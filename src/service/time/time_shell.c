@@ -44,6 +44,9 @@ static BaseType_t show_time(char *buf, size_t bufsz, const char *cmd)
     } else {
         len += snprintf(&buf[len], bufsz - (size_t)len, "RTC Time    : Read Failed\r\n");
     }
+
+    /* 显示系统tick(ms) */
+    len += snprintf(&buf[len], bufsz - (size_t)len, "System Tick : %u ms\r\n", time_if_get_systick_ms());
     
     /* 显示RTC故障状态 */
     if (time_if_rtc_is_fault()) {

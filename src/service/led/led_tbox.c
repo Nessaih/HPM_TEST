@@ -2,6 +2,9 @@
 #include "tbox_core.h"
 #include "drv_pin.h"
 #include "stimer.h"
+#include "4g_if.h"
+#include "can_if.h"
+#include "gnss_if.h"
 
 #include "led_if.h"
 #include "led.h"
@@ -86,7 +89,6 @@ static INT32 led_tbox_start_mode(VOID)
 
 static VOID led_tbox_run_mode(VOID)
 {
-#if 0
 	if((CAN_INSTANCE_BUSY == can_if_state_get(0)) || (CAN_INSTANCE_BUSY == can_if_state_get(1)))
 	{
 		led_tbox_set_can(TRUE);
@@ -113,7 +115,6 @@ static VOID led_tbox_run_mode(VOID)
 	{
 		led_tbox_set_gns(FALSE);
 	}
-#endif
 
     drv_pin_toggle(PIN_LED_TBOX_RUN);
     drv_pin_set_level(PIN_LED_TBOX_CAN, led_tbox_state.can);

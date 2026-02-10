@@ -19,6 +19,7 @@ TBOX_RUNLOOP_MODULE(TIME, TBOX_TASK_PRIORITY_LOW1, LOG_LEVEL_INFO, TBOX_TASK_MED
 TBOX_MODULE_LOADER(TIME) {}
 
 
+#define DEV_CHECK_YEAR(year)                     (year > 37 || year < 25)
 
 #define DEV_CHECK_MONTH(month)                   ((month < 1) || (month > 12))
 
@@ -49,8 +50,8 @@ typedef enum {
 
 static TBOX_ID time_module_id;
 
-static unsigned int time_tick             = 0;
-static unsigned int time_sec              = 0;
+static TickType_t   basetime_tick         = 0;  // 基准时刻的系统 tick（原始值）
+static time_t       basetime_utc          = 0;  // 基准时刻的 UTC 时间戳（秒）
 static bool         time_is_set           = false;
 static bool         time_rtc_is_set       = false;
 static bool         time_rtc_is_diag      = true;
@@ -63,12 +64,38 @@ static void time_set(DEV_TIME time);
 static void time_rst(void);
 static int  time_rtc_set(DEV_TIME time);
 void time_write_flash(unsigned char *data);
-
 /* 临时函数声明，待后续实现 */
 static int dev_reboot_date_is_same(void)
 {
     /* TODO: 实现判断是否在同一天重启过的逻辑 */
     return 0;  /* 默认返回0，表示不是同一天 */
+}
+
+static inline uint32_t time_get_elapsed_ms(void)
+{
+    TickType_t current_tick = xTaskGetTickCount();
+    TickType_t tick_diff = current_tick - basetime_tick;
+    return pdTICKS_TO_MS(tick_diff);
+}
+
+unsigned int time_if_get_systick_ms(void)
+{
+    return pdTICKS_TO_MS(xTaskGetTickCount());
+}
+
+unsigned int time_if_get_systick_s(void)
+{
+    return pdTICKS_TO_MS(xTaskGetTickCount()) / 1000;
+}
+
+unsigned int time_if_get_basetime_tick(void)
+{
+    return (unsigned int)basetime_tick;
+}
+
+unsigned int time_if_get_basetime_utc_s(void)
+{
+    return (unsigned int)basetime_utc;
 }
 
 static void time_mgr_info_init(void)
@@ -100,8 +127,14 @@ static void time_mgr_info_init(void)
 int time_if_check_is_valid(DEV_TIME time)
 {
     int ret = 1;
-    if (DEV_CHECK_MONTH(time.month) || DEV_CHECK_DAY(time.year, time.month, time.day) || DEV_CHECK_CLOCK(time.hour, time.min, time.sec))
-        ret = 0;
+    
+    if (DEV_CHECK_YEAR(time.year) || 
+        DEV_CHECK_MONTH(time.month) || 
+        DEV_CHECK_DAY(time.year, time.month, time.day) || 
+        DEV_CHECK_CLOCK(time.hour, time.min, time.sec)) {
+            MODULE_LOG_E(TIME, "Invalid time format, year: %u, month: %u, day: %u, hour: %u, min: %u, sec: %u", time.year, time.month, time.day, time.hour, time.min, time.sec);
+            ret = 0;
+        }
 
     return ret;
 }
@@ -151,9 +184,9 @@ static void time_set(DEV_TIME time)
     cur_time.tm_min  = time.min;
     cur_time.tm_sec  = time.sec;
 
-    time_tick   = xTaskGetTickCount() / 10;
-    time_sec    = mktime(&cur_time);
-    time_is_set = true;
+    basetime_tick = xTaskGetTickCount();
+    basetime_utc  = mktime(&cur_time);
+    time_is_set   = true;
 }
 
 void time_if_set_with_source(DEV_TIME time, TIME_SYNC_SOURCE source)
@@ -220,13 +253,13 @@ static void time_rst(void)
 
 time_t time_if_get(DEV_TIME *time)
 {
-    unsigned int tick;
-    time_t       sec;
-    struct tm   *cur_time;
+    uint32_t   elapsed_ms;
+    time_t     current_utc;
+    struct tm *cur_time;
 
-    tick     = xTaskGetTickCount() / 10;
-    sec      = time_sec + (tick - time_tick) / 100;
-    cur_time = localtime(&sec);
+    elapsed_ms  = time_get_elapsed_ms();
+    current_utc = basetime_utc + (elapsed_ms / 1000);
+    cur_time    = localtime(&current_utc);
 
     if (time && cur_time) {
         time->year  = cur_time->tm_year - 100;
@@ -235,9 +268,9 @@ time_t time_if_get(DEV_TIME *time)
         time->hour  = cur_time->tm_hour;
         time->min   = cur_time->tm_min;
         time->sec   = cur_time->tm_sec;
-        time->msec  = ((tick - time_tick) % 100) * 10;
+        time->msec  = elapsed_ms % 1000;
     }
-    return sec;
+    return current_utc;
 }
 
 static int time_rtc_set(DEV_TIME time)
@@ -374,24 +407,14 @@ void time_if_retry(void)
     }
 }
 
-unsigned int time_if_get_basetick(void)
-{
-    return time_tick;
-}
-
-unsigned int time_if_get_sec(void)
-{
-    return time_sec;
-}
-
 void time_set_wakeup_time(void)
 {
     int          ret_wake, ret_reboot;
     unsigned int fixed_min, curr_min;
     unsigned int val;
     unsigned int reboot_switch;
-    unsigned int tick;
-    time_t       sec;
+    uint32_t     elapsed_ms;
+    time_t       current_utc;
     struct tm   *alarm_time;
     struct tm   *reboot_time;
     DEV_TIME     time;
@@ -415,8 +438,8 @@ void time_set_wakeup_time(void)
     
     time_if_rtc_get(&time);
 
-    tick = xTaskGetTickCount() / 10;
-    sec  = time_sec + (tick - time_tick) / 100;
+    elapsed_ms  = time_get_elapsed_ms();
+    current_utc = basetime_utc + (elapsed_ms / 1000);
 
     srand(time.sec);
     time_reboot_min = rand() % 60;
@@ -430,8 +453,8 @@ void time_set_wakeup_time(void)
             drv_rtc_set_alarm(NULL);
             return;
         } else {
-            sec        = sec + val * 60; /* the unit of val is minute */
-            alarm_time = localtime(&sec);
+            current_utc = current_utc + val * 60; /* the unit of val is minute */
+            alarm_time  = localtime(&current_utc);
 
             memset(&alarm, 0, sizeof(alarm));
             alarm.day    = alarm_time->tm_mday;
@@ -444,7 +467,7 @@ void time_set_wakeup_time(void)
     } else {
         if (ret_wake < 0 || 0 == val) {
             if (time.hour < TIME_FIXED_REBOOT_HOUR) {
-                reboot_time = localtime(&sec);
+                reboot_time = localtime(&current_utc);
 
                 memset(&alarm, 0, sizeof(alarm));
                 alarm.day    = reboot_time->tm_mday;
@@ -456,9 +479,9 @@ void time_set_wakeup_time(void)
             } else if (time.hour == TIME_FIXED_REBOOT_HOUR) {
                 if (time.min < time_reboot_min) {
                     if (dev_reboot_date_is_same()) {
-                        sec = sec + 24 * 60 * 60;
+                        current_utc = current_utc + 24 * 60 * 60;
                     }
-                    reboot_time = localtime(&sec);
+                    reboot_time = localtime(&current_utc);
 
                     memset(&alarm, 0, sizeof(alarm));
                     alarm.day    = reboot_time->tm_mday;
@@ -468,8 +491,8 @@ void time_set_wakeup_time(void)
 
                     MODULE_LOG_I(TIME, "3RebootTime->day:%d,hour:%d,min:%d", reboot_time->tm_mday, TIME_FIXED_REBOOT_HOUR, time_reboot_min);
                 } else {
-                    sec         = sec + 24 * 60 * 60;
-                    reboot_time = localtime(&sec);
+                    current_utc = current_utc + 24 * 60 * 60;
+                    reboot_time = localtime(&current_utc);
 
                     memset(&alarm, 0, sizeof(alarm));
                     alarm.day    = reboot_time->tm_mday;
@@ -480,8 +503,8 @@ void time_set_wakeup_time(void)
                     MODULE_LOG_I(TIME, "4RebootTime->day:%d,hour:%d,min:%d", reboot_time->tm_mday, TIME_FIXED_REBOOT_HOUR, time_reboot_min);
                 }
             } else {
-                sec         = sec + 24 * 60 * 60;
-                reboot_time = localtime(&sec);
+                current_utc = current_utc + 24 * 60 * 60;
+                reboot_time = localtime(&current_utc);
 
                 memset(&alarm, 0, sizeof(alarm));
                 alarm.day    = reboot_time->tm_mday;
@@ -494,8 +517,8 @@ void time_set_wakeup_time(void)
         } else {
             if (time.hour < TIME_FIXED_REBOOT_HOUR) {
                 if ((fixed_min - curr_min) > val) {
-                    sec        = sec + val * 60; /* the unit of val is minute */
-                    alarm_time = localtime(&sec);
+                    current_utc = current_utc + val * 60; /* the unit of val is minute */
+                    alarm_time  = localtime(&current_utc);
 
                     memset(&alarm, 0, sizeof(alarm));
                     alarm.day    = alarm_time->tm_mday;
@@ -506,8 +529,8 @@ void time_set_wakeup_time(void)
                     MODULE_LOG_I(TIME, "6WakeUpTime->day:%d,hour:%d,min:%d", alarm_time->tm_mday, alarm_time->tm_hour, alarm_time->tm_min);
                 } else {
                     if (dev_reboot_date_is_same()) {
-                        sec        = sec + val * 60;
-                        alarm_time = localtime(&sec);
+                        current_utc = current_utc + val * 60;
+                        alarm_time  = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = alarm_time->tm_mday;
@@ -517,7 +540,7 @@ void time_set_wakeup_time(void)
 
                         MODULE_LOG_I(TIME, "9WakeUpTime->day:%d,hour:%d,min:%d", alarm_time->tm_mday, alarm_time->tm_hour, alarm_time->tm_min);
                     } else {
-                        reboot_time = localtime(&sec);
+                        reboot_time = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = reboot_time->tm_mday;
@@ -531,8 +554,8 @@ void time_set_wakeup_time(void)
             } else if (time.hour == TIME_FIXED_REBOOT_HOUR) {
                 if (time.min < time_reboot_min) {
                     if ((time_reboot_min - time.min + 24 * 60) > val) {
-                        sec        = sec + val * 60; /* the unit of val is minute */
-                        alarm_time = localtime(&sec);
+                        current_utc = current_utc + val * 60; /* the unit of val is minute */
+                        alarm_time  = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = alarm_time->tm_mday;
@@ -542,8 +565,8 @@ void time_set_wakeup_time(void)
 
                         MODULE_LOG_I(TIME, "8WakeUpTime->day:%d,hour:%d,min:%d", alarm_time->tm_mday, alarm_time->tm_hour, alarm_time->tm_min);
                     } else {
-                        sec         = sec + 24 * 60 * 60;
-                        reboot_time = localtime(&sec);
+                        current_utc = current_utc + 24 * 60 * 60;
+                        reboot_time = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = reboot_time->tm_mday;
@@ -555,8 +578,8 @@ void time_set_wakeup_time(void)
                     }
                 } else {
                     if ((fixed_min - curr_min + 24 * 60) > val) {
-                        sec        = sec + val * 60; /* the unit of val is minute */
-                        alarm_time = localtime(&sec);
+                        current_utc = current_utc + val * 60; /* the unit of val is minute */
+                        alarm_time  = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = alarm_time->tm_mday;
@@ -566,7 +589,7 @@ void time_set_wakeup_time(void)
 
                         MODULE_LOG_I(TIME, "01WakeUpTime->day:%d,hour:%d,min:%d", alarm_time->tm_mday, alarm_time->tm_hour, alarm_time->tm_min);
                     } else {
-                        reboot_time = localtime(&sec);
+                        reboot_time = localtime(&current_utc);
 
                         memset(&alarm, 0, sizeof(alarm));
                         alarm.day    = reboot_time->tm_mday;
@@ -579,8 +602,8 @@ void time_set_wakeup_time(void)
                 }
             } else {
                 if ((fixed_min - curr_min + 24 * 60) > val) {
-                    sec        = sec + val * 60; /* the unit of val is minute */
-                    alarm_time = localtime(&sec);
+                    current_utc = current_utc + val * 60; /* the unit of val is minute */
+                    alarm_time  = localtime(&current_utc);
 
                     memset(&alarm, 0, sizeof(alarm));
                     alarm.day    = alarm_time->tm_mday;
@@ -590,8 +613,8 @@ void time_set_wakeup_time(void)
 
                     MODULE_LOG_I(TIME, "03WakeUpTime->day:%d,hour:%d,min:%d", alarm_time->tm_mday, alarm_time->tm_hour, alarm_time->tm_min);
                 } else {
-                    sec         = sec + 24 * 60 * 60;
-                    reboot_time = localtime(&sec);
+                    current_utc = current_utc + 24 * 60 * 60;
+                    reboot_time = localtime(&current_utc);
 
                     memset(&alarm, 0, sizeof(alarm));
                     alarm.day    = reboot_time->tm_mday;

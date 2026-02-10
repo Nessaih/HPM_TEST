@@ -72,6 +72,10 @@ extern "C" {
 #define SOFTWARE_RESET    NVIC_SystemReset()
 #define SYSTEM_RESET      SOFTWARE_RESET
 
+#define offset_of(data,member)      (unsigned int)(&(((data*)0)->member))
+
+#define container_of(ptr, type, member) ((type *)( (unsigned char *)ptr - offset_of(type,member) ))
+
 #ifdef __cplusplus
 }
 #endif

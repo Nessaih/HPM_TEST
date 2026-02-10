@@ -2682,16 +2682,100 @@
                     <name>$PROJ_DIR$\..\..\src\app\fct\fct_cmd.h</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_iuc.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_iuc.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.c</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.h</name>
+                </file>
+            </group>
+            <group>
+                <name>hpm</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_can.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_can.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_cfg.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_cfg.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_content.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data_recv.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data_recv.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_mgr.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_mgr.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_net.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_net.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_ota_ecu.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_ota_ecu.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_ota_tbox.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_ota_tbox.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_pack.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_pack.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session_htbt.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session_htbt.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_socket.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_socket.h</name>
                 </file>
             </group>
         </group>

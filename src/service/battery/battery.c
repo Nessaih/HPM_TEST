@@ -200,7 +200,9 @@ static INT32 battery_init(UINT8 seq)
             break;
             
         case MODULE_INIT_SEQ_MODULE:
+            GET_TBOX_MODULE_ID(BATTERY, battery_module_id);
             TBOX_SHELL_REGISTER(showbat);
+            tbox_module_set_state(battery_module_id, TBOX_MODULE_STATE_START);
             MODULE_LOG_D(BATTERY, "Battery module initialized");
             break;
             
@@ -216,6 +218,6 @@ static VOID battery_stop(VOID)
 {
     /* 停止充电 */
     battery_charge_hw_stop();
-    MODULE_LOG_I(BATTERY, "Battery module stopped, charging disabled");
     tbox_module_set_state(battery_module_id, TBOX_MODULE_STATE_STOP);
+    MODULE_LOG_I(BATTERY, "Battery module stopped, charging disabled");
 }

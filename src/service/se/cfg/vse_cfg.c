@@ -36,13 +36,11 @@ void vse_delay_ms(uint16_t msec)
 
 int32_t vse_get_time(vse_time_t *time)
 {
-#if 0	//TODO: time 模块未实现
     uint32_t tick;
 
-    tick       = (xTaskGetTickCount() / 10) - time_if_get_basetick();
-    time->sec  = time_if_get_sec() + tick / 100;
+    tick       = (xTaskGetTickCount() / 10) - time_if_get_basetime_tick();
+    time->sec  = time_if_get_basetime_utc_s() + tick / 100;
     time->msec = (tick % 100) * 10;
-#endif
     return 0;
 }
 

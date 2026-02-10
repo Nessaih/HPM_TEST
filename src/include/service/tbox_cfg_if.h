@@ -24,10 +24,11 @@ typedef UINT32 TBOX_CFG_ID;
 #define TBOX_CFG_RTCENABLE_LEN          1U
 #define TBOX_CFG_RTCINTV_LEN            4U
 #define TBOX_CFG_CANBAUD_LEN            2U
-#define TBOX_CFG_TIMEZONE_LEN           4U
+#define TBOX_CFG_TIMEZONE_LEN           1U
 #define TBOX_CFG_APN_LEN                32U
 #define TBOX_CFG_SMSCENTER_LEN          20U
 #define TBOX_CFG_GPSMODE_LEN            1U
+#define TBOX_CFG_GPSRATE_LEN            2U
 #define TBOX_CFG_RESETCOUNT_LEN         4U
 #define TBOX_CFG_VIN_LEN                18U /*实际长度为17字节，多出1字节用于字符串结束符*/
 #define TBOX_CFG_URL_LEN          		64U

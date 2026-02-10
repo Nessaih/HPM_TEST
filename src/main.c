@@ -28,6 +28,7 @@ VOID tbox_load_all_module(VOID)
 
     /*load app module*/     
     LOAD_TBOX_MODULE(FCT);
+    LOAD_TBOX_MODULE(HPM);
 }
 
 VOID tbox_main_task(VOID *param)
