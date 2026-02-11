@@ -7,7 +7,7 @@
  * ================================================================================================================
  * 1. Include this file when FLASH storage is needed
  * 2. Users should define specific storage addresses based on the already divided blocks
- * 3. Do not modify this file. Instead, create one or more user storage address definition files and include this 
+ * 3. Do not modify this file. Instead, create one or more user storage address definition files and include this
  *    file in them
  * =================================================================================================================
  */
@@ -25,7 +25,11 @@
  * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
  * │   4    │0x0011 8000 ~ 0x0011 9FFF │ 8    K       │ Application program infomation                        │
  * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   5    │0x0011 A000 ~ 0x0011 BFFF │ 8    K       │Application program infomation                         │
+ * │   5    │0x0011 A000 ~ 0x0011 BFFF │ 8    K       │ Application program infomation                        │
+ * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
+ * │   6    │0x0011 C000 ~ 0x0011 FFFF │ 16   K       │ Reserved for system use                               │
+ * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
+ * │   7    │0x0012 0000 ~ 0x001F FFFF │ 896  K       │ User's file storage                                   │
  * └────────┴──────────────────────────┴──────────────┴───────────────────────────────────────────────────────┘
  */
 
@@ -42,6 +46,9 @@
 #define FLASH_PCFG1_ADDR       0x00118000U
 #define FLASH_PCFG2_ADDR       0x0011A000U
 #define FLASH_PCFG_LEN         0x00000080U
+
+#define FLASH_USER_ADDR        0x00120000U
+#define FLASH_USER_LEN         0x000E0000U
 
 /* =============================================  MCU Flash Memory Map ============================================= */
 
