@@ -11,24 +11,12 @@ static BaseType_t show_time(char *buf, size_t bufsz, const char *cmd)
     int32_t  len = 0;
     DEV_TIME time;
     TIME_SYNC_SOURCE sync_source;
-    const char *source_str[] = {
-        "NONE",
-        "RTC",
-        "SHELL",
-        "GNSS",
-        "NTP"
-    };
     (void)cmd;
 
     /* 显示同步源 */
     sync_source = time_if_get_sync_source();
-    if (sync_source < sizeof(source_str) / sizeof(source_str[0])) {
-        len += snprintf(&buf[len], bufsz - (size_t)len, "\r\n=== Time Information ===\r\n");
-        len += snprintf(&buf[len], bufsz - (size_t)len, "Sync Source : %s\r\n", source_str[sync_source]);
-    } else {
-        len += snprintf(&buf[len], bufsz - (size_t)len, "\r\n=== Time Information ===\r\n");
-        len += snprintf(&buf[len], bufsz - (size_t)len, "Sync Source : UNKNOWN(%d)\r\n", sync_source);
-    }
+    len += snprintf(&buf[len], bufsz - (size_t)len, "\r\n=== Time Information ===\r\n");
+    len += snprintf(&buf[len], bufsz - (size_t)len, "Sync Source : %s\r\n", time_if_sync_source_to_str(sync_source));
     
     /* 显示系统时间 */
     memset(&time, 0, sizeof(time));

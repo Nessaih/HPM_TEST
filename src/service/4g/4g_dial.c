@@ -12,7 +12,7 @@
 
 #define DIAL_4G_CALL_TIMEOUT            (360*1000)     //360S
 #define DIAL_4G_STOP_TIMEOUT            (40*1000)      //40S
-#define DIAL_4G_ABORTCALL_TIMEOUT       (10*1000)      //10S
+#define DIAL_4G_ABORTCALL_TIMEOUT       (5*1000)       //5S
 #define DIAL_4G_RETRY_PERIOD            (1000)         //1S
 #define DIAL_4G_CONFIGAPN_TIMEOUT       (5000)         //5S
 #define DIAL_4G_RESET4G_MAXCOUNT        (2)

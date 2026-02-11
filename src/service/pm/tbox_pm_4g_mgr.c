@@ -118,6 +118,14 @@ VOID tbox_pm_4g_mgr_stop(VOID)
     xSemaphoreGive(tbox_pm_4g_mutex);
 }
 
+VOID tbox_pm_4g_mgr_stop_check_startup(VOID)
+{
+    xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+    tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_NONE;
+    tbox_pm_4g_check_startup_count = 0U;
+    xSemaphoreGive(tbox_pm_4g_mutex);
+}
+
 VOID tbox_pm_4g_mgr_period(VOID)
 {
     tbox_pm_4g_handle_check_startup();
@@ -229,6 +237,7 @@ VOID tbox_pm_4g_do_timeout(VOID)
                     tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_WAIT_STARTUP4G;
                     tbox_pm_4g_check_startup_count = 0U;               
                 }
+                MODULE_LOG_I(TBOXPM, "4g action:%d", tbox_pm_4g_do_action);
                 tbox_pm_4g_do_action = (UINT8)TBOX_PM_4G_DO_NOTHING;
             }
             break;

@@ -1,8 +1,10 @@
-#ifndef __MEM_HPM_H__
-#define __MEM_HPM_H__
+#ifndef __MEM_COMMON_H__
+#define __MEM_COMMON_H__
 
-#include "mem_def.h"
+#include "flash_def.h"
 
+
+/* =============================================  NOR Flash Memory Map ============================================= */
 /*────────────────────────────────────────DEFINE BLOCK2────────────────────────────────────────*/
 #define FLASH_NOR_ADDR_HPM_RUN_INFO (FLASH_NOR_ADDR_BLOCK2)
 #define FLASH_NOR_SIZE_HPM_RUN_INFO (0x00001000)
@@ -23,5 +25,6 @@
 #define FLASH_NOR_SIZE_HPM_DATA     (0x00180000) // 1.5M
 
 /*────────────────────────────────────────ENDDEF BLOCK4────────────────────────────────────────*/
+/* =============================================  NOR Flash Memory Map ============================================= */
 
-#endif //__MEM_HPM_H__
+#endif //__MEM_COMMON_H__

@@ -3,7 +3,7 @@
 #include "checksum.h"
 #include "tbox_log.h"
 #include "tbox_memory.h"
-#include "mem_hpm.h"
+#include "flash_common.h"
 
 #include "hpm_flash.h"
 

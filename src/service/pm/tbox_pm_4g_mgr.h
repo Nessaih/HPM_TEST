@@ -23,6 +23,7 @@ INT32 tbox_pm_4g_mgr_init(VOID);
 VOID tbox_pm_4g_mgr_deinit(VOID);
 VOID tbox_pm_4g_mgr_start(VOID);
 VOID tbox_pm_4g_mgr_stop(VOID);
+VOID tbox_pm_4g_mgr_stop_check_startup(VOID);
 VOID tbox_pm_4g_mgr_period(VOID);
 INT32 tbox_pm_4g_do_startup(VOID);
 INT32 tbox_pm_4g_do_shutdown(VOID);

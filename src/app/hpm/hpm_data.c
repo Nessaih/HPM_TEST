@@ -96,7 +96,7 @@ static VOID hpm_data_flush_one_realtm_data(VOID)
 
     while(count > 0 && (node = dlist_pop_first_node(&hpm_realtm_list)) != NULL)
     {
-        pack = container_of(node, HPM_PACKET, link);
+        pack = TBOX_CONTAINER(node, HPM_PACKET, link);
         delay_cmdid = HPM_CMD_REISSUE_DATA;//hpm_cv_com_get_delay_cmdid(pack->type);
         if (delay_cmdid)
         {
@@ -179,7 +179,7 @@ VOID hpm_data_save_to_realtm_list(UINT8 cmdid, UINT8* data, uint16 len)
         return;
     }
 
-    pack = container_of(node, HPM_PACKET, link);
+    pack = TBOX_CONTAINER(node, HPM_PACKET, link);
     memcpy(pack->data, data, len);
     pack->len = len;
     pack->list = &hpm_realtm_list;
@@ -203,7 +203,7 @@ VOID hpm_data_flush_realtm_data(VOID)
 
     while(count > 0 && (node = dlist_pop_first_node(&hpm_realtm_list)) != NULL)
     {
-        pack = container_of(node, HPM_PACKET, link);
+        pack = TBOX_CONTAINER(node, HPM_PACKET, link);
         delay_cmdid = HPM_CMD_REISSUE_DATA;//hpm_cv_com_get_delay_cmdid(pack->type);
         if (delay_cmdid)
         {
@@ -228,7 +228,7 @@ VOID hpm_data_flush_trans_list(VOID)
 
     while ((node = dlist_pop_last_node(&hpm_trans_list)) != NULL)
     {
-        pack = container_of(node, HPM_PACKET, link);
+        pack = TBOX_CONTAINER(node, HPM_PACKET, link);
 
         dlist_add_tail(&pack->link, pack->list);
     }
@@ -261,7 +261,7 @@ HPM_PACKET *hpm_data_get_report_pack(VOID)
         node = dlist_pop_first_node(&hpm_delay_list);
     }
 
-    return ((node == NULL) ? NULL : container_of(node, HPM_PACKET, link));
+    return ((node == NULL) ? NULL : TBOX_CONTAINER(node, HPM_PACKET, link));
 }
 
 VOID hpm_data_put_back_report_pack(HPM_PACKET* pack)
@@ -293,7 +293,7 @@ HPM_PACKET *hpm_data_get_report_pack_noflash(VOID)
          node = dlist_pop_first_node(&hpm_realtm_list);
     }
 
-    return ((node == NULL) ? NULL : container_of(node, HPM_PACKET, link));
+    return ((node == NULL) ? NULL : TBOX_CONTAINER(node, HPM_PACKET, link));
 }
 
 VOID hpm_data_put_back_list_with_samepos(HPM_PACKET *pack)
@@ -377,7 +377,7 @@ HPM_PACKET *hpm_data_get_from_list(HPM_LIST_TYPE list_type)
        return NULL;
     }
 
-    return container_of(node, HPM_PACKET, link);
+    return TBOX_CONTAINER(node, HPM_PACKET, link);
 }
 
 UINT8 hpm_data_flush_alldata(VOID)

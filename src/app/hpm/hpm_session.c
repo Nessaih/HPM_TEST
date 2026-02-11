@@ -1,7 +1,7 @@
 #include "tbox_common.h"
 #include "tbox_core.h"
 #include "tbox_memory.h"
-#include "mem_hpm.h"
+#include "flash_common.h"
 #include "time_if.h"
 
 #include "hpm_content.h"
@@ -237,7 +237,6 @@ static VOID hpm_session_proc_login(VOID)
 	{
 		hpm_socket_reset();
 		MODULE_LOG_E(HPM, "send failed, len: %d", len);
-		return;
 	}
 	else
 	{
@@ -316,8 +315,6 @@ static VOID hpm_session_proc_loginout(VOID)
 	{
 		hpm_socket_reset();
 		MODULE_LOG_E(HPM, "send failed, len: %d", len);
-		mempool_free(buf);
-		return;
 	}
 	else
 	{

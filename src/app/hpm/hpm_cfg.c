@@ -2,7 +2,7 @@
 #include "tbox_core.h"
 #include "tbox_cfg_if.h"
 #include "tbox_log.h"
-#include "mem_hpm.h"
+#include "flash_common.h"
 #include "version.h"
 
 

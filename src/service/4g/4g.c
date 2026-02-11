@@ -51,6 +51,12 @@ UINT8 tbox_4g_get_state(VOID)
 VOID tbox_4g_reset(VOID)
 {
     TBOX_4G_MUTEX_LOCK();
+    if(TBOX_4G_STATE_STOPPING == tbox_4g_state)
+    {
+        TBOX_4G_MUTEX_UNLOCK();
+        MODULE_LOG_W(TBOX4G, "4g is stopping, ignore reset");
+        return;
+    }
     tbox_4g_state = (UINT8)TBOX_4G_STATE_STARTING;
     TBOX_4G_MUTEX_UNLOCK();
         
@@ -62,7 +68,9 @@ VOID tbox_4g_reset(VOID)
         stimer_start(tbox_4g_timer_id, PERIODIC_UNIT_4G);
     }
 
-    mgr_4g_reset_sequence();   
+    mgr_4g_reset_sequence();
+
+    MODULE_LOG_I(TBOX4G, "tbox 4g reset");
 }
 
 static INT32 tbox_4g_init(UINT8 seq)

@@ -8,6 +8,7 @@
 #include "tbox_cfg_if.h"
 #include "drv_rtc.h"
 #include "stimer.h"
+#include "delay.h"
 
 static INT32 time_init(UINT8 seq);
 static VOID time_stop(VOID);
@@ -19,7 +20,7 @@ TBOX_RUNLOOP_MODULE(TIME, TBOX_TASK_PRIORITY_LOW1, LOG_LEVEL_INFO, TBOX_TASK_MED
 TBOX_MODULE_LOADER(TIME) {}
 
 
-#define DEV_CHECK_YEAR(year)                     (year > 37 || year < 25)
+#define DEV_CHECK_YEAR(year)                     (year > 37 || year < 23)
 
 #define DEV_CHECK_MONTH(month)                   ((month < 1) || (month > 12))
 
@@ -96,6 +97,20 @@ unsigned int time_if_get_basetime_tick(void)
 unsigned int time_if_get_basetime_utc_s(void)
 {
     return (unsigned int)basetime_utc;
+}
+
+const char *time_if_sync_source_to_str(TIME_SYNC_SOURCE source)
+{
+    switch (source) {
+        case TIME_SYNC_SOURCE_NONE: return "NONE";
+        case TIME_SYNC_SOURCE_RTC: return "RTC";
+        case TIME_SYNC_SOURCE_SHELL: return "SHELL";
+        case TIME_SYNC_SOURCE_GNSS: return "GNSS";
+        case TIME_SYNC_SOURCE_NTP: return "NTP";
+        case TIME_SYNC_SOURCE_TSP: return "TSP";
+        case TIME_SYNC_SOURCE_FLASH: return "FLASH";
+        default: return "UNKNOWN";
+    }
 }
 
 static void time_mgr_info_init(void)
@@ -192,16 +207,9 @@ static void time_set(DEV_TIME time)
 void time_if_set_with_source(DEV_TIME time, TIME_SYNC_SOURCE source)
 {
     unsigned char time_data[6];
-    const char *time_sync_source_str[] = {
-        "NONE",
-        "RTC",
-        "SHELL",
-        "GNSS",
-        "NTP"
-    };
 
     if (!time_if_check_is_valid(time)) {
-        MODULE_LOG_E(TIME, "Invalid time format, sync source: %d", source);
+        MODULE_LOG_E(TIME, "Invalid time format, sync source: %s", time_if_sync_source_to_str(source));
         return;
     }
 
@@ -210,7 +218,7 @@ void time_if_set_with_source(DEV_TIME time, TIME_SYNC_SOURCE source)
     time_rtc_is_set = false;
 
     if (0 != time_rtc_set(time)) {
-        MODULE_LOG_E(TIME, "Set time OK, but RTC sync failed, source: %d", source);
+        MODULE_LOG_E(TIME, "Set time OK, but RTC sync failed, source: %s", time_if_sync_source_to_str(source));
     }
 
     time_data[0] = time.year;
@@ -224,7 +232,7 @@ void time_if_set_with_source(DEV_TIME time, TIME_SYNC_SOURCE source)
     time_sync_source = source;
 
     MODULE_LOG_I(TIME, "Time set from source %s: 20%02u-%02u-%02u %02u:%02u:%02u", 
-        time_sync_source_str[source], time.year, time.month, time.day, time.hour, time.min, time.sec); 
+        time_if_sync_source_to_str(source), time.year, time.month, time.day, time.hour, time.min, time.sec); 
 }
 
 TIME_SYNC_SOURCE time_if_get_sync_source(void)
@@ -360,7 +368,19 @@ DEV_TIME rtc_time_init(void)
 }
 int time_if_init(void)
 {
-    drv_rtc_init();
+    int ret;
+    int retry_times = 3;
+    while (retry_times--) {
+        ret = drv_rtc_init();
+        if (RTC_STATUS_SUCCESS == ret) {
+            break;
+        }
+        delay_ms(100);
+    }
+    if (RTC_STATUS_SUCCESS != ret) {
+        MODULE_LOG_E(TIME, "RTC init failed");
+        return -1;
+    }
     rtc_time_init();
     time_mgr_info_init();
 
