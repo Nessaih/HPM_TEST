@@ -37,9 +37,11 @@ HardFault_Handler
 
     BL      backtrace
 
-    ; Call C function to print stack info
+    ; Call C function to print stack info - with interrupt protection
+    CPSID   i                     ; Close all interrupts (IRQ and FIQ)
     LDR     r0, =stack
     BL      print_stack_info
+    CPSIE   i                     ; Open all interrupts (IRQ and FIQ)
 
 Fault_Loop
     BL      Fault_Loop              ;while(1)
@@ -124,38 +126,38 @@ loop_pcp:
     ; Check loop condition: i > 0
     CMP     r12, #0
     BLE     end_loop_pcp
-    
+
     ; Load *pcp
     LDR     r3, [r1]
-    
+
     ; Check if *pcp > cs && *pcp < ce
     CMP     r3, r8
     BLE     skip_pcp_store
     CMP     r3, r9
     BGE     skip_pcp_store
-    
+
     ; Store *pcp to stack.buffer[dp]
     LSL     r4, r2, #2                 ; offset = dp * 4
     ADD     r4, r4, #36                ; buffer base offset (32 + 4)
     STR     r3, [r0, r4]
-    
+
     ; Increment dp
     ADD     r2, r2, #1
-    
+
 skip_pcp_store:
     ; Decrement pcp
     SUB     r1, r1, #4
-    
+
     ; Decrement i
     SUB     r12, r12, #1
-    
+
     ; Repeat loop
     B       loop_pcp
 
 end_loop_pcp:
     ; Save updated dp to stack.depth
     STR     r2, [r0, #32]
-    
+
     ; Get stack top
     MOV     r0, #0                  ; NULL
     BL      uxTaskStackTop
