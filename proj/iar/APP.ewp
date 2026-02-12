@@ -2364,6 +2364,12 @@
                     <name>$PROJ_DIR$\..\..\sdk\device\src\Exception_AC784xx.c</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\sdk\device\src\Exception_BackTrace.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\sdk\device\src\Exception_Fault.s</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\sdk\device\src\System_AC784xx.c</name>
                 </file>
             </group>

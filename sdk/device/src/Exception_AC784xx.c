@@ -59,6 +59,7 @@
  * @return void
  */
 /*PRQA S 3006 ++ # allows mixed use of inline assembly and C statements.*/
+#if defined(CM_BACKTRACE)
 void HardFault_Handler(void) //PRQA S 1503,3408 # it is handler.
 {
     /*open hsm debug path*/
@@ -80,6 +81,7 @@ void HardFault_Handler(void) //PRQA S 1503,3408 # it is handler.
         ASMV_KEYWORD("nop"); /* No operation*/ //PRQA S 1006 # assembly is allowed.*/
     }
 }
+#endif
 /*PRQA S 3006 -- */
 /*cstat +MISRAC2012-Rule-11.4*/
 /* =============================================  EOF  ============================================== */

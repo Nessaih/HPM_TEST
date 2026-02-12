@@ -8694,3 +8694,42 @@ void vTaskResetState( void )
     #endif /* #if ( configGENERATE_RUN_TIME_STATS == 1 ) */
 }
 /*-----------------------------------------------------------*/
+
+
+
+const char* pxTaskName( TaskHandle_t xTaskToQuery )
+{
+    TCB_t *pxTCB;
+
+    if( xTaskToQuery == NULL )
+    {
+        /* Return the name of the currently running task. */
+        pxTCB = pxCurrentTCB;
+    }
+    else
+    {
+        pxTCB = xTaskToQuery;
+    }
+
+    return pxTCB->pcTaskName;
+}
+
+uint32_t uxTaskStackTop( TaskHandle_t xTaskToQuery )
+{
+    TCB_t *pxTCB;
+    uint32_t size;
+
+    if( xTaskToQuery == NULL )
+    {
+        /* Return the stack address of the currently running task. */
+        pxTCB = pxCurrentTCB;
+    }
+    else
+    {
+        pxTCB = xTaskToQuery;
+    }
+
+    size =  (uint32_t)(pxTCB->pxTopOfStack);
+
+    return size;
+}

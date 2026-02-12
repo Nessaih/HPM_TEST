@@ -64,6 +64,7 @@ static VOID hpm_timer_creat(VOID)
 		MODULE_LOG_E(HPM, "create hpm tbox timer failed");
 	}
 }
+extern void fault_test_by_div0(void);
 
 static VOID hpm_timer_start(VOID)
 {
@@ -73,6 +74,9 @@ static VOID hpm_timer_start(VOID)
 	{
 		MODULE_LOG_E(HPM, "start hpm tbox timer failed");
 	}
+
+    fault_test_by_div0();
+
 }
 
 static VOID hpm_timer_stop(VOID)
