@@ -64,9 +64,6 @@ VOID tbox_load_all_module(VOID)
     LOAD_TBOX_MODULE(FCT);
     LOAD_TBOX_MODULE(HPM);
 
-    fault_test_by_div0();
-    fault_test_by_unalign();
-
 }
 
 VOID tbox_main_task(VOID *param)
