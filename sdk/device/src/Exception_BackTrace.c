@@ -1,8 +1,7 @@
 
 #include <stdint.h>
-#include <string.h>
-#include "FreeRTOS.h"
-#include "task.h"
+#include <stdio.h>
+
 
 typedef struct
 {
@@ -19,59 +18,33 @@ typedef struct
     char     name[32];
 } stack_info_t;
 
-stack_info_t stack;
+extern stack_info_t stack;
 
-#pragma section = ".text"
-
-void backtrace(uint32_t handle_lr, uint32_t handle_sp, uint32_t handle_fpu)
+void print_stack_info(stack_info_t *stack_info)
 {
-    uint32_t   *spp = (uint32_t *)handle_sp;
-    uint32_t   *pcp = spp + 6;
-    const char *tn  = pxTaskName(NULL);
-    uint32_t    sp  = handle_sp;
-    uint32_t    pc  = handle_lr - 1;
-    uint32_t    cs  = (uint32_t)__section_begin(".text");
-    uint32_t    ce  = (uint32_t)__section_end(".text");
-    uint32_t    st  = uxTaskStackTop(NULL);
-    uint16_t    dp  = 0;
-
-    stack.r0  = spp[0];
-    stack.r1  = spp[1];
-    stack.r2  = spp[2];
-    stack.r3  = spp[3];
-    stack.r13 = spp[4];
-    stack.lr  = spp[5];
-    stack.pc  = spp[6];
-    stack.psr = spp[7];
-    strncpy(stack.name, tn, 32 - 1);
-
-    for (int i = 2; i > 0; --i)
+    if (stack_info == NULL)
     {
-        if (*pcp > cs && *pcp < ce)
-            stack.buffer[dp++] = *pcp;
-        pcp--;
+        return;
     }
 
-    if (handle_fpu)
+    // Print register values
+    printf("\n=== Hard Fault Stack Information ===\n");
+    printf("Task Name: %s\n", stack_info->name);
+    printf("\nRegisters:\n");
+    printf("  r0: 0x%08X\n", stack_info->r0);
+    printf("  r1: 0x%08X\n", stack_info->r1);
+    printf("  r2: 0x%08X\n", stack_info->r2);
+    printf("  r3: 0x%08X\n", stack_info->r3);
+    printf("  r13(sp): 0x%08X\n", stack_info->r13);
+    printf("  lr: 0x%08X\n", stack_info->lr);
+    printf("  pc: 0x%08X\n", stack_info->pc);
+    printf("  psr: 0x%08X\n", stack_info->psr);
+
+    // Print backtrace buffer
+    printf("\nBacktrace (depth: %u):\n", stack_info->depth);
+    for (uint32_t i = 0; i < stack_info->depth; i++)
     {
-        spp += 18;
+        printf("  [%u]: 0x%08X\n", i, stack_info->buffer[i]);
     }
-
-    sp = (uint32_t)spp;
-
-    for (; sp < st; sp += sizeof(size_t))
-    {
-        pc = *((uint32_t *)sp) - sizeof(size_t);
-        if (pc % 2 == 0)
-            continue;
-        pc = *((uint32_t *)sp) - 1;
-
-        if (pc > cs && pc < ce && dp < 32)
-        {
-            uint16_t *pi = (uint16_t *)(pc);
-            if (((pi[-1] & 0xFF00) == 0x4700) || (((pi[-1] & 0xF800) == 0xF800) && ((pi[-2] & 0xF800) == 0xF000)))
-                stack.buffer[dp++] = pc;
-        }
-    }
-    stack.depth = dp;
+    printf("====================================\n\n");
 }
