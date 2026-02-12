@@ -37,70 +37,54 @@ HardFault_Handler
 
     BL      backtrace
 
-    ; Call C function to print stack info - with interrupt protection
-    CPSID   i                     ; Close all interrupts (IRQ and FIQ)
+    CPSID   i
     LDR     r0, =stack
     BL      print_stack_info
-    CPSIE   i                     ; Open all interrupts (IRQ and FIQ)
+    CPSIE   i
 
 Fault_Loop
-    BL      Fault_Loop              ;while(1)
+    BL      Fault_Loop
 
 backtrace
-    ; r0 = handle_lr
-    ; r1 = handle_sp
-    ; r2 = handle_fpu
     PUSH    {r4-r11, lr}
 
     ; Save current registers
-    MOV     r4, r0                  ; handle_lr
-    MOV     r5, r1                  ; handle_sp
-    MOV     r6, r2                  ; handle_fpu
+    MOV     r4, r0
+    MOV     r5, r1
+    MOV     r6, r2
+    MOV     r7, r5
 
-    ; spp = (uint32_t *)handle_sp
-    MOV     r7, r5                  ; spp
-
-    ; stack.r0 = spp[0]
     LDR     r8, [r7, #0]
     LDR     r9, =stack
-    STR     r8, [r9, #0]            ; stack.r0
+    STR     r8, [r9, #0]
 
-    ; stack.r1 = spp[1]
     LDR     r8, [r7, #4]
-    STR     r8, [r9, #4]            ; stack.r1
+    STR     r8, [r9, #4]
 
-    ; stack.r2 = spp[2]
     LDR     r8, [r7, #8]
-    STR     r8, [r9, #8]            ; stack.r2
+    STR     r8, [r9, #8]
 
-    ; stack.r3 = spp[3]
     LDR     r8, [r7, #12]
-    STR     r8, [r9, #12]           ; stack.r3
+    STR     r8, [r9, #12]
 
-    ; stack.r13 = spp[4]
     LDR     r8, [r7, #16]
-    STR     r8, [r9, #16]           ; stack.r13
+    STR     r8, [r9, #16]
 
-    ; stack.lr = spp[5]
     LDR     r8, [r7, #20]
-    STR     r8, [r9, #20]           ; stack.lr
+    STR     r8, [r9, #20]
 
-    ; stack.pc = spp[6]
     LDR     r8, [r7, #24]
-    STR     r8, [r9, #24]           ; stack.pc
+    STR     r8, [r9, #24]
 
-    ; stack.psr = spp[7]
     LDR     r8, [r7, #28]
-    STR     r8, [r9, #28]           ; stack.psr
+    STR     r8, [r9, #28]
 
-    ; Get task name
-    MOV     r0, #0                  ; NULL
+    MOV     r0, #0
     BL      pxTaskName
 
-    ; Copy task name to stack.name
     MOV     r1, r0                  ; tn
     LDR     r0, =stack
-    ADD     r0, r0, #160            ; stack.name offset: 8 registers * 4 + 32 buffer entries * 4 = 32 + 128 = 160
+    ADD     r0, r0, #160          ; name 
     MOV     r2, #31                 ; max length
     BL      strncpy
 
@@ -109,10 +93,10 @@ backtrace
     STR     r0, [r9, #32]           ; stack.depth offset: 8 registers * 4 = 32
 
     ; Get .text section boundaries
-    ; cs = (uint32_t)__section_begin(".text")
-    ; ce = (uint32_t)__section_end(".text")
-    LDR     r8, =sfb(.text) + 4        ; cs
-    LDR     r9, =sfe(.text) + 4        ; ce
+    LDR     r8, =sfb(.text)        ; cs
+    LDR     r9, =sfe(.text)        ; ce
+    ADD     R8, R8, #4
+    ADD     R9, R9, #4
 
     ; Equivalent of C code: for (int i = 2; i > 0; --i)
     ; { if (*pcp > cs && *pcp < ce) stack.buffer[dp++] = *pcp; pcp--; }
