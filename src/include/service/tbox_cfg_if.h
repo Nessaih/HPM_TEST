@@ -36,7 +36,6 @@ typedef UINT32 TBOX_CFG_ID;
 #define TBOX_CFG_PORT_LEN            	2U
 #define TBOX_CFG_REPOT_INTV_LEN         2U
 #define TBOX_CFG_RTCPOR_LEN             4U  /*RTC上电标志*/
-#define TBOX_CFG_DEVICETIME_LEN         6U  /*设备时间，6字节：年月日时分秒*/
 typedef enum
 {
     CFG_TYPE_NUMBER = 0,     /*10机制数字类型，定义默认值是10进展数字字符串*/

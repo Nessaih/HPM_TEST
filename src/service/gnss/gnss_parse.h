@@ -3,6 +3,10 @@
 
 INT32 gnss_parse_init(UINT8 seq);
 
+VOID gnss_parse_sleep(VOID);
+
+VOID gnss_parse_wake(VOID);
+
 VOID gnss_parse_periodic(VOID);
 
 VOID gnss_parse_show_info(VOID);

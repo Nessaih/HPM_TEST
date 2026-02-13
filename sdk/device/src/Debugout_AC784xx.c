@@ -58,22 +58,22 @@
 /** @brief define uart max receive buffer size */
 #define MAX_DEBUG_BUFF_SIZE      128U
 /** @brief define debug uart for debug output  */
-#define DEBUG_UART               UART0
+#define DEBUG_UART               UART1
 /** @brief define debug uart interrupt vector  */
-#define DEBUG_UART_IRQ           UART0_IRQn
+#define DEBUG_UART_IRQ           UART1_IRQn
 /** @brief select debug uart clock  */
-#define DEBUG_UART_CLK           CKGEN_UART0_CLK
+#define DEBUG_UART_CLK           CKGEN_UART1_CLK
 /** @brief select debug uart bus clock  */
-#define DEBUG_UART_BUS_CLK       CKGEN_UART0_BUS_CLK
+#define DEBUG_UART_BUS_CLK       CKGEN_UART1_BUS_CLK
 /** @brief set debug uart smp */
 #define DEBUG_UART_SMP           16.0F
 /** @brief set debug uart baudrate  */
 #define DEBUG_UART_BAUDRATE      115200.0F
 
 /** @brief define select debug uart tx gpio */
-#define DEBUG_UART_TX_PIN        PORTID_C, 3U
+#define DEBUG_UART_TX_PIN        PORTID_C, 9U
 /** @brief define select debug uart rx gpio */
-#define DEBUG_UART_RX_PIN        PORTID_C, 2U
+#define DEBUG_UART_RX_PIN        PORTID_C, 8U
 /** @brief define select debug uart tx pinmux */
 #define DEBUG_UART_TX_FUNC       PORT_MUX_ALT2
 /** @brief define select debug uart rx pinmux */
@@ -150,9 +150,9 @@ void Debug_DeInit(boolean IsCloseDevice)
     if (TRUE == IsCloseDevice)
     {
         /* disable uart clock */
-        Rcm_Hal_SetResetState(RCM_RESET_ID_UART0, RCM_RESET_STATE_ASSERT);
-        Rcm_Hal_SetResetState(RCM_RESET_ID_UART0, RCM_RESET_STATE_DEASSERT);
-        (void)Ckgen_Hal_EnablePeriphClk(CKGEN_UART0_BUS_CLK, FALSE);
+        Rcm_Hal_SetResetState(RCM_RESET_ID_UART1, RCM_RESET_STATE_ASSERT);
+        Rcm_Hal_SetResetState(RCM_RESET_ID_UART1, RCM_RESET_STATE_DEASSERT);
+        (void)Ckgen_Hal_EnablePeriphClk(CKGEN_UART1_BUS_CLK, FALSE);
         /* Disable UART NVIC interrupt. */
         Core_Hal_DisableIrq(DEBUG_UART_IRQ);
         Core_Hal_ClearPendingIrq(DEBUG_UART_IRQ);

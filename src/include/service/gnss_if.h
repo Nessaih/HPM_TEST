@@ -30,7 +30,7 @@ extern double         gnss_get_speed(void);
 extern double         gnss_get_direction(void);
 extern GNSS_POS_STATE gnss_get_fix_state(void);
 extern int32_t        gnss_get_satellites(void);
-extern int32_t        gnss_get_position(GNSS_POSITION_DATA *pos);
+extern void           gnss_get_position(GNSS_POSITION_DATA *pos);
 extern int32_t        gnss_get_time(DEV_TIME *time);
 extern GNSS_ERROR_FLAG gnss_wdg_get_error_flag(void);
 

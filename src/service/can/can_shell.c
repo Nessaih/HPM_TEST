@@ -50,26 +50,50 @@ static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
 /* Shell 命令：显示最近接收的 CAN 消息日志 */
 static BaseType_t can_log_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
 {
-    UINT8 i, j;
+    static UINT8 current_can = 0;      /* 静态变量记录当前输出的 CAN 通道 */
+    static UINT8 current_msg = 0;      /* 静态变量记录当前输出的消息索引 */
+    static UINT8 first_call = 1;       /* 是否首次调用 */
+    UINT8 j;
     INT32 len = 0;
     UINT8 msg_count;
-    UINT8 display_count;
+    UINT8 batch_count;
+    can_msg_t *msg;
     
     (VOID)cmd;
     
-    msg_count = can_mgr_stat_get_last_msg_count();
-    display_count = (msg_count > 5) ? 5 : msg_count;  /* 最多显示5条消息 */
+    /* 首次调用，输出标题并初始化 */
+    if (first_call != 0) {
+        current_can = 0;
+        current_msg = 0;
+        first_call = 0;
+        len += snprintf(buf + len, bufsz - len, "\r\n=== CAN Message Log ===\r\n");
+        return pdTRUE;
+    }
     
-    len += snprintf(buf + len, bufsz - len, "\r\n=== CAN Message Log (Last %u) ===\r\n", display_count);
-    
-    if (msg_count == 0) {
-        len += snprintf(buf + len, bufsz - len, "No messages received yet.\r\n");
-    } else {
-        for (i = 0; i < display_count; i++) {
-            can_msg_t *msg = can_mgr_stat_get_last_msg(i);
+    /* 遍历每个 CAN 通道 */
+    while (current_can < DRV_CAN_INS_COUNT) {
+        msg_count = can_mgr_stat_get_last_msg_count(current_can);
+        
+        /* 输出当前 CAN 通道的标题 */
+        if (current_msg == 0) {
+            len += snprintf(buf + len, bufsz - len, 
+                          "\r\n--- CAN%u (Total: %u) ---\r\n", 
+                          current_can + 1, msg_count);
+            
+            if (msg_count == 0) {
+                len += snprintf(buf + len, bufsz - len, "No messages received yet.\r\n");
+                current_can++;
+                continue;
+            }
+        }
+        
+        /* 输出当前 CAN 通道的消息（每次最多输出 5 条，避免超出缓冲区） */
+        batch_count = 0;
+        while (current_msg < msg_count && batch_count < 5) {
+            msg = can_mgr_stat_get_last_msg(current_can, current_msg);
             if (msg != NULL_PTR) {
                 len += snprintf(buf + len, bufsz - len, "[%02u] CAN%u ID=0x%08lX Len=%u Data=", 
-                          i + 1, msg->ins + 1, msg->id, msg->len);
+                          current_msg + 1, current_can + 1, msg->id, msg->len);
                 
                 for (j = 0; j < msg->len && j < 8; j++) {
                     len += snprintf(buf + len, bufsz - len, "%02X ", msg->data[j]);
@@ -77,12 +101,25 @@ static BaseType_t can_log_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
                 
                 len += snprintf(buf + len, bufsz - len, "\r\n");
             }
+            current_msg++;
+            batch_count++;
+        }
+        
+        /* 当前 CAN 通道输出完毕，切换到下一个 */
+        if (current_msg >= msg_count) {
+            current_can++;
+            current_msg = 0;
+        }
+        
+        /* 如果缓冲区快满了，先返回，下次继续 */
+        if (len > (INT32)(bufsz - 100)) {
+            return pdTRUE;
         }
     }
     
     len += snprintf(buf + len, bufsz - len, "================================\r\n");
-    
-    return pdFALSE;
+    first_call = 1;
+    return pdFALSE;  /* 命令执行完毕 */
 }
 
 /* Shell 命令：发送 CAN 数据 */

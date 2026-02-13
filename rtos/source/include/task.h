@@ -3766,11 +3766,6 @@ void vTaskInternalSetTimeOutState( TimeOut_t * const pxTimeOut ) PRIVILEGED_FUNC
 
 #endif /* #if ( ( portUSING_MPU_WRAPPERS == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) && ( configENABLE_ACCESS_CONTROL_LIST == 1 ) ) */
 
-extern const char* pxTaskName( TaskHandle_t xTaskToQuery );
-
-extern uint32_t uxTaskStackTop( TaskHandle_t xTaskToQuery );
-
-
 /* *INDENT-OFF* */
 #ifdef __cplusplus
     }

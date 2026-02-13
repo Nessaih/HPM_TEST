@@ -9,9 +9,9 @@ VOID hpm_cfg_sleep(VOID);
 
 VOID hpm_cfg_changed_handle(TBOX_MSG_DATA *data);
 
-INT32 hpm_cfg_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len);
+INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len);
 
-INT32 hpm_cfg_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len);
+INT32 hpm_cfg_tsp_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len);
 
 INT32 hpm_cfg_get_devid(UINT8 *data, INT32 len);
 

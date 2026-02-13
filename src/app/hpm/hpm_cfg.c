@@ -34,6 +34,7 @@ typedef struct
 
 static HPM_CFG_RUN_INFO_T hpm_cfg_run_info;
 
+
 static VOID hpm_cfg_run_info_write(VOID)
 {
 	INT32 ret = 0;
@@ -1447,7 +1448,7 @@ static INT32 hpm_cfg_tsp_set_gps_mode(UINT8 *data, UINT16 in_len)
 #endif
 }
 
-static HPM_CFG_TSP_ITEM hpm_cfg_table[] = {
+static HPM_CFG_TSP_ITEM hpm_cfg_tsp_table[] = {
 	{HPM_CFG_TSP_PARA_APN ,				hpm_cfg_tsp_get_apn,			hpm_cfg_tsp_set_apn,			hpm_cfg_tsp_check_apn			},
 	{HPM_CFG_TSP_PARA_MAIN_IP , 		hpm_cfg_tsp_get_main_ip,		hpm_cfg_tsp_set_main_ip,		hpm_cfg_tsp_check_main_ip		},
 	{HPM_CFG_TSP_PARA_MAIN_URL , 		hpm_cfg_tsp_get_main_url,		hpm_cfg_tsp_set_main_url,		hpm_cfg_tsp_check_mian_url		},
@@ -1473,7 +1474,7 @@ static HPM_CFG_TSP_ITEM hpm_cfg_table[] = {
 };
 
 
-INT32 hpm_cfg_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len)
+INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len)
 {
 	UINT16 r_len = 0;
 	UINT16 w_len = 0;	
@@ -1491,15 +1492,15 @@ INT32 hpm_cfg_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *o
 		one_cfg = (in_data[r_len] << 8)+in_data[r_len+1];
 		if(one_cfg >= HPM_CFG_TSP_PARA_MIN && one_cfg <= HPM_CFG_TSP_PARA_MAX)
 		{
-			for(index = 0;index < sizeof(hpm_cfg_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
+			for(index = 0;index < sizeof(hpm_cfg_tsp_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
 			{
-				if(one_cfg == hpm_cfg_table[index].optcode && NULL != hpm_cfg_table[index].get)
+				if(one_cfg == hpm_cfg_tsp_table[index].optcode && NULL != hpm_cfg_tsp_table[index].get)
 				{
 					out_data[w_len++] = one_cfg >> 8;
 					out_data[w_len++] = one_cfg;
 					tmp_pos = w_len;
 					w_len ++;
-					ret = hpm_cfg_table[index].get(out_data + w_len,&one_len);
+					ret = hpm_cfg_tsp_table[index].get(out_data + w_len,&one_len);
 					if(HPM_CFG_RESP_OK != ret)
 					{
 						break;
@@ -1527,7 +1528,7 @@ INT32 hpm_cfg_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *o
 	return ret;
 }
 
-INT32 hpm_cfg_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len)
+INT32 hpm_cfg_tsp_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len)
 {
 	UINT16 r_len;
 	UINT16 index = 0;
@@ -1542,11 +1543,11 @@ INT32 hpm_cfg_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *o
 		one_len = in_data[r_len++];
 		if(one_cfg >= HPM_CFG_TSP_PARA_MIN && one_cfg <= HPM_CFG_TSP_PARA_MAX)
 		{
-			for(index = 0;index < sizeof(hpm_cfg_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
+			for(index = 0;index < sizeof(hpm_cfg_tsp_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
 			{
-				if(one_cfg == hpm_cfg_table[index].optcode && NULL != hpm_cfg_table[index].check)
+				if(one_cfg == hpm_cfg_tsp_table[index].optcode && NULL != hpm_cfg_tsp_table[index].check)
 				{
-					check_flag = hpm_cfg_table[index].check(in_data + r_len,one_len);
+					check_flag = hpm_cfg_tsp_table[index].check(in_data + r_len,one_len);
 					if(HPM_CFG_RESP_OK != check_flag)
 						break;
 				}
@@ -1565,11 +1566,11 @@ INT32 hpm_cfg_set_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *o
 			one_len = in_data[r_len++];
 			if(one_cfg >= HPM_CFG_TSP_PARA_MIN && one_cfg <= HPM_CFG_TSP_PARA_MAX)
 			{
-				for(index = 0;index < sizeof(hpm_cfg_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
+				for(index = 0;index < sizeof(hpm_cfg_tsp_table)/sizeof(HPM_CFG_TSP_ITEM);index ++)
 				{
-					if(one_cfg == hpm_cfg_table[index].optcode && NULL != hpm_cfg_table[index].set)
+					if(one_cfg == hpm_cfg_tsp_table[index].optcode && NULL != hpm_cfg_tsp_table[index].set)
 					{
-						hpm_cfg_table[index].set(in_data + r_len,one_len);
+						hpm_cfg_tsp_table[index].set(in_data + r_len,one_len);
 					}
 				}
 			}		

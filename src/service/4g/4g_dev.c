@@ -83,7 +83,7 @@ INT32 dev_4g_open(VOID)
 {
     if((UINT8)DEV_4G_STATE_OPENED == dev_4g_is_open)
     {
-        MODULE_LOG_E(TBOX4G, "4g uart is already opened");
+        MODULE_LOG_W(TBOX4G, "4g uart is already opened");
         Uart_Hal_ReceiveData(DEV_4G_INSTANCE, dev_4g_rx_buffer, DEV_4G_RXBUF_SIZE);
         return (INT32)TBOX_E_HASSTART;
     }

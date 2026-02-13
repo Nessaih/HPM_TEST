@@ -1845,7 +1845,7 @@ static void Lin_Hal_StateInit
     StatePtr->TimeoutCounter = 0U;
 }
 
-static void Lin_Hal_IRQHandler
+static void __attribute__((unused)) Lin_Hal_IRQHandler
 (
     uint8 Instance
 )

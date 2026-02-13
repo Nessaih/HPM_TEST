@@ -49,12 +49,11 @@ static drv_timer_t hw_timer;
 static drv_tcb_t   hw_tcb;
 
 TBOX_MODULE_FUN(STIMER, tbox_stimer_init, NULL_PTR, NULL_PTR, NULL_PTR, tbox_stimer_exit, NULL_PTR);
-TBOX_RUNLOOP_MODULE(STIMER, TBOX_TASK_PRIORITY_MID1, LOG_LEVEL_ERROR, TBOX_TASK_MEDIUM_STACK_SIZE, tbox_stimer_task);
+TBOX_RUNLOOP_MODULE(STIMER, TBOX_TASK_PRIORITY_HIGH, LOG_LEVEL_ERROR, TBOX_TASK_MEDIUM_STACK_SIZE, tbox_stimer_task);
 TBOX_MODULE_LOADER(STIMER)
 {
     /*TODO 加载其他信息*/
 }
-
 
 VOID tbox_stimer_start(VOID)
 {

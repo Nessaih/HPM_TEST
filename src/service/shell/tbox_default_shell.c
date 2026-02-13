@@ -38,13 +38,13 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
     case 1: {
         len = 0;
 #if (configGENERATE_RUN_TIME_STATS == 1)
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "┌───────────┬───────┬──────┬───────────┬────────┬───────┐\n");
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "│ Task Name │ State │ Prio │ StackFree │ TaskID │ Usage │\n");
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "├───────────┼───────┼──────┼───────────┼────────┼───────┤\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "┌─────────────────┬───────┬──────┬───────────┬────────┬───────┐\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "│    Task Name    │ State │ Prio │ StackFree │ TaskID │ Usage │\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "├─────────────────┼───────┼──────┼───────────┼────────┼───────┤\n");
 #else
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "┌───────────┬───────┬──────┬───────────┬────────┐\n");
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "│ Task Name │ State │ Prio │ StackFree │ TaskID │\n");
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "├───────────┼───────┼──────┼───────────┼────────┤\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "┌─────────────────┬───────┬──────┬───────────┬────────┐\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "│    Task Name    │ State │ Prio │ StackFree │ TaskID │\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "├─────────────────┼───────┼──────┼───────────┼────────┤\n");
 #endif
 
         if (len > 0) {
@@ -92,7 +92,7 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
                     task->xTaskNumber);
             }
 #else
-            len = snprintf(&buf[len], bufsz - (uint32_t)len, "│ %-10s│ %-5c │ %-4u │ %-9u │ %-7u│\n",
+            len = snprintf(&buf[len], bufsz - (uint32_t)len, "│ %-16s│ %-5c │ %-4u │ %-9u │ %-7u│\n",
                 task->pcTaskName,
                 state,
                 task->uxCurrentPriority,
@@ -120,9 +120,9 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
     case 3: {
 #if (configGENERATE_RUN_TIME_STATS == 1)
         len = 0;
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "└───────────┴───────┴──────┴───────────┴────────┴───────┘\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "└─────────────────┴───────┴──────┴───────────┴────────┴───────┘\n");
 #else
-        len += snprintf(&buf[len], bufsz - (uint32_t)len, "└───────────┴───────┴──────┴───────────┴────────┘\n");
+        len += snprintf(&buf[len], bufsz - (uint32_t)len, "└─────────────────┴───────┴──────┴───────────┴────────┘\n");
 #endif
         xReturn = pdTRUE;
         xPhase  = 4;

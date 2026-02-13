@@ -40,6 +40,8 @@ INT32 hpm_pack_logout(UINT8 *buf);
 
 INT32 hpm_pack_heartbeat(UINT8 *buf);
 
+INT32 hpm_pack_common_resp(UINT8 *buf, UINT8* res, UINT16 ret_len);
+
 INT32 hpm_pack_unpack(UINT8 *in, UINT16 inlen, HPM_PACK_FRAME_T *parsebuf, UINT16 *parselen);
 
 #endif

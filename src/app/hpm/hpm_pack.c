@@ -153,10 +153,18 @@ INT32 hpm_pack_logout(UINT8 *buf)
 
 INT32 hpm_pack_heartbeat(UINT8 *buf)
 {
-    UINT8 len;
+    UINT8 len = 0;
     len = hpm_pack(HPM_CMD_HEART_BEAT, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, 0, NULL, buf);
     return len;
 }
+
+INT32 hpm_pack_common_resp(UINT8 *buf, UINT8* res, UINT16 ret_len)
+{
+	UINT8 len = 0;
+	len = hpm_pack(HPM_CMD_TBOX_COMMON_ACK, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, ret_len, res, buf);
+    return len;
+}
+
 
 INT32 hpm_pack_unpack(UINT8 *in, UINT16 inlen, HPM_PACK_FRAME_T *parsebuf, UINT16 *parselen)
 {

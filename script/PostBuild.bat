@@ -12,6 +12,7 @@ for %%I in ("%TARGET_PATH%\..\..\..\..") do set "OUTPUT=%%~fI\output"
 
 
 set OUT=%TARGET_PATH%.out
+set ELF=%OUTPUT%\%TARGET_NAME%.elf
 set HEX=%OUTPUT%\%TARGET_NAME%.hex
 set BIN=%OUTPUT%\%TARGET_NAME%.bin
 
@@ -30,5 +31,8 @@ ielftool --bin --verbose %OUT% %BIN% >nul 2>&1
 
 :: generate additional output: hex
 ielftool --ihex --verbose %OUT% %HEX% >nul 2>&1
+
+:: generate additional output: elf
+cp %OUT% %ELF% >nul 2>&1
 
 @echo on

@@ -16,7 +16,7 @@ VOID gnss_com_task(VOID *param)
 	
 	for(;;)
 	{
-		BaseType_t notify_status = xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, pdTICKS_TO_MS(200));;
+		BaseType_t notify_status = xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, pdTICKS_TO_MS(1000U));
         if (notify_status == pdFALSE)
         {
             continue;

@@ -21,7 +21,7 @@ TBOX_MODULE_LOADER(GNSS)
 
 
 static TBOX_ID gnss_module_id;
-
+SemaphoreHandle_t  gnss_mutex;
 
 static INT32 gnss_init(UINT8 seq)
 {
@@ -29,6 +29,7 @@ static INT32 gnss_init(UINT8 seq)
     switch (seq)
     {
         case MODULE_INIT_SEQ_OS:
+			gnss_mutex = NULL;
             GET_TBOX_MODULE_ID(GNSS, gnss_module_id);
             break;
 
@@ -37,6 +38,13 @@ static INT32 gnss_init(UINT8 seq)
 
         case MODULE_INIT_SEQ_MODULE:
             tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_START);
+			gnss_mutex = xSemaphoreCreateMutex();
+			if(NULL == gnss_mutex)
+			{
+				MODULE_LOG_E(HPM, "hpm creat mutex faied");
+				vSemaphoreDelete(gnss_mutex);
+                gnss_mutex = NULL;
+			}
             break;
             
         default:
@@ -54,11 +62,13 @@ static INT32 gnss_init(UINT8 seq)
 static VOID gnss_stop(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_STOP);
+	gnss_parse_sleep();
 }
 
 static VOID  gnss_start(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_START);
+	gnss_parse_wake();
 }
 
 static VOID  gnss_exit(VOID)

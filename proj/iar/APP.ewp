@@ -2715,6 +2715,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_content.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_control.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_control.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data.c</name>
                 </file>
                 <file>
@@ -3508,6 +3514,18 @@
                 <name>time</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\time\time.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_backup.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_backup.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\time\time_shell.c</name>

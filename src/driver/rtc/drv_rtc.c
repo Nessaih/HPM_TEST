@@ -93,13 +93,11 @@ rtc_status_t drv_rtc_get_time(rtc_time_t *time)
     return RTC_STATUS_SUCCESS;
 }
 
-rtc_status_t drv_rtc_set_alarm(const rtc_time_t *time)
+rtc_status_t drv_rtc_set_alarm(unsigned char day, unsigned char hour, unsigned char min)
 {
-
     int32_t ret;
     uint8_t buf[3];
 
-    
     buf[0] = 0x00;
     ret    = drv_i2c_write(RTC_ADDR, 1, &buf[0], 1);
     if (0 != ret) {
@@ -107,14 +105,14 @@ rtc_status_t drv_rtc_set_alarm(const rtc_time_t *time)
         return RTC_STATUS_ERROR;
     }
 
-    if (NULL == time) {
-        DRV_LOG_W(DRVRTC, "alarm stoped, but not set");
+    if (day == 0 && hour == 0 && min == 0) {
+        DRV_LOG_W(DRVRTC, "alarm stopped, but not set");
         return RTC_STATUS_ALARM_STOPED;
     }
 
-    buf[0] = 0x7FU & dec2bcd(time->minute);
-    buf[1] = 0x7FU & dec2bcd(time->hour);
-    buf[2] = 0x7FU & dec2bcd(time->day);
+    buf[0] = 0x7FU & dec2bcd(min);
+    buf[1] = 0x7FU & dec2bcd(hour);
+    buf[2] = 0x7FU & dec2bcd(day);
     ret    = drv_i2c_write(RTC_ADDR, 9, buf, (uint16_t)sizeof(buf));
 
     if (0 != ret) {
@@ -122,7 +120,6 @@ rtc_status_t drv_rtc_set_alarm(const rtc_time_t *time)
         return RTC_STATUS_ERROR;
     }
 
-    
     buf[0] = 0x02;
     ret    = drv_i2c_write(RTC_ADDR, 1, &buf[0], 1);
     if (0 != ret) {
@@ -134,3 +131,22 @@ rtc_status_t drv_rtc_set_alarm(const rtc_time_t *time)
 }
 
 
+bool drv_rtc_is_startup_pre(void)
+{
+    int32_t ret;
+    uint8_t buf[7];
+    bool    vl_detected = false;
+
+    ret = drv_i2c_read(RTC_ADDR, 2, buf, (uint16_t)sizeof(buf));
+    if (0 != ret) {
+        DRV_LOG_E(DRVRTC, "Read RTC status failed");
+        return false;
+    }
+
+    if ((buf[0] & 0x80U) != 0U) {
+        vl_detected = true;
+        DRV_LOG_W(DRVRTC, "RTC voltage loss detected (pre-startup state)");
+    }
+
+    return vl_detected;
+}

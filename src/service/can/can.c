@@ -174,8 +174,8 @@ static VOID can_task(VOID *param)
         /* 检查模块状态 */
         if(tbox_module_get_state(can_module_id) != TBOX_MODULE_STATE_START)
         {
-            MODULE_LOG_D(CAN, "task stopped, return");
-            return;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
         }
         
         notify_value = 0;

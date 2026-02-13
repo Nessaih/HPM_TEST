@@ -1395,6 +1395,8 @@ static uint8 net_4g_query_apn_resp(void *context, uint8 *data, uint16 *len)
     uint8 *temp;
     uint8 *token;
     uint16 temp_len = 0;
+    char *quote_start, *quote_end;
+    char *apn_str = NULL_PTR;
 
     if(AT_4G_QUERY_APN != resp->cmd.cmd_id)
     {
@@ -1412,21 +1414,62 @@ static uint8 net_4g_query_apn_resp(void *context, uint8 *data, uint16 *len)
             return AT_4G_DECODE_NOMATCH;
         }
 
-        MODULE_LOG_I(TBOX4G, "receive apn information:%s", (CHAR*)data);
-
         temp = token;
         token = tbox_string_get_substring(data, temp_len, AT_4G_RECV_END_OK_STRING);
         if(NULL == token)
         {
             return AT_4G_DECODE_CONTINUE;
         }
+        temp = (uint8 *)strchr((char *)data, ',');
+        if(NULL_PTR == temp)
+        {
+            seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
+            *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
+            return AT_4G_DECODE_ISMATCH;            
+        }
+        quote_start = strchr((char *)(temp+1U), '\"');
+        if(NULL_PTR == quote_start)
+        {
+            seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
+            *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
+            return AT_4G_DECODE_ISMATCH; 
+        }
+        quote_end = strchr(quote_start+1U, '\"');
+        if(NULL_PTR == quote_end)
+        {
+            seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
+            *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
+            return AT_4G_DECODE_ISMATCH; 
+        }
+        apn_str = (char *)mempool_alloc(NET_APN_NAME_MAX+1U);
+        if(NULL_PTR == apn_str)
+        {
+            MODULE_LOG_E(TBOX4G, "failed to alloc memory for apn string");
+            seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
+            *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
+            return AT_4G_DECODE_ISMATCH;            
+        }
+        temp_len = (uint16)(quote_end - quote_start - 1U);
+        if(temp_len > NET_APN_NAME_MAX)
+        {
+            MODULE_LOG_E(TBOX4G, "the apn lenght too long:%d", temp_len);
+            seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
+            *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
+            return AT_4G_DECODE_ISMATCH;               
+        }
+        strncpy(apn_str, quote_start + 1U, temp_len);
+
+        MODULE_LOG_I(TBOX4G, "receive apn information:%s", apn_str);
 
         for(index = 0; index < NET_4G_APN_MAX_COUNT; index++)
         {
             if(net_4g_info.apns[index].cid >= 0)
             {
-                temp = tbox_string_get_substring(data, temp_len, (CHAR*)net_4g_info.apns[index].name);
-                if(NULL != temp)
+                if(strlen((char*)net_4g_info.apns[index].name) != temp_len)
+                {
+                    continue;
+                }
+                if(0 == strncmp((char*)net_4g_info.apns[index].name, apn_str, temp_len))
                 {
                     MODULE_LOG_I(TBOX4G, "the apn[%s] exists in the 4G module", (char*)net_4g_info.apns[index].name);
                     net_4g_info.apns[index].exists_in4g = 1;
@@ -1434,8 +1477,8 @@ static uint8 net_4g_query_apn_resp(void *context, uint8 *data, uint16 *len)
             }
         }
 
+        mempool_free(apn_str);
         seqmgr_4g_handle_cmd_exe_result(AT_4G_QUERY_APN, SEQMGR_4G_CMD_EXE_OK);
-
         *len = (uint16)(token-data)+strlen(AT_4G_RECV_END_OK_STRING);
         return AT_4G_DECODE_ISMATCH;
     }

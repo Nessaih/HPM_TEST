@@ -26,8 +26,6 @@ static BaseType_t gnss_shell_cmd(char *buf, size_t bufsz, const char *cmd)
 		goto GNSS_SHELL_ERR;
     }
 
-	tbox_log_print("len1: %d, p1: %s\r\n", param1_len, param1_ptr);
-
 	if(0 == strncmp(param1_ptr, "-h", param1_len))
 	{
 		gnss_shell_tips();

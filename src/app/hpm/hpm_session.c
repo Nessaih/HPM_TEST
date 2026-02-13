@@ -431,6 +431,8 @@ static VOID hpm_session_receive(VOID)
 			hpm_session_recv_info.cmd = parse->cmd;
 			hpm_session_recv_info.data_len = parse_len;	
 			memcpy(hpm_session_recv_info.data,parse->data,parse_len);
+			MODULE_LOG_I(HPM, "receive control cmd: 0x%02x", hpm_session_recv_info.cmd);
+			hpm_control_cmd_handle(hpm_session_recv_info.cmd, hpm_session_recv_info.data, hpm_session_recv_info.data_len);
 			data_len -= read_len;
 			if(data_len > 0)
 			{					

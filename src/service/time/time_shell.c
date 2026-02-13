@@ -18,11 +18,25 @@ static BaseType_t show_time(char *buf, size_t bufsz, const char *cmd)
     len += snprintf(&buf[len], bufsz - (size_t)len, "\r\n=== Time Information ===\r\n");
     len += snprintf(&buf[len], bufsz - (size_t)len, "Sync Source : %s\r\n", time_if_sync_source_to_str(sync_source));
     
+    /* 显示系统时间是否设置 */
+    if (time_if_is_set()) {
+        len += snprintf(&buf[len], bufsz - (size_t)len, "System Set  : Yes\r\n");
+    } else {
+        len += snprintf(&buf[len], bufsz - (size_t)len, "System Set  : No\r\n");
+    }
+
     /* 显示系统时间 */
     memset(&time, 0, sizeof(time));
     time_if_get(&time);
     len += snprintf(&buf[len], bufsz - (size_t)len, "System Time : %04u-%02u-%02u %02u:%02u:%02u.%03u\r\n", 
                     time.year + 2000U, time.month, time.day, time.hour, time.min, time.sec, time.msec);
+
+    /* 显示RTC时间是否设置 */
+    if (time_if_rtc_is_set()) {
+        len += snprintf(&buf[len], bufsz - (size_t)len, "RTC Set     : Yes\r\n");
+    } else {
+        len += snprintf(&buf[len], bufsz - (size_t)len, "RTC Set     : No\r\n");
+    }
 
     /* 显示RTC时间 */
     memset(&time, 0, sizeof(time));
@@ -122,7 +136,7 @@ static BaseType_t set_time(char *buf, size_t bufsz, const char *cmd)
     }
 
     /* 设置时间 */
-    time_if_set_with_source(time, TIME_SYNC_SOURCE_SHELL);
+    time_if_set_with_source(TIME_SYNC_SOURCE_SHELL, &time);
 
     snprintf(buf, bufsz, "Time set successfully: %04d-%02d-%02d %02d:%02d:%02d\r\n",
              year, month, day, hour, min, sec);
@@ -139,7 +153,7 @@ static BaseType_t set_rtc_wake(char *buf, size_t bufsz, const char *cmd)
     int32_t     parsed;
     char        day_str[8] = {0};
     char        time_str[16] = {0};
-    rtc_status_t ret;
+    int         ret;
 
     /* 获取第一个参数 */
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 1, &param_len);
@@ -152,8 +166,8 @@ static BaseType_t set_rtc_wake(char *buf, size_t bufsz, const char *cmd)
 
     /* 检查是否是关闭命令 */
     if (param_len == 3 && strncmp(param_ptr, "off", 3) == 0) {
-        ret = drv_rtc_set_alarm(NULL);
-        if (ret == RTC_STATUS_SUCCESS || ret == RTC_STATUS_ALARM_STOPED) {
+        ret = time_if_set_rtcwake(0, 0, 0);
+        if (ret == (int)RTC_STATUS_SUCCESS || ret == (int)RTC_STATUS_ALARM_STOPED) {
             snprintf(buf, bufsz, "RTC wake alarm stopped\r\n");
         } else {
             snprintf(buf, bufsz, "Failed to stop RTC wake alarm (status: %d)\r\n", ret);
@@ -214,8 +228,8 @@ static BaseType_t set_rtc_wake(char *buf, size_t bufsz, const char *cmd)
     alarm.minute = (uint8_t)min;
 
     /* 设置唤醒时间 */
-    ret = drv_rtc_set_alarm(&alarm);
-    if (ret == RTC_STATUS_SUCCESS) {
+    ret = time_if_set_rtcwake((unsigned char)day, (unsigned char)hour, (unsigned char)min);
+    if (ret == (int)RTC_STATUS_SUCCESS) {
         snprintf(buf, bufsz, "RTC wake alarm set: day=%d, %02d:%02d\r\n", day, hour, min);
     } else {
         snprintf(buf, bufsz, "Failed to set RTC wake alarm (status: %d)\r\n", ret);

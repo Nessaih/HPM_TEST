@@ -70,6 +70,8 @@ static void dial_4g_handle_resptimeout(void);
 
 static void dial_4g_cfg_change(const char *name, TBOX_MSG_DATA *data);
 
+static void dial_4g_cfg_setdefault(const char *name, TBOX_MSG_DATA *data);
+
 static DIAL_4G_MGR dial_4g_mgr;
 
 static uint8 dial_4g_resetcount;
@@ -120,7 +122,8 @@ void dial_4g_init(void)
 
     TBOX_ID module_id;
     GET_TBOX_MODULE_ID(TBOX4G, module_id);
-    tbox_message_subscribe(TBOX_CFG_EVENT_VALUE_CHANGE, module_id, dial_4g_cfg_change);    
+    tbox_message_subscribe(TBOX_CFG_EVENT_VALUE_CHANGE, module_id, dial_4g_cfg_change);
+    tbox_message_subscribe(TBOX_CFG_EVENT_SET_DEFAULT, module_id, dial_4g_cfg_setdefault);   
 }
 
 void dial_4g_reset(void)
@@ -248,6 +251,12 @@ uint8 dial_4g_stopcall(void)
         if(FALSE == dial_4g_has_apn_need_stop((INT8)(-1), &next_index))
         {
             MODULE_LOG_I(TBOX4G, "it is not need to stop dial");
+            TBOX_4G_MUTEX_LOCK();
+            for(uint8 index = 0; index < DIAL_4G_APN_MAX_INDEX; index++)
+            {
+                dial_4g_mgr.net[index].state = DIAL_4G_STATE_DISCONNECTED;
+            }
+            TBOX_4G_MUTEX_UNLOCK();            
             dial_4g_mgr.mgr_state = DIAL_4G_MGR_STOP_FINISH;
             return 0;
         }
@@ -922,6 +931,12 @@ static void dial_4g_handle_notify_when_abort(void)
     dial_4g_mgr.period = 0;
     if(FALSE == dial_4g_has_apn_need_stop((INT8)(-1), &next_index))
     {
+        TBOX_4G_MUTEX_LOCK();
+        for(uint8 index = 0; index < DIAL_4G_APN_MAX_INDEX; index++)
+        {
+            dial_4g_mgr.net[index].state = DIAL_4G_STATE_DISCONNECTED;
+        }
+        TBOX_4G_MUTEX_UNLOCK();         
         dial_4g_mgr.mgr_state = DIAL_4G_MGR_STOP_FINISH;
         return;
     }
@@ -1033,6 +1048,44 @@ static void dial_4g_cfg_change(const char *name, TBOX_MSG_DATA *data)
         dial_4g_stopcall();
         break;
     }
+
+    mempool_free(new_apn_buffer);
+}
+
+static void dial_4g_cfg_setdefault(const char *name, TBOX_MSG_DATA *data)
+{
+    UNUSED(name);
+    UNUSED(data);
+
+    char *new_apn_buffer;
+	TBOX_CFG_ID cfg_id;
+    TBOX_CFG_ID_GET(PUBAPN, cfg_id);
+
+    new_apn_buffer = (char *)mempool_alloc(TBOX_CFG_APN_LEN+1U);
+    if(NULL_PTR == new_apn_buffer)
+    {
+        MODULE_LOG_E(TBOX4G, "failed to alloc memory for apn");
+        return;
+    }
+    memset(new_apn_buffer, 0U, TBOX_CFG_APN_LEN);
+
+    tbox_cfg_read(cfg_id, new_apn_buffer);
+    if(0U == strlen(new_apn_buffer))
+    {
+        MODULE_LOG_W(TBOX4G, "apn is empty");
+        mempool_free(new_apn_buffer);  
+        return;
+    }
+    if(0 == strncmp(new_apn_buffer, (char*)dial_4g_mgr.net[DIAL_4G_PUBLIC_APN].apn, DIAL_4G_APN_LEN))
+    {
+        MODULE_LOG_W(TBOX4G, "the apn is same as default");
+        mempool_free(new_apn_buffer);  
+        return;
+    }
+
+    MODULE_LOG_I(TBOX4G, "public apn cfg change old:%s new:%s", dial_4g_mgr.net[DIAL_4G_PUBLIC_APN].apn, new_apn_buffer);
+    strncpy((char*)dial_4g_mgr.net[DIAL_4G_PUBLIC_APN].apn, new_apn_buffer, DIAL_4G_APN_LEN);
+    dial_4g_stopcall();
 
     mempool_free(new_apn_buffer);
 }

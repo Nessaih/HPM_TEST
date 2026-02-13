@@ -343,8 +343,18 @@ static BaseType_t prvHelpCommand( char * pcWriteBuffer, size_t xWriteBufferLen, 
     {
         /* Reset the pxCommand pointer back to the start of the list. */
         pxCommand = &xRegisteredCommands;
+        /*忽略help命令*/
+        if(pxCommand != NULL)
+        {
+            pxCommand = pxCommand->pxNext;
+            if(pxCommand == NULL)
+            {
+                xReturn = pdFALSE;
+                return xReturn;
+            }
+        }
         /* Print a newline before printing the first command */
-        xWroteLength = snprintf(pcWriteBuffer, xWriteBufferLen, "\r\n");
+        xWroteLength = snprintf(pcWriteBuffer, xWriteBufferLen, "\r\nshow command list:\r\n");
     }
 
     /* Return the next command help string, before moving the pointer on to

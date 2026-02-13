@@ -63,7 +63,7 @@ int32_t analog_bat_tmp(void)
     if (i < 7U) {
         tmp = (vtg - bat_curve[6U - i].offset) / bat_curve[6U - i].coefficient;
     } else {
-        if (vtg < 4080.0f) {
+        if (vtg < 4020.0f) {
             tmp = -40.0f;
         } else {
             tmp = 255.0f;

@@ -173,8 +173,9 @@ static void battery_task(void *param)
     for (;;) {
         if(tbox_module_get_state(battery_module_id) != TBOX_MODULE_STATE_START)
         {
-            MODULE_LOG_D(BATTERY, "task stopped, return");
-            return;
+            // MODULE_LOG_D(BATTERY, "task stopped, return");
+            vTaskDelay(pdMS_TO_TICKS(100));  // 模块未启动时休眠
+            continue;
         }
 
         battery_charge_mgr_1s();

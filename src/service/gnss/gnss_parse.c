@@ -3,7 +3,10 @@
 #include "time_if.h"
 #include "tbox_log.h"
 #include "gnss_if.h"
+#include "tbox_cfg_if.h"
+#include "tbox_bits.h"
 
+#include "gnss.h"
 #include "gnss_nmeap.h"
 
 #define SPEED_KN_TO_KM(speed) (1.852 * (speed))
@@ -14,6 +17,8 @@
 #define GNSS_PARSE_ENABLE_GSV (0)
 #define GNSS_PARSE_BUFF_SIZE  (256)
 
+#define GNSS_INFO_MAGICNO	  (0x11223344)
+#define GNSS_INFO_MANE		  ("GNSS_INFO_BACKUP")
 
 typedef struct gnss_info
 {
@@ -31,24 +36,48 @@ typedef struct gnss_info
 	DOUBLE hdop;
 } gnss_info_t;
 
+typedef struct
+{
+	UINT32 magic;
+	UINT8  is_east;
+    UINT8  is_north;
+    DOUBLE longitude;
+    DOUBLE latitude;
+}gnss_info_backup_t;
+
 static nmeap_context_t gnss_parse_nmea_context;
 static gnss_info_t     gnss_parse_info;
 static BOOL            gnss_parse_nmea_log;
 static UINT8           gnss_parse_buff[GNSS_PARSE_BUFF_SIZE];
 static DEV_TIME        gnss_parse_time;
 
+static gnss_info_backup_t  gnss_parse_info_backup;
+
 static INT32 gnss_parse_get_timezone(VOID)
 {
-	int32_t time_zone = 8;
-	
-	#if 0
-	if(0 == dev_cfg_get(CFG_ITEM_TIME_ZONE,(uint8_t *)&time_zone))
-	{
-		time_zone = 8;
-	}
-	#endif
+	INT32 ret = 0;
+	TBOX_CFG_ID cfg_id;
+	TBOX_CFG_ID_GET(TIMEZONE, cfg_id);
+	UINT8 time_zone = 0;
+    INT32 zone = 0;
 
-    return time_zone;
+	ret = tbox_cfg_read(cfg_id, &time_zone);
+	if(0 != ret)
+	{
+		MODULE_LOG_E(GNSS, "gnss get time zone failed, ret: %d", ret);
+		return 0;
+	}
+
+	if(BITS_IS_SET(time_zone, 7))
+	{
+		zone = -(time_zone & 0x7F);
+	}
+	else
+	{
+		zone = time_zone & 0x7F;
+	}
+
+    return zone;
 }
 
 static VOID double_to_string(DOUBLE v, INT8 *s, UINT32 size)
@@ -142,6 +171,8 @@ static VOID gnss_parse_auto_sysc_time(DEV_TIME *local_time)
 {
     BOOL need_sync = false;
 
+    time_if_update_backuptime(local_time);
+
     // clang-format off
     need_sync = (gnss_parse_time.year != local_time->year) || \
                 (gnss_parse_time.month != local_time->month)   || \
@@ -150,7 +181,7 @@ static VOID gnss_parse_auto_sysc_time(DEV_TIME *local_time)
 
     if (need_sync)
     {
-        //time_if_set_with_source(*local_time, TIME_SYNC_SOURCE_GNSS);
+        time_if_set_with_source(TIME_SYNC_SOURCE_GNSS, local_time);
         memcpy(&gnss_parse_time, local_time, sizeof(DEV_TIME));
         MODULE_LOG_I(GNSS, "GNSS time sync to local time");
     }
@@ -167,6 +198,14 @@ static VOID gnss_parse_update_rmc(nmeap_rmc_t *nmea, gnss_info_t *gif)
     gif->latitude  = nmea->latitude;
     gif->direction = nmea->course;
     gif->speed     = SPEED_KN_TO_KM(nmea->speed);
+}
+
+static VOID gnss_parse_update_backup(nmeap_rmc_t *nmea, gnss_info_backup_t *gif)
+{
+    gif->is_east   = nmea->is_east;
+    gif->is_north  = nmea->is_north;
+    gif->longitude = nmea->longitude;
+    gif->latitude  = nmea->latitude;
 }
 
 static VOID gnss_parse_update_gga(nmeap_gga_t *nmea, gnss_info_t *gif)
@@ -192,20 +231,22 @@ static VOID gnss_parse_callout_gprmc(nmeap_context_t *context, VOID *data, VOID 
         timezone = gnss_parse_get_timezone();
         gnss_parse_time_format(rmc->time, rmc->date, &utc_time);
         gnss_parse_utc_to_local(timezone, &utc_time, &local_time);
-#if 0	//时间模块完成后放开
         if (time_if_check_is_valid(local_time))
         {
             gnss_parse_auto_sysc_time(&local_time);
             gnss_parse_update_rmc(rmc, &gnss_parse_info);
+			gnss_parse_update_backup(rmc, &gnss_parse_info_backup);
         }
         else
         {
-            tbox_log_print("\r\nrmc time is invalid!");
+            MODULE_LOG_E(GNSS, "rmc time is invalid, rmc->time: %ld, rmc->date: %ld, \
+                               utc_time: %d-%d-%d %d:%d:%d, local_time: %d-%d-%d %d:%d:%d", 
+                               rmc->time, rmc->date, 
+                               utc_time.year, utc_time.month, utc_time.day, 
+                               utc_time.hour, utc_time.min, utc_time.sec, 
+                               local_time.year, local_time.month, local_time.day, 
+                               local_time.hour, local_time.min, local_time.sec);
         }
-#else
-		gnss_parse_auto_sysc_time(&local_time);
-		gnss_parse_update_rmc(rmc, &gnss_parse_info);
-#endif
     }
     else
     {
@@ -272,6 +313,43 @@ static VOID gnss_parse_init_nmea(VOID)
 #endif
 }
 
+static VOID gnss_parse_info_write_backup(VOID)
+{
+	INT32 ret = 0;
+	
+	ret = tbox_cfg_setkv(GNSS_INFO_MANE, &gnss_parse_info_backup, sizeof(gnss_info_backup_t));
+	if(0 != ret)
+	{
+		MODULE_LOG_E(HPM, "gnss write pos backup info failed, ret: %d", ret);
+	}
+}
+
+static VOID gnss_parse_info_read_backup(VOID)
+{
+	INT32 ret = 0;
+	ret = tbox_cfg_getkv(GNSS_INFO_MANE, &gnss_parse_info_backup, sizeof(gnss_info_backup_t));
+	if(0 != ret)
+	{
+		gnss_parse_info_backup.magic     = GNSS_INFO_MAGICNO;
+		gnss_parse_info_backup.is_east   = 0;
+		gnss_parse_info_backup.is_north  = 0;
+		gnss_parse_info_backup.longitude = 0.0;
+		gnss_parse_info_backup.latitude  = 0.0;
+		gnss_parse_info_write_backup();
+	}
+	else
+	{
+		if(GNSS_INFO_MAGICNO != gnss_parse_info_backup.magic)
+		{
+			gnss_parse_info_backup.magic     = GNSS_INFO_MAGICNO;
+			gnss_parse_info_backup.is_east   = 0;
+			gnss_parse_info_backup.is_north  = 0;
+			gnss_parse_info_backup.longitude = 0.0;
+			gnss_parse_info_backup.latitude  = 0.0;
+			gnss_parse_info_write_backup();
+		}
+	}
+}
 
 INT32 gnss_parse_init(UINT8 seq)
 {
@@ -279,6 +357,7 @@ INT32 gnss_parse_init(UINT8 seq)
     {
         case MODULE_INIT_SEQ_OS:
 			gnss_parse_nmea_log = FALSE;
+			memset(&gnss_parse_info_backup, 0, sizeof(gnss_info_backup_t));
             break;
 
         case MODULE_INIT_SEQ_STORAGE:
@@ -286,6 +365,7 @@ INT32 gnss_parse_init(UINT8 seq)
 
         case MODULE_INIT_SEQ_MODULE:
 			gnss_parse_init_nmea();
+			gnss_parse_info_read_backup();
             break;
             
         default:
@@ -294,13 +374,22 @@ INT32 gnss_parse_init(UINT8 seq)
 	return 0;
 }
 
+VOID gnss_parse_sleep(VOID)
+{
+	gnss_parse_info_write_backup();
+}
+
+VOID gnss_parse_wake(VOID)
+{
+	gnss_parse_info_read_backup();
+}
+
 INT32 gnss_parse_data(UINT8 *data, UINT16 len)
 {
-    int32_t id     = 0;
-    int32_t remain = len;
+    INT32 id     = 0;
+    INT32 remain = len;
 
     id = nmeap_parseBuffer(&gnss_parse_nmea_context, (const char *)data, (int *)&remain);
-
     if (id < 0)
     {
         remain = 0;
@@ -316,10 +405,11 @@ VOID gnss_parse_periodic(VOID)
 	INT32		 ret = 0;
 
 	ret = drv_eio_gnss_rx(&gnss_parse_buff[rem], len);
-	if(ret < 0)
+	if(ret <= 0)
 	{
 		return;
 	}
+    len = ret;
 
     if (gnss_parse_nmea_log)
     {
@@ -335,60 +425,108 @@ VOID gnss_parse_periodic(VOID)
     }
 }
 
-INT32 gnss_get_position(GNSS_POSITION_DATA *pos)
+VOID gnss_get_position(GNSS_POSITION_DATA *pos)
 {
+	GNSS_MUTEX_LOCK();
     if (GNSS_POS_STATE_FIX == gnss_parse_info.fix_sta)
     {
         pos->longitude = fabs(gnss_parse_info.longitude);
         pos->latitude  = fabs(gnss_parse_info.latitude);
         pos->is_east   = gnss_parse_info.is_east;
         pos->is_north  = gnss_parse_info.is_north;
-        return 0;
     }
-    return -1;
+	else
+	{
+		pos->longitude = fabs(gnss_parse_info_backup.longitude);
+        pos->latitude  = fabs(gnss_parse_info_backup.latitude);
+        pos->is_east   = gnss_parse_info_backup.is_east;
+        pos->is_north  = gnss_parse_info_backup.is_north;
+	}
+	GNSS_MUTEX_UNLOCK();
 }
 
 INT32 gnss_get_time(DEV_TIME *time)
 {
-    if (GNSS_POS_STATE_FIX == gnss_parse_info.fix_sta)
+	UINT8 fix_sta = GNSS_POS_STATE_UNFIX;
+	
+	GNSS_MUTEX_LOCK();
+	fix_sta = gnss_parse_info.fix_sta;
+	GNSS_MUTEX_UNLOCK();
+	
+    if (GNSS_POS_STATE_FIX == fix_sta)
     {
+		GNSS_MUTEX_LOCK();
         memcpy((void *)time, (void *)&gnss_parse_time, sizeof(DEV_TIME));
+		GNSS_MUTEX_UNLOCK();
         return 0;
     }
+	
     return -1;
 }
 
 GNSS_POS_STATE gnss_get_fix_state(VOID)
 {
-    if (GNSS_POS_STATE_FIX == gnss_parse_info.fix_sta)
-        return GNSS_POS_STATE_FIX;
-
-    return GNSS_POS_STATE_UNFIX;
+	UINT8 fix_sta = GNSS_POS_STATE_UNFIX;
+	
+	GNSS_MUTEX_LOCK();
+	fix_sta = gnss_parse_info.fix_sta;
+	GNSS_MUTEX_UNLOCK();
+	
+    return (GNSS_POS_STATE)fix_sta;
 }
 
 INT32 gnss_get_satellites(VOID)
 {
-    return gnss_parse_info.satellites;
+	INT32 sate = 0;
+	
+	GNSS_MUTEX_LOCK();
+	sate = gnss_parse_info.satellites;
+	GNSS_MUTEX_UNLOCK();
+	
+    return sate;
 }
 
 DOUBLE gnss_get_altitude(VOID)
 {
-    return gnss_parse_info.altitude;
+	DOUBLE altitude = 0.0;
+	GNSS_MUTEX_LOCK();
+	altitude = gnss_parse_info.altitude;
+	GNSS_MUTEX_UNLOCK();
+	
+    return altitude;
 }
 
 DOUBLE gnss_get_hdop(VOID)
 {
-    return gnss_parse_info.hdop;
+	DOUBLE hdop = 0.0;
+	
+	GNSS_MUTEX_LOCK();
+	hdop = gnss_parse_info.hdop;
+	GNSS_MUTEX_UNLOCK();
+	
+    return hdop;
 }
 
 DOUBLE gnss_get_speed(VOID)
 {
-    return gnss_parse_info.speed;
+	DOUBLE speed = 0.0;
+	
+	GNSS_MUTEX_LOCK();
+	speed = gnss_parse_info.speed;
+	GNSS_MUTEX_UNLOCK();
+	
+    return speed;
 }
 
 DOUBLE gnss_get_direction(VOID)
 {
-    return gnss_parse_info.direction;
+	DOUBLE direction = 0.0;
+	
+	GNSS_MUTEX_LOCK();
+	direction = gnss_parse_info.direction; 
+	GNSS_MUTEX_UNLOCK();
+	
+    return direction;
 }
 
 VOID gnss_parse_show_info(VOID)
@@ -401,16 +539,32 @@ VOID gnss_parse_show_info(VOID)
     INT8     spd[20];
     INT8     alt[20];
     INT8     hdp[20];
+	UINT8	 is_east;
+	UINT8	 is_north;
 
-    memcpy(&time, &gnss_parse_time, sizeof(time));
+    INT8     lon_back[20];
+    INT8     lat_back[20];
+	UINT8	 is_east_back;
+	UINT8	 is_north_back;
+	
+	gnss_get_time(&time);
+	
+	GNSS_MUTEX_LOCK();
     double_to_string(gnss_parse_info.longitude, lon, sizeof(lon));
     double_to_string(gnss_parse_info.latitude, lat, sizeof(lat));
     double_to_string(gnss_parse_info.direction, dir, sizeof(dir));
     double_to_string(gnss_parse_info.speed, spd, sizeof(spd));
     double_to_string(gnss_parse_info.altitude, alt, sizeof(alt));
     double_to_string(gnss_parse_info.hdop, hdp, sizeof(hdp));
+	is_east = gnss_parse_info.is_east;
+	is_north = gnss_parse_info.is_north;
+	double_to_string(gnss_parse_info_backup.longitude, lon_back, sizeof(lon_back));
+	double_to_string(gnss_parse_info_backup.latitude, lat_back, sizeof(lat_back));
+	is_east_back = gnss_parse_info_backup.is_east;
+	is_north_back = gnss_parse_info_backup.is_north;
+	GNSS_MUTEX_UNLOCK();
 
-    if (GNSS_POS_STATE_FIX == gnss_parse_info.fix_sta)
+    if (GNSS_POS_STATE_FIX == gnss_get_fix_state())
     {
         strncpy((char *)fix, "Located", sizeof(fix));
     }
@@ -421,14 +575,18 @@ VOID gnss_parse_show_info(VOID)
 	
     tbox_log_print("\r\n-------------------------------------\r\n");
     tbox_log_print("Time      : %04u-%02u-%02u %02u:%02u:%02u\r\n", time.year + 2000, time.month, time.day, time.hour, time.min, time.sec);
+    tbox_log_print("Zone      : %d\r\n", gnss_parse_get_timezone());
     tbox_log_print("Gnss      : %s\r\n", fix);
-    tbox_log_print("Satelites : %u\r\n", gnss_parse_info.satellites);
-    tbox_log_print("Longitude : %10s    %c\r\n", lon, gnss_parse_info.is_east ? 'E' : 'W');
-    tbox_log_print("Latitude  : %10s    %c\r\n", lat, gnss_parse_info.is_north ? 'N' : 'S');
+    tbox_log_print("Satelites : %d\r\n", gnss_get_satellites());
+    tbox_log_print("Longitude : %10s    %c\r\n", lon, is_east ? 'E' : 'W');
+    tbox_log_print("Latitude  : %10s    %c\r\n", lat, is_north ? 'N' : 'S');
     tbox_log_print("Direction : %10s    deg\r\n", dir);
     tbox_log_print("Speed     : %10s    km/h\r\n", spd);
     tbox_log_print("Altitude  : %10s    m\r\n", alt);
     tbox_log_print("Hdop      : %10s    m\r\n", hdp);
+    tbox_log_print("-------------------------------------\r\n");
+    tbox_log_print("LonBackup : %10s    %c\r\n", lon_back, is_east_back ? 'E' : 'W');
+    tbox_log_print("LatBackup : %10s    %c\r\n", lat_back, is_north_back ? 'N' : 'S');
     tbox_log_print("-------------------------------------\r\n");
 }
 

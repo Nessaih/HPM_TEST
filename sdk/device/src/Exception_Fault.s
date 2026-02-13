@@ -84,7 +84,7 @@ backtrace
 
     MOV     r1, r0                  ; tn
     LDR     r0, =stack
-    ADD     r0, r0, #160          ; name 
+    ADD     r0, r0, #164          ; name
     MOV     r2, #31                 ; max length
     BL      strncpy
 
