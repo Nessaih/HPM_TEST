@@ -33,6 +33,27 @@ static void dev_time_sync_cclk_resp(IF_4G_TIMINFO *info);
 static void dev_time_sync_ntp(void);
 static void dev_time_sync_date_change(void);
 
+static const char *dev_time_ntp_state_to_str(DEV_TIME_NTP_SYNC_STATE state)
+{
+    switch (state)
+    {
+    case DEV_TIME_NTP_WAIT_DIALED:
+        return "WAIT_DIALED";
+    case DEV_TIME_NTP_DELAY_SYNC:
+        return "DELAY_SYNC";
+    case DEV_TIME_NTP_WAIT_NTP_RESP:
+        return "WAIT_NTP_RESP";
+    case DEV_TIME_NTP_WAIT_4GSYNC:
+        return "WAIT_4GSYNC";
+    case DEV_TIME_NTP_WAIT_CCLK_RESP:
+        return "WAIT_CCLK_RESP";
+    case DEV_TIME_NTP_FINISH:
+        return "FINISH";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static void utc_to_local(UINT8 *time, INT32 timezone)
 {
     INT32 hour = time[3] + timezone;
@@ -73,6 +94,8 @@ void dev_time_ntp_wakeup(void)
 
 static void dev_time_sync_ntp(void)
 {
+    DEV_TIME_NTP_SYNC_STATE prev_state = (DEV_TIME_NTP_SYNC_STATE)dev_time_ntp_state;
+
     switch (dev_time_ntp_state)
     {
     case DEV_TIME_NTP_WAIT_DIALED:
@@ -167,6 +190,16 @@ static void dev_time_sync_ntp(void)
 
     default:
         break;
+    }
+
+    if (prev_state != (DEV_TIME_NTP_SYNC_STATE)dev_time_ntp_state)
+    {
+        MODULE_LOG_I(TIME,
+                     "NTP state change: %s(%d) -> %s(%d)",
+                     dev_time_ntp_state_to_str(prev_state),
+                     prev_state,
+                     dev_time_ntp_state_to_str((DEV_TIME_NTP_SYNC_STATE)dev_time_ntp_state),
+                     dev_time_ntp_state);
     }
 }
 

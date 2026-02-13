@@ -356,7 +356,7 @@ void dev_time_sleep(void)
     val &= 0x7FFFFFFF;
 
     time_if_get(&time);
-    sec  = basetime_utc + (((unsigned int)xTaskGetTickCount()) - basetime_tick) / 100;
+    sec  = basetime_utc + (((unsigned int)xTaskGetTickCount()) - basetime_tick) / pdMS_TO_TICKS(1000);
     fixed_min = FIXED_REBOOT_HOUR * 60 + dev_time_reboot_min;
     curr_min  = time.hour * 60 + time.min;
 

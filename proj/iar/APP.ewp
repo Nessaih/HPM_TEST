@@ -2733,6 +2733,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_data_recv.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_dev.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_dev.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash.c</name>
                 </file>
                 <file>
@@ -2769,16 +2775,16 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_pack.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_fetch.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_fetch.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.c</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session_htbt.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session_htbt.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_socket.c</name>
@@ -3522,16 +3528,16 @@
                     <name>$PROJ_DIR$\..\..\src\service\time\time_backup.h</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\time\time_shell.c</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\time\time_shell.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\time\time_sync.h</name>
                 </file>
             </group>
             <group>
