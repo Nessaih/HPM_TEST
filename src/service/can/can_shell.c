@@ -1,125 +1,115 @@
-#include <string.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "tbox_cfg_if.h"
 #include "tbox_common.h"
 #include "tbox_log.h"
 #include "tbox_shell_if.h"
-#include "can_shell.h"
 #include "can_if.h"
 #include "can_mgr.h"
+#include "can_shell.h"
 #include "can_types.h"
-#include "tbox_cfg_if.h"
 #include "drv_can.h"
 
 /* Shell 命令：显示 CAN 状态和统计信息 */
 static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
 {
-    UINT8 i;
-    UINT8 state;
+    UINT8       i;
+    UINT8       state;
     const CHAR *state_str[] = {"NOUSED", "IDLE", "BUSY", "ERROR", "OFF"};
-    INT32 len = 0;
-    
-    (VOID)cmd;
-    
+    INT32       len         = 0;
+
+    (VOID) cmd;
+
     len += snprintf(buf + len, bufsz - len, "\r\n=== CAN Status ===\r\n");
-    
+
     for (i = 0; i < DRV_CAN_INS_COUNT; i++) {
         state = can_if_state_get(i);
-        if (state < sizeof(state_str)/sizeof(state_str[0])) {
-            len += snprintf(buf + len, bufsz - len, "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu, send=%lu\r\n",
-                      i + 1, 
-                      state_str[state],
-                      can_mgr_get_baudrate(i),
-                      can_mgr_stat_get_recv_count(i), 
-                      can_mgr_stat_get_send_count(i));
+        if (state < sizeof(state_str) / sizeof(state_str[0])) {
+            len += snprintf(buf + len, bufsz - len, "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu, send=%lu\r\n", i + 1, state_str[state],
+                            can_mgr_get_baudrate(i), can_mgr_stat_get_recv_count(i), can_mgr_stat_get_send_count(i));
         } else {
-            len += snprintf(buf + len, bufsz - len, "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu, send=%lu\r\n",
-                      i + 1,
-                      can_mgr_get_baudrate(i),
-                      can_mgr_stat_get_recv_count(i), 
-                      can_mgr_stat_get_send_count(i));
+            len += snprintf(buf + len, bufsz - len, "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu, send=%lu\r\n", i + 1, can_mgr_get_baudrate(i),
+                            can_mgr_stat_get_recv_count(i), can_mgr_stat_get_send_count(i));
         }
     }
-    
+
     len += snprintf(buf + len, bufsz - len, "====================\r\n");
-    
+
     return pdFALSE;
 }
 
 /* Shell 命令：显示最近接收的 CAN 消息日志 */
 static BaseType_t can_log_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
 {
-    static UINT8 current_can = 0;      /* 静态变量记录当前输出的 CAN 通道 */
-    static UINT8 current_msg = 0;      /* 静态变量记录当前输出的消息索引 */
-    static UINT8 first_call = 1;       /* 是否首次调用 */
-    UINT8 j;
-    INT32 len = 0;
-    UINT8 msg_count;
-    UINT8 batch_count;
-    can_msg_t *msg;
-    
-    (VOID)cmd;
-    
+    static UINT8 current_can = 0; /* 静态变量记录当前输出的 CAN 通道 */
+    static UINT8 current_msg = 0; /* 静态变量记录当前输出的消息索引 */
+    static UINT8 first_call  = 1; /* 是否首次调用 */
+    UINT8        j;
+    INT32        len = 0;
+    UINT8        msg_count;
+    UINT8        batch_count;
+    can_msg_t   *msg;
+
+    (VOID) cmd;
+
     /* 首次调用，输出标题并初始化 */
     if (first_call != 0) {
         current_can = 0;
         current_msg = 0;
-        first_call = 0;
+        first_call  = 0;
         len += snprintf(buf + len, bufsz - len, "\r\n=== CAN Message Log ===\r\n");
         return pdTRUE;
     }
-    
+
     /* 遍历每个 CAN 通道 */
     while (current_can < DRV_CAN_INS_COUNT) {
         msg_count = can_mgr_stat_get_last_msg_count(current_can);
-        
+
         /* 输出当前 CAN 通道的标题 */
         if (current_msg == 0) {
-            len += snprintf(buf + len, bufsz - len, 
-                          "\r\n--- CAN%u (Total: %u) ---\r\n", 
-                          current_can + 1, msg_count);
-            
+            len += snprintf(buf + len, bufsz - len, "\r\n--- CAN%u (Total: %u) ---\r\n", current_can + 1, msg_count);
+
             if (msg_count == 0) {
                 len += snprintf(buf + len, bufsz - len, "No messages received yet.\r\n");
                 current_can++;
                 continue;
             }
         }
-        
+
         /* 输出当前 CAN 通道的消息（每次最多输出 5 条，避免超出缓冲区） */
         batch_count = 0;
         while (current_msg < msg_count && batch_count < 5) {
             msg = can_mgr_stat_get_last_msg(current_can, current_msg);
             if (msg != NULL_PTR) {
-                len += snprintf(buf + len, bufsz - len, "[%02u] CAN%u ID=0x%08lX Len=%u Data=", 
-                          current_msg + 1, current_can + 1, msg->id, msg->len);
-                
+                len += snprintf(buf + len, bufsz - len, "[%02u] CAN%u ID=0x%08lX Len=%u Data=", current_msg + 1, current_can + 1, msg->id, msg->len);
+
                 for (j = 0; j < msg->len && j < 8; j++) {
                     len += snprintf(buf + len, bufsz - len, "%02X ", msg->data[j]);
                 }
-                
+
                 len += snprintf(buf + len, bufsz - len, "\r\n");
             }
             current_msg++;
             batch_count++;
         }
-        
+
         /* 当前 CAN 通道输出完毕，切换到下一个 */
         if (current_msg >= msg_count) {
             current_can++;
             current_msg = 0;
         }
-        
+
         /* 如果缓冲区快满了，先返回，下次继续 */
-        if (len > (INT32)(bufsz - 100)) {
+        if (len > (INT32)(bufsz - 256)) {
             return pdTRUE;
         }
     }
-    
+
     len += snprintf(buf + len, bufsz - len, "================================\r\n");
     first_call = 1;
-    return pdFALSE;  /* 命令执行完毕 */
+    return pdFALSE; /* 命令执行完毕 */
 }
 
 /* Shell 命令：发送 CAN 数据 */
@@ -128,17 +118,17 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     const CHAR *param_ptr;
     BaseType_t  param_len;
     CHAR        param_str[64];
-    UINT8       port = 0;
-    UINT32      id = 0;
+    UINT8       port     = 0;
+    UINT32      id       = 0;
     UINT8       data_len = 0;
-    UINT8       data[8] = {0};
-    can_msg_t   msg = {0};
+    UINT8       data[8]  = {0};
+    can_msg_t   msg      = {0};
     INT32       ret;
     INT32       i;
-    
+
     /* 格式: cansend <port> <id> <len> <data...> */
     /* 例如: cansend 1 0x123 8 01 02 03 04 05 06 07 08 (port: 1=CAN1, 2=CAN2, 3=CAN3) */
-    
+
     /* 获取端口号 */
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 1, &param_len);
     if (NULL_PTR == param_ptr || param_len == 0) {
@@ -148,14 +138,14 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
     strncpy(param_str, param_ptr, param_len);
     param_str[param_len] = '\0';
-    port = (UINT8)atoi(param_str);
-    
+    port                 = (UINT8)atoi(param_str);
+
     if (port < 1 || port > DRV_CAN_INS_COUNT) {
         snprintf(buf, bufsz, "Error: port must be 1-%u\r\n", DRV_CAN_INS_COUNT);
         return pdFALSE;
     }
     port = port - 1;
-    
+
     /* 获取 ID */
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 2, &param_len);
     if (NULL_PTR == param_ptr || param_len == 0) {
@@ -165,7 +155,7 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
     strncpy(param_str, param_ptr, param_len);
     param_str[param_len] = '\0';
-    id = (UINT32)strtoul(param_str, NULL_PTR, 16);
+    id                   = (UINT32)strtoul(param_str, NULL_PTR, 16);
 
     if (0U == (id & DRV_CAN_EXTEND_ID_MASK)) {
         if (id > 0x7FFU) {
@@ -182,13 +172,13 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
     strncpy(param_str, param_ptr, param_len);
     param_str[param_len] = '\0';
-    data_len = (UINT8)atoi(param_str);
-    
+    data_len             = (UINT8)atoi(param_str);
+
     if (data_len > 8) {
         snprintf(buf, bufsz, "Error: len must be <= 8\r\n");
         return pdFALSE;
     }
-    
+
     /* 获取数据 */
     for (i = 0; i < data_len; i++) {
         param_ptr = FreeRTOS_CLIGetParameter(cmd, 4 + i, &param_len);
@@ -199,15 +189,15 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
         param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
         strncpy(param_str, param_ptr, param_len);
         param_str[param_len] = '\0';
-        data[i] = (UINT8)strtoul(param_str, NULL_PTR, 16);
+        data[i]              = (UINT8)strtoul(param_str, NULL_PTR, 16);
     }
-    
+
     /* 构造消息并发送 */
     msg.ins = port;
-    msg.id = id;
+    msg.id  = id;
     msg.len = data_len;
     memcpy(msg.data, data, data_len);
-    
+
     ret = can_if_send(&msg);
     if (ret == 0) {
         snprintf(buf, bufsz, "CAN%u send: ID=0x%lX Len=%u Data=", port + 1, id, data_len);
@@ -220,7 +210,7 @@ static BaseType_t can_send_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     } else {
         snprintf(buf, bufsz, "CAN%u send failed, ret=%d\r\n", port + 1, ret);
     }
-    
+
     return pdFALSE;
 }
 
@@ -230,13 +220,13 @@ static BaseType_t can_setbaud_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     const CHAR *param_ptr;
     BaseType_t  param_len;
     CHAR        param_str[32];
-    UINT8       port = 0;
+    UINT8       port     = 0;
     UINT32      baudrate = 0;
     INT32       ret;
-    
+
     /* 格式: cansetbaud <port> <baudrate> */
     /* 例如: cansetbaud 1 500 (port: 1=CAN1, 2=CAN2, 3=CAN3) */
-    
+
     /* 获取端口号 */
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 1, &param_len);
     if (NULL_PTR == param_ptr || param_len == 0) {
@@ -246,14 +236,14 @@ static BaseType_t can_setbaud_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
     strncpy(param_str, param_ptr, param_len);
     param_str[param_len] = '\0';
-    port = (UINT8)atoi(param_str);
-    
+    port                 = (UINT8)atoi(param_str);
+
     if (port < 1 || port > DRV_CAN_INS_COUNT) {
         snprintf(buf, bufsz, "Error: port must be 1-%u\r\n", DRV_CAN_INS_COUNT);
         return pdFALSE;
     }
     port = port - 1;
-    
+
     /* 获取波特率 */
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 2, &param_len);
     if (NULL_PTR == param_ptr || param_len == 0) {
@@ -263,14 +253,14 @@ static BaseType_t can_setbaud_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
     strncpy(param_str, param_ptr, param_len);
     param_str[param_len] = '\0';
-    baudrate = (UINT32)atoi(param_str);
-    
+    baudrate             = (UINT32)atoi(param_str);
+
     /* 验证波特率 */
     if (baudrate != 0 && baudrate != 250 && baudrate != 500 && baudrate != 1000) {
         snprintf(buf, bufsz, "Error: baudrate must be 0, 250, 500, or 1000 (kbps)\r\n");
         return pdFALSE;
     }
-    
+
     ret = can_if_setbaud(port, baudrate, 1);
     if (ret == 0) {
         snprintf(buf, bufsz, "Success: CAN%u baudrate set to %lu kbps\r\n", port + 1, baudrate);
