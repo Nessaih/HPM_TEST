@@ -1,28 +1,25 @@
 
 #include <stddef.h>
 #include "api_rtos.h"
-#include "log.h"
-#include "module_id.h"
-#include "test_adc.h"
 #include "test_can.h"
-#include "test_flash.h"
-#include "test_led.h"
-#include "test_rtc.h"
-#include "test_timer.h"
+//#include "test_adc.h"
+//#include "test_flash.h"
+//#include "test_led.h"
+//#include "test_rtc.h"
+//#include "test_timer.h"
 
 
 void test_init_task(void *param)
 {
-    log_init();
-    log_register(MODULE_ID_SVR, "SVR", LOG_LVL_INFO);
-
-    test_led_init(NULL);
+    // log_init();
+    // log_register(MODULE_ID_SVR, "SVR", LOG_LVL_INFO);
+    // test_led_init(NULL);
     test_can_init(NULL);
-    test_timer_init(NULL);
-    test_rtc_init(NULL);
-    test_adc_init(NULL);
+    // test_timer_init(NULL);
+    // test_rtc_init(NULL);
+    // test_adc_init(NULL);
     // test_log_init(NULL);
-    test_flash_init(NULL);
+    // test_flash_init(NULL);
     vTaskDelete(NULL);
 }
 

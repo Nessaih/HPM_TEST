@@ -94,10 +94,11 @@ static VOID hpm_can_event_handler(UINT32 event, VOID *para)
     {
     case CAN_IF_EVENT_RECEIVED:
     {
-        can_msg_t* msg = (can_msg_t*)para;
+        can_msg_t *msg = (can_msg_t *)para;
         if (msg)
         {
-            hpm_can_recv_can1(msg->id, msg->data);
+            UINT32 canid = msg->id & 0x7FFFFFFFU;
+            hpm_can_recv_can1(canid, msg->data);
         }
         break;
     }
@@ -138,12 +139,17 @@ static INT32 hpm_can_single_report(UINT8 *data)
 INT32 hpm_can_report(UINT8 *data)
 {
     UINT16 len = 0;
+    UINT8 *data_len = &data[len];
+    data[len++] = 0;
+    data[len++] = 0;
     UINT32 id = hpm_param_get_id();
     data[len++] = (UINT8)(id >> 24);
     data[len++] = (UINT8)(id >> 16);
     data[len++] = (UINT8)(id >> 8);
     data[len++] = (UINT8)(id >> 0);
     len += hpm_can_single_report(&data[len]);
+    data_len[0] = (UINT8)((len - 2) >> 8);
+    data_len[1] = (UINT8)((len - 2) >> 0);
     hpm_can_fetch_data_reset();
     return len;
 }

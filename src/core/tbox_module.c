@@ -875,6 +875,7 @@ BOOL tbox_allmodule_canbe_stop(VOID)
         if(NULL_PTR != canbe_stop_fun && 
            FALSE == (*canbe_stop_fun)())
         {
+            MODULE_LOG_I(ICORE, "module:%s can not be stoped", tbox_modules[i].module_info.name);
             return FALSE;
         }
     }

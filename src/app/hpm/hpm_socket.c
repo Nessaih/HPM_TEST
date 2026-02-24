@@ -230,7 +230,6 @@ static VOID hpm_socket_pro_connected(VOID)
 	{
 		MODULE_LOG_E(HPM, "socket connect lost, stop transfer data");		
 		hpm_socket_step = HPM_SOCKET_STEP_CLOSE;
-		//TODO: 重置会话, 重置接收数据
 		hpm_session_reset();
 	}
 	else
@@ -241,7 +240,7 @@ static VOID hpm_socket_pro_connected(VOID)
 
 static VOID hpm_socket_pro_close(VOID)
 {
-	UINT32 cur_tick = 0;
+	UINT32 cur_tick = time_if_get_systick_s();
 	if(0 == hpm_net_disconnect())
 	{
 		MODULE_LOG_I(HPM, "socket close success");

@@ -2787,6 +2787,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_shell.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_shell.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_socket.c</name>
                 </file>
                 <file>
@@ -3561,32 +3567,47 @@
         </group>
         <group>
             <name>test</name>
-            <excluded>
-                <configuration>Debug</configuration>
-            </excluded>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_adc.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_can.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_flash.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_led.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_log.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_rtc.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_timer.c</name>
+                <excluded>
+                    <configuration>Debug</configuration>
+                </excluded>
             </file>
         </group>
         <file>

@@ -444,7 +444,7 @@ static uint8_t hpm_param_set_common_cfg(void)
 static uint8_t hpm_param_read_download_cfg(uint32_t file_size)
 {
     MODULE_LOG_I(HPM, "start param read cfg file size:%d", (int)file_size);
-    uint32_t read_addr = FLASH_NOR_ADDR_HPM_DATA;
+    uint32_t read_addr = FLASH_MCU_ADD_HPM_CFG;
     uint32_t read_file_len_total = 0; // total read file len
     uint32_t read_file_len_once = (HPM_PARAM_READ_SIZE <= file_size) ? HPM_PARAM_READ_SIZE : file_size;
     uint32_t read_data_len_total = 0; // read data len total
@@ -575,7 +575,7 @@ static uint8_t hpm_param_read_download_cfg(uint32_t file_size)
                 {
                     read_file_len_total = read_data_len_total;
                     read_file_len_once = (HPM_PARAM_READ_SIZE <= file_size - read_file_len_total) ? HPM_PARAM_READ_SIZE : file_size - read_file_len_total;
-                    read_addr = FLASH_NOR_ADDR_HPM_DATA + read_file_len_total;
+                    read_addr = FLASH_MCU_ADD_HPM_CFG + read_file_len_total;
                     drv_flash_mcu_read(read_addr, hpm_param_buffer, read_file_len_once);
                     read_file_len_total += read_file_len_once;
                     read_data_len_once = 0;
@@ -790,7 +790,7 @@ static uint8_t hpm_param_ftp_download_call_back(uint8 notify_code, uint8 *data, 
     return IF_FTP_4G_CALLBACK_RET_OK;
 }
 
-int hpm_param_download_req(uint8_t *in_data, unsigned short in_len, uint8 *res, uint16 *res_len)
+int hpm_param_download_req(UINT8* in_data, UINT16 in_len, UINT8* res, UINT16* res_len)
 {
     unsigned short r_len = 0;
     uint8_t *url;
@@ -807,13 +807,13 @@ int hpm_param_download_req(uint8_t *in_data, unsigned short in_len, uint8 *res, 
     if (HPM_PARAM_INIT != hpm_param_get_state())
     {
         MODULE_LOG_E(HPM, "param donload faild,state:%u", (unsigned int)hpm_param_get_state());
-        return 0;
+        return -1;
     }
     param_id = (in_data[0] << 24) + (in_data[1] << 16) + (in_data[2] << 8) + in_data[3];
     if (param_id == hpm_param_record_info.param_id)
     {
         MODULE_LOG_E(HPM, "param id not change,id:%u", (unsigned int)param_id);
-        return 0;
+        return -1;
     }
     memset(&hpm_download_info, 0, sizeof(hpm_download_info));
     hpm_download_info.param_id = param_id;
@@ -835,10 +835,10 @@ int hpm_param_download_req(uint8_t *in_data, unsigned short in_len, uint8 *res, 
 
     hpm_param_set_state(HPM_PARAM_START_DOWNLOAD);
 
-    return 1;
+    return 0;
 }
 
-void hpm_param_process(void)
+void hpm_param_timeout(void)
 {
     uint8_t param_state = hpm_param_get_state();
     switch (param_state)
@@ -846,12 +846,12 @@ void hpm_param_process(void)
     case HPM_PARAM_START_DOWNLOAD:
     {
         uint32_t tmp_addr;
-        tmp_addr = hpm_param_write_addr = FLASH_NOR_ADDR_HPM_DATA;
+        tmp_addr = hpm_param_write_addr = FLASH_MCU_ADD_HPM_CFG;
         while (1)
         {
             drv_flash_mcu_erase(tmp_addr, 1);
-            tmp_addr += PFLASH_PAGE_SIZE;
-            if (tmp_addr - FLASH_NOR_ADDR_HPM_DATA >= FLASH_MCU_SIZE_HPM_CFG)
+            tmp_addr += 0x00001000;
+            if (tmp_addr - FLASH_MCU_ADD_HPM_CFG >= FLASH_MCU_SIZE_HPM_CFG)
             {
                 break;
             }

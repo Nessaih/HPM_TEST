@@ -15,6 +15,7 @@
 #include "hpm_session.h"
 #include "hpm_param_fetch.h"
 #include "hpm_dev.h"
+#include "hpm_shell.h"
 
 static INT32 hpm_init(UINT8 seq);
 static VOID hpm_stop(VOID);
@@ -41,7 +42,7 @@ static VOID hpm_handle_message_event(const CHAR *name, TBOX_MSG_DATA *data)
 	{
 		hpm_socket_timeout_proc();
 		hpm_dev_process();
-		hpm_param_process();
+		hpm_param_timeout();
 	}
 	else if (0 == strncmp(name, TBOX_CFG_EVENT_VALUE_CHANGE, strlen(TBOX_CFG_EVENT_VALUE_CHANGE)))
 	{
@@ -128,6 +129,7 @@ static INT32 hpm_init(UINT8 seq)
 	hpm_dev_init(seq);
 	hpm_can_init(seq);
 	hpm_param_init(seq);
+	hpm_shell_init(seq);
 	MODULE_LOG_D(HPM, "init seq:%d, ret:%d", seq, ret);
 	return ret;
 }

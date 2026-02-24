@@ -34,7 +34,7 @@ typedef enum
 
 #define DEV_4G_INSTANCE       1U
 #define DEV_4G_BAUDRATE       115200U
-#define DEV_4G_RXBUF_SIZE     128U
+#define DEV_4G_RXBUF_SIZE     512U
 
 #define AT_CMD_STATE_IDLE       (0U)
 #define AT_CMD_STATE_REQ        (1U<<0U)

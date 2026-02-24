@@ -9,7 +9,7 @@
 #define IF_4G_MAX_ICCID_LEN             21U
 #define IF_4G_MAX_IMEI_LEN              15U
 #define IF_4G_MAX_PHONE_NUM_LEN         20U
-#define IF_4G_SOCKET_MAX_DATA_LEN       256U
+#define IF_4G_SOCKET_MAX_DATA_LEN       512U
 
 typedef struct
 {

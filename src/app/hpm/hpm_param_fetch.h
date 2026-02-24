@@ -11,9 +11,9 @@
 
 int hpm_param_init(UINT8 seq);
 
-int hpm_param_download_req(uint8_t *in_data, unsigned short in_len, uint8_t *res, uint16_t *res_len);
+int hpm_param_download_req(UINT8* in_data, UINT16 in_len, UINT8* res, UINT16* res_len);
 
-void hpm_param_process(void);
+void hpm_param_timeout(void);
 
 int8_t hpm_param_canid_type1_index_find(uint32_t canid);
 

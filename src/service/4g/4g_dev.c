@@ -44,9 +44,9 @@ static VOID dev_4g_rx_callback(UINT8 instance, Uart_EventType event)
         break;
     }
 
-    if (len > 0U && len < DEV_4G_RXBUF_SIZE)
+    if (len > 0U && len <= DEV_4G_RXBUF_SIZE)
     {
-        dev_4g_rx_buffer[len] = '\0';
+        //dev_4g_rx_buffer[len] = '\0';
         
         for (UINT16 i = 0; i < len; i++)
         {

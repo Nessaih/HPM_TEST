@@ -236,7 +236,7 @@ static INT32 hpm_get_real_data(UINT8 *buf)
     buf[len++] = (UINT8)(time.min);
     buf[len++] = (UINT8)(time.sec);
     len += hpm_get_position_data(buf + len);
-    if (0 == hpm_param_get_id())
+    if (0 != hpm_param_get_id())
     {
         len += hpm_get_can_data(buf + len);
     }

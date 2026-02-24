@@ -168,7 +168,7 @@ INT32 hpm_pack_report_data(HPM_PACKET *pack, UINT8 *buf)
 
     len = 0;
     len += hpm_sesion_get_data_seq(data + len);
-    data[len++] = 0x01; // 数据数量
+    data[len++] = 0x02; // 数据数量
     memcpy(data + len, pack->data, pack->len);
     len += pack->len;
     len = hpm_pack((HPM_CMD_TYPE)pack->type, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, len, data, buf);

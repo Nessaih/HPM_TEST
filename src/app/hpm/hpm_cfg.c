@@ -34,7 +34,6 @@ typedef struct
 
 static HPM_CFG_RUN_INFO_T hpm_cfg_run_info;
 
-
 static VOID hpm_cfg_run_info_write(VOID)
 {
 	INT32 ret = 0;
@@ -69,6 +68,8 @@ static VOID hpm_cfg_run_info_read(VOID)
 VOID hpm_cfg_changed_handle(TBOX_MSG_DATA *data)
 {
 	//TODO: cfg changed
+	//那些配置changed直接重连平台?
+	
 	return;
 }
 
@@ -482,11 +483,20 @@ static INT32 hpm_cfg_tsp_get_main_ip(UINT8 *data, UINT16* out_len)
 		return HPM_CFG_RESP_NG;
 	}
 
-	if (sscanf(ip, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1], &data[2], &data[3]) != 4)
+	if(strlen(ip) > 0)
 	{
-		return HPM_CFG_RESP_NG;
+		if (sscanf(ip, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1], &data[2], &data[3]) != 4)
+		{
+			MODULE_LOG_E(HPM, "sscanf main ip failed.");
+		}
 	}
-	
+	else
+	{
+		data[0] = 0x00;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = 0x00;
+	}	
 	*out_len = 4;
 	return HPM_CFG_RESP_OK;
 }
@@ -579,11 +589,20 @@ static INT32 hpm_cfg_tsp_get_slaver_ip(UINT8 *data, UINT16* out_len)
 		return HPM_CFG_RESP_NG;
 	}
 
-	if (sscanf(ip, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1], &data[2], &data[3]) != 4)
+	if(strlen(ip) > 0)
 	{
-		return HPM_CFG_RESP_NG;
+		if (sscanf(ip, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1], &data[2], &data[3]) != 4)
+		{
+			MODULE_LOG_E(HPM, "sscanf slaver ip failed.");
+		}
 	}
-	
+	else
+	{
+		data[0] = 0x00;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = 0x00;
+	}	
 	*out_len = 4;
 	return HPM_CFG_RESP_OK;
 }
@@ -923,7 +942,7 @@ static INT32 hpm_cfg_tsp_get_soft_ver(UINT8 *data, UINT16* out_len)
 	const CHAR *ver = version_get(VERSION_TYPE_APP);
 	strcpy((char *)data, ver);
 
-	*out_len = strlen(ver);
+	*out_len = strlen(ver)+1;
 	return HPM_CFG_RESP_OK;
 }
 
@@ -1474,17 +1493,19 @@ static HPM_CFG_TSP_ITEM hpm_cfg_tsp_table[] = {
 };
 
 
-INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len)
+INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len, UINT8 *out_data, UINT16 *out_len)
 {
 	UINT16 r_len = 0;
 	UINT16 w_len = 0;	
 	UINT16 index = 0;
 	UINT16 one_len = 0;
 	UINT16 one_cfg = 0;
-	UINT8 tmp_pos = 0;
-	INT32 ret = 0;
+	INT32  ret = 0;
 
-	out_data[w_len++] = 0; //len
+	UINT8  tmp_data[128] = {0};
+	UINT8  tmp_len = 0;
+
+	out_data[w_len++] = 0; //body_len
 	out_data[w_len++] = 0;
 	
 	for(r_len = 0;r_len < in_len ;r_len += 2)
@@ -1496,34 +1517,32 @@ INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT1
 			{
 				if(one_cfg == hpm_cfg_tsp_table[index].optcode && NULL != hpm_cfg_tsp_table[index].get)
 				{
-					out_data[w_len++] = one_cfg >> 8;
-					out_data[w_len++] = one_cfg;
-					tmp_pos = w_len;
-					w_len ++;
-					ret = hpm_cfg_tsp_table[index].get(out_data + w_len,&one_len);
+					memset(tmp_data, 0, sizeof(tmp_data));
+					tmp_len = 0;
+					
+					tmp_data[tmp_len++] = one_cfg >> 8;
+					tmp_data[tmp_len++] = one_cfg;
+					tmp_len++;
+					ret = hpm_cfg_tsp_table[index].get(tmp_data+tmp_len, &one_len);
 					if(HPM_CFG_RESP_OK != ret)
 					{
 						break;
 					}
-					out_data[tmp_pos] = one_len;
-					w_len += one_len;
+					else
+					{
+						tmp_data[2] = one_len;
+						tmp_len += one_len;
+						memcpy(out_data+w_len, tmp_data, tmp_len);
+						w_len += tmp_len;
+					}
 				}
 			}
 		}
 	}
 
-	if(HPM_CFG_RESP_OK != ret)
-	{
-		out_data[0] = 0x00;
-		out_data[1] = 0x00;
-		*out_len = 2;
-	}
-	else
-	{
-		out_data[0] = w_len >> 8;
-		out_data[1] = w_len;
-		*out_len = w_len;
-	}
+	out_data[0] = w_len >> 8;
+	out_data[1] = w_len;
+	*out_len = w_len;
 	
 	return ret;
 }

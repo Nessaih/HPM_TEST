@@ -544,6 +544,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->state = HPM_SESSION_SEND_SUCCESS;
             sender->retry_count = 0;
             sender->wait_time = 0;
+            hpm_socket_reset();
             break;
         }
 

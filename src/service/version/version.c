@@ -16,7 +16,7 @@
 
 // clang-format off
 #define SOFTWARE_VER  "00"
-#define DEBUG_VER     "07"
+#define DEBUG_VER     "08"
 #define RELEASE_DATE  "20260213"
 #define HARDWARE_VER  "93"
 #define APP_VERSION   MOUDLE_TYPE "." PROJECT_CODE "." SOFTWARE_VER "." DEBUG_VER "." RELEASE_DATE "." HARDWARE_VER
