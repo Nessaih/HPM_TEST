@@ -126,7 +126,6 @@ static VOID tbox_log_task(VOID *param)
             xSemaphoreGive(tbox_log_mgr.mutex);
 
             tbox_log_raw_output(temp_ptr, header.size);
-            tbox_log_flush();
 
             xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
             {
@@ -181,7 +180,7 @@ INT32 tbox_log_init(VOID)
     
     INT32 ret = xTaskCreate(tbox_log_task, 
                             "TBOX_LOG_TASK",
-                            512/sizeof(StackType_t), 
+                            TBOX_TASK_SMALL_STACK_SIZE/sizeof(StackType_t), 
                             NULL_PTR, 
                             TBOX_TASK_PRIORITY_LOW, 
                             &tbox_log_mgr.task_handle);
@@ -189,7 +188,6 @@ INT32 tbox_log_init(VOID)
     {
         tbox_log_mgr.mutex = NULL_PTR;
         tbox_log_mgr.task_handle = NULL_PTR;        
-        vSemaphoreDelete(tbox_log_mgr.mutex);
         vSemaphoreDelete(tbox_log_mgr.mutex);
         tbox_memory_free(TBOX_MEMORY_TYPE_CORE, tbox_log_mgr.log_queue.buffer);
         tbox_memory_free(TBOX_MEMORY_TYPE_CORE, tbox_log_mgr.temp_buffer);

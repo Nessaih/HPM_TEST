@@ -41,8 +41,10 @@
  *如果函数里需要使用大容量局部变量，可以使用tbox_memory_alloc分配内存，这样可以避免堆栈溢出。
 */
 #define TBOX_TASK_LARGE_STACK_SIZE           (3072U) // 128*24， 适用复杂任务，比如企标业务、国标业务
+#define TBOX_TASK_MEDIUM_STACK_SIZE_1        (2048U) // 128*16
 #define TBOX_TASK_MEDIUM_STACK_SIZE          (1536U) // 128*12， 适用中等复杂任务，服务处理
-#define TBOX_TASK_SMALL_STACK_SIZE           (896U)  // 128*8， 适用驱动回调，服务处理或者业务简单任务
+#define TBOX_TASK_SMALL_STACK_SIZE_1         (1024U) // 128*8
+#define TBOX_TASK_SMALL_STACK_SIZE           (896U)  // 128*7， 适用驱动回调，服务处理或者业务简单任务
 #define TBOX_TASK_LARGER_SIZE_NUM            (1U)
 #define TBOX_TASK_MEDIUM_SIZE_NUM            (6U)
 #define TBOX_TASK_SMALL_SIZE_NUM             (1U)

@@ -715,6 +715,7 @@ static VOID hpm_session_proc_init(VOID)
 {
     if (FALSE == hpm_mgr_acc_is_active())
     {
+        hpm_socket_reset();
         return;
     }
 

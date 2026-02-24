@@ -37,7 +37,7 @@ static STIMER_ID  tbox_pm_timer_id;
 static UINT8 tbox_pm_enable_flag;
 static TickType_t tbox_pm_enable_tick;
 TBOX_MODULE_FUN(TBOXPM, tbox_pm_init, NULL_PTR, NULL_PTR, tbox_pm_enable, tbox_pm_exit, NULL_PTR);
-TBOX_RUNLOOP_MODULE(TBOXPM, TBOX_TASK_PRIORITY_MID1, LOG_LEVEL_ERROR, TBOX_TASK_MEDIUM_STACK_SIZE, tbox_pm_task);
+TBOX_RUNLOOP_MODULE(TBOXPM, TBOX_TASK_PRIORITY_MID1, LOG_LEVEL_ERROR, TBOX_TASK_LARGE_STACK_SIZE, tbox_pm_task);
 TBOX_SHELL_DEFINE(reset, "reset system[1:mcu 2:4g 3:deepreset4g 4:mcuand4g]", 1, tbox_pm_shell_reset);
 TBOX_SHELL_DEFINE(cleanreset, "clean the reset infomation", 0, tbox_pm_shell_cleanresetinfo);
 TBOX_MODULE_LOADER(TBOXPM)

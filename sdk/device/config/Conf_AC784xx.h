@@ -58,7 +58,7 @@ extern "C" {
 #endif
 
 #ifndef CONFIG_UART1_ENABLE
-#define CONFIG_UART1_ENABLE     1
+#define CONFIG_UART1_ENABLE     0
 #endif
 
 #ifndef CONFIG_UART2_ENABLE

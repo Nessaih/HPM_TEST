@@ -3108,127 +3108,61 @@
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_at.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_at.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_at_startup.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_at_startup.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_at_transmit.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_at_transmit.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_content.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_data.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_data.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_depend_header.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_dev.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_dev.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_dial.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_dial.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_ftp.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_ftp.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_if.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_if_inner.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_info.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_info.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_mgr.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_mgr.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_modem.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_modem.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_network.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_network.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_power.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_power.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_sequence_mgr.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_sequence_mgr.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_sharememery.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_sharememery.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_shell.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_shell.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_sim.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_sim.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_sms.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_sms.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_socket.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_socket.h</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\service\4g\4g_time.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\4g\4g_time.h</name>
                 </file>
             </group>
             <group>

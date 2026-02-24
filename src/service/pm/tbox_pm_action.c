@@ -335,9 +335,9 @@ static VOID tbox_pm_action_wakeup(VOID)
     driver_wake();
     /*启动后处理模块*/
     xTaskResumeAll();
-    delay_ms(100U);
+    vTaskDelay(pdMS_TO_TICKS(100U));
     tbox_core_start(FALSE);
-    delay_ms(200U);
+    vTaskDelay(pdMS_TO_TICKS(200U));
     tbox_stimer_start();
     tbox_pm_start();
     /*唤醒电源模块*/
@@ -365,7 +365,6 @@ static VOID tbox_pm_action_wakeup(VOID)
 
     CHAR *wakeup_log = "enter running mode.....\r\n";
     tbox_log_raw_output(wakeup_log, strlen(wakeup_log));
-    tbox_log_flush();    
 }
 
 static VOID tbox_pm_action_sleep(VOID)
@@ -374,13 +373,12 @@ static VOID tbox_pm_action_sleep(VOID)
     tbox_mode_get(&mode);
     CHAR *sleep_log = "enter sleep mode......\r\n";
     tbox_log_raw_output(sleep_log, strlen(sleep_log));
-    tbox_log_flush();
     /*停止后处理模块*/
     tbox_pm_stop();
     tbox_stimer_stop();
-    delay_ms(100U);
+    vTaskDelay(pdMS_TO_TICKS(100U));
     tbox_core_stop(FALSE);
-    delay_ms(200U);
+    vTaskDelay(pdMS_TO_TICKS(200U));
     vTaskSuspendAll();
     /*停止驱动模块*/
     driver_sleep();
@@ -414,13 +412,12 @@ static VOID tbox_pm_action_listen(VOID)
     tbox_mode_get(&mode);
     CHAR *sleep_log = "enter listen mode......\r\n";
     tbox_log_raw_output(sleep_log, strlen(sleep_log));
-    tbox_log_flush();
     /*停止后处理模块*/
     tbox_pm_stop();
     tbox_stimer_stop();
-    delay_ms(100U);
+    vTaskDelay(pdMS_TO_TICKS(100U));
     tbox_core_stop(FALSE);
-    delay_ms(200U);
+    vTaskDelay(pdMS_TO_TICKS(100U));
     vTaskSuspendAll();
     /*停止驱动模块*/
     driver_sleep();

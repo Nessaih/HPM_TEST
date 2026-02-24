@@ -13,6 +13,6 @@ VOID dev_4g_check_send(VOID);
 
 VOID dev_4g_direct_send(UINT8 *data, UINT16 len, DEV_4G_SEND_CALLBACK callback);
 
-VOID dev_4g_direct_send_blocking(UINT8 *data, UINT16 len);
+// VOID dev_4g_direct_send_blocking(UINT8 *data, UINT16 len);
 
 #endif /*TBOX_4G_DEV_H*/

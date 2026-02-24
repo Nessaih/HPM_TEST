@@ -9,6 +9,7 @@
 #include "hpm_pack.h"
 #include "hpm_data.h"
 #include "hpm_can.h"
+#include "hpm_session.h"
 #include "hpm_param_fetch.h"
 #include "tbox_cfg_if.h"
 
@@ -223,7 +224,7 @@ static INT32 hpm_get_can_data(UINT8 *buf)
     return len;
 }
 
-static INT32 hpm_get_real_data(UINT8 *buf)
+static INT32 hpm_get_real_data(UINT8 *buf, UINT8 *subcmd)
 {
     INT32 len = 0;
     buf[len++] = HPM_DATA_LOCATION;
@@ -235,11 +236,24 @@ static INT32 hpm_get_real_data(UINT8 *buf)
     buf[len++] = (UINT8)(time.hour);
     buf[len++] = (UINT8)(time.min);
     buf[len++] = (UINT8)(time.sec);
+    (*subcmd)++;
     len += hpm_get_position_data(buf + len);
     if (0 != hpm_param_get_id())
     {
+        (*subcmd)++;
         len += hpm_get_can_data(buf + len);
     }
+    return len;
+}
+
+static INT32 hpm_make_report_pack(UINT8* data)
+{
+    UINT8 count = 0;
+    UINT16 len = 0;
+    len += hpm_sesion_get_data_seq(data + len);
+    data[len++] = 0x00; // ¨ºy?Y¨ºy¨¢?
+    len += hpm_get_real_data(data + len, &count);
+    data[2] = count;
     return len;
 }
 
@@ -252,7 +266,7 @@ VOID hpm_dev_report(VOID)
         return;
     }
 
-    INT32 len = hpm_get_real_data(buf);
+    INT32 len = hpm_make_report_pack(buf);
     if (len <= 0)
     {
         MODULE_LOG_E(HPM, "get real data failed");

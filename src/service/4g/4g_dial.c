@@ -804,7 +804,7 @@ static void dial_4g_periodic_do_call(void)
             dial_4g_mgr.mgr_state = DIAL_4G_MGR_CALL_FINISH;
             dial_4g_mgr.do_state = DIAL_4G_CALL_IDLE;
             tbox_pm_reboot(TBOX_PM_REBOOT_4G);
-            delay_ms(100U);
+            vTaskDelay(pdMS_TO_TICKS(100U));
             mgr_4g_reset_sequence();
             dial_4g_resetcount++;
             break;

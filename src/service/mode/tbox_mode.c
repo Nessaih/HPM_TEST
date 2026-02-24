@@ -266,9 +266,25 @@ static BOOL tbox_mode_factory_can_switch(VOID)
 {
     /*TODO:添加切换到工厂模式的条件判断:
       1、TBOX 出厂时厂家预配置
-      2、设备未激活状态
+      2、设备未激活状态(VIN未获取)
       3、车辆报废，车企后台下发永久停机指令
       4、没发生欠压，异常，紧急事件，升级等情况*/
+    if(TRUE == tbox_check_power_isundervoltage())
+    {
+        return FALSE;
+    }
+    
+    CHAR vin[TBOX_CFG_VIN_LEN] = {'\0'};
+    TBOX_CFG_ID cfg_id = CFG_ID_INVALID;
+    TBOX_CFG_ID_GET(VIN, cfg_id);
+    tbox_cfg_read(cfg_id, vin);
+    if(strlen(vin) == 0U ||
+       strncmp(vin, "0", TBOX_CFG_VIN_LEN-1U) == 0U ||
+       strncmp(vin, "00000000000000000", TBOX_CFG_VIN_LEN-1U) == 0U)
+    {
+        return TRUE;
+    }
+
     return FALSE;    
 }
 
@@ -474,12 +490,17 @@ static VOID tbox_mode_emergency_hanle(VOID)
     {
         tbox_mode_emergency_switch(TBOX_MODE_UNDERVOLTAGE);
     }
+    if(TRUE == tbox_mode_fun_table[TBOX_MODE_FACTORY].can_switch())
+    {
+        tbox_mode_abnormal_switch(TBOX_MODE_FACTORY);
+    }    
 }
 
 static VOID tbox_mode_emergency_switch(TBOX_MODE_TYPE new_mode)
 {
     switch(new_mode)
     {
+        case TBOX_MODE_FACTORY:
         case TBOX_MODE_NORMAL:
         case TBOX_MODE_UNDERVOLTAGE:
             tbox_last_mode = tbox_current_mode;
