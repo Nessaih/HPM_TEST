@@ -4137,7 +4137,10 @@
                 </file>
             </group>
             <group>
-                <name>upgrade</name>
+                <name>program</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\program\program.c</name>
+                </file>
             </group>
             <group>
                 <name>version</name>

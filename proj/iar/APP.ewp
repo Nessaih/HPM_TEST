@@ -392,6 +392,7 @@
                     <state>$PROJ_DIR$\..\..\src\service\upgrade</state>
                     <state>$PROJ_DIR$\..\..\src\service\se\inc</state>
                     <state>$PROJ_DIR$\..\..\src\service\shell</state>
+                    <state>$PROJ_DIR$\..\..\src\service\program</state>
                     <state>$PROJ_DIR$\..\..\src\test</state>
                     <state>$PROJ_DIR$\..\..\src\common</state>
                     <state>$PROJ_DIR$\..\..\src\core</state>
@@ -722,7 +723,7 @@
             <name>BUILDACTION</name>
             <archiveVersion>1</archiveVersion>
             <data>
-                <prebuild></prebuild>
+                <prebuild>$PROJ_DIR$\..\..\script\PreBuild.bat</prebuild>
                 <postbuild>$PROJ_DIR$\..\..\script\PostBuild.bat  $TARGET_BPATH$</postbuild>
             </data>
         </settings>
@@ -3487,7 +3488,10 @@
                 </file>
             </group>
             <group>
-                <name>upgrade</name>
+                <name>program</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\program\program.c</name>
+                </file>
             </group>
             <group>
                 <name>version</name>
