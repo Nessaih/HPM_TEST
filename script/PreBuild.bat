@@ -59,7 +59,7 @@ goto :EOF
 :RunPythonUpdate
 :: Update version using Python script
 set "scpt=%~dp0UpdateVersion.py"
-set "verc=%~dp0..\src\version\version.c"
+set "verc=%~dp0..\src\service\version\version.c"
 
 :: Verify file existence
 if not exist "%scpt%" (

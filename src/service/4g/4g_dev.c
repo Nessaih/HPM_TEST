@@ -19,7 +19,7 @@ static volatile BOOL        dev_4g_is_txbusy = FALSE;
 static volatile UINT8      *dev_4g_tx_buffer = NULL_PTR;
 static volatile UINT16      dev_4g_tx_length = 0U;
 
-void                        UART1_IRQHandler(void)
+void UART1_IRQHandler(void)
 {
     uint32_t mask;
     uint32_t error;
