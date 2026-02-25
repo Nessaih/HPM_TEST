@@ -31,6 +31,7 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
             total_time = total_time / 100U;
             task_index = 0;
             xPhase     = 1;
+            xReturn    = pdTRUE;
         }
         break;
     }
@@ -138,7 +139,7 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
         task_index = 0;
         total_time = 0;
         xPhase     = 0;
-        xReturn    = pdFALSE; 
+        xReturn    = pdFALSE;
         break;
     }
 
@@ -214,11 +215,11 @@ static BaseType_t log_level_control(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     UINT8 i;
     const CHAR log_level_char[] = {'D', 'I', 'W', 'E', 'F', 'N'};
     const CHAR   *param_ptr;
-    CHAR *target_name = NULL_PTR;   
+    CHAR *target_name = NULL_PTR;
     BaseType_t    param_len = 0;
 
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 1, &param_len);
-    if (NULL == param_ptr || param_len == 0) 
+    if (NULL == param_ptr || param_len == 0)
     {
         snprintf(buf, bufsz, "parse module name failed.\r\n");
         return pdFALSE;
@@ -234,7 +235,7 @@ static BaseType_t log_level_control(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     tbox_string_toupper(target_name);
 
     param_ptr = FreeRTOS_CLIGetParameter(cmd, 2, &param_len);
-    if (NULL == param_ptr) 
+    if (NULL == param_ptr)
     {
         snprintf(buf, bufsz, "parse log level failed.\r\n");
         mempool_free(target_name);

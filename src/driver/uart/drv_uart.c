@@ -143,6 +143,7 @@ int32_t drv_uart_init(void)
     Uart_Hal_Init(UART_DBG_INSTANCE, &uart_config);
     Uart_Hal_SetDataMatch(UART_DBG_INSTANCE, 0x0AU, true);
     Uart_Hal_SetMatchInterrupt(UART_DBG_INSTANCE, true);
+    Uart_Hal_ReceiveDataBlocking(UART_DBG_INSTANCE, uart_rx_buf, 2, 1000U);
     status = Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
 
     if (STATUS_SUCCESS != status) {
