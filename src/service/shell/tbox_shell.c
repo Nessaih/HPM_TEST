@@ -1,11 +1,11 @@
-#include "tbox_adsp_if.h"
-#include "tbox_common.h"
-#include "tbox_config.h"
-#include "tbox_core.h"
+#include "tbox_common.h"       
+#include "tbox_config.h"       
+#include "tbox_core.h"         
+#include "tbox_shell_if.h"     
 #include "tbox_default_shell.h"
-#include "tbox_shell_if.h"
-#include "macros.h"
-#include "version.h"
+#include "macros.h"            
+#include "version.h"           
+#include "tbox_adsp_if.h"  
 
 static INT32        tbox_shell_init(UINT8 seq);
 static inline INT32 tbox_shell_rstip(CHAR *str, UINT16 len);
