@@ -15,8 +15,8 @@
 #include "program.h"
 #include "version.h"
 
-
-struct program_config_t {
+struct program_config_t
+{
     char     iver[64];
     uint32_t iaddr;
     uint32_t isize;
@@ -40,18 +40,21 @@ int32_t calc_crc32(uint32_t addr, uint32_t size, uint32_t *crc32_buf)
 
     l      = MIN_VALUE(sizeof(data), size);
     status = drv_flash_mcu_read(addr, data, l);
-    if (status != 0) {
+    if (status != 0)
+    {
         return -1;
     }
 
     p   = l;
     crc = Crc_Hal_CalculateCRC32(data, l, CRC_INITIAL_VALUE32, TRUE, CRC_TABLE_256_BYTE_MODE);
-    while (p < size) {
+    while (p < size)
+    {
         drv_wdg_feed();
 
         l      = MIN_VALUE(sizeof(data), size - p);
         status = drv_flash_mcu_read(addr + p, data, l);
-        if (status != 0) {
+        if (status != 0)
+        {
             return -2;
         }
         crc = Crc_Hal_CalculateCRC32(data, l, crc, FALSE, CRC_TABLE_256_BYTE_MODE);
@@ -68,38 +71,45 @@ int32_t program_write_cfg(program_config_t *cfg)
     uint32_t crc;
     uint32_t num;
 
-    if (cfg == NULL) {
+    if (cfg == NULL)
+    {
         return -1;
     }
 
     strncpy(cfg->iver, (char *)(cfg->iaddr + 0x200U), sizeof(cfg->iver));
 
-    num  = cfg->snum;
-    addr = cfg->saddr;
-
-    if (cfg->saddr == FLASH_PCFG1_ADDR) {
+    if (FLASH_PCFG1_ADDR == cfg->saddr)
+    {
+        addr       = FLASH_PCFG1_ADDR;
         cfg->saddr = FLASH_PCFG2_ADDR;
-    } else {
+    }
+    else
+    {
+        addr       = FLASH_PCFG2_ADDR;
         cfg->saddr = FLASH_PCFG1_ADDR;
     }
 
+    num = cfg->snum;
     cfg->snum += 1;
     cfg->ssize = FLASH_PCFG_LEN;
 
     crc       = Crc_Hal_CalculateCRC32((uint8_t *)cfg, FLASH_PCFG_LEN - 4, CRC_INITIAL_VALUE32, TRUE, CRC_TABLE_256_BYTE_MODE);
     cfg->scrc = crc;
 
-    status = drv_flash_mcu_erase(addr, FLASH_PCFG_LEN);
-    if (0 != status) {
+    status = drv_flash_mcu_erase(cfg->saddr, FLASH_PCFG_LEN);
+    if (0 != status)
+    {
         return -3;
     }
 
     status = drv_flash_mcu_write(cfg->saddr, (uint8_t *)cfg, cfg->ssize);
-    if (0 != status) {
+    if (0 != status)
+    {
         return -3;
     }
 
-    if (num == 0xFFFFFFFFU) {
+    if (num == 0xFFFFFFFFU)
+    {
         status = drv_flash_mcu_erase(addr, FLASH_PCFG_LEN);
     }
 
@@ -113,11 +123,13 @@ int32_t program_start(uint32_t addr, uint32_t size, uint32_t crc)
     int32_t          status;
 
     status = calc_crc32(addr, size, &crcc);
-    if (status) {
+    if (status)
+    {
         return -1;
     }
 
-    if (crcc != crc) {
+    if (crcc != crc)
+    {
         return -2;
     }
 
@@ -127,7 +139,8 @@ int32_t program_start(uint32_t addr, uint32_t size, uint32_t crc)
     cfg.istate = 0x5A5A5A5A;
 
     status = program_write_cfg(&cfg);
-    if (status) {
+    if (status)
+    {
         return -3;
     }
 
