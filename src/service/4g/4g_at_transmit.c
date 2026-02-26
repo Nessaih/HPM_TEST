@@ -504,9 +504,12 @@ void at_4g_transmit_monitor_queue(void)
 
 uint8 at_4g_transmit_direct_send(uint8 *data, uint16 len, DEV_4G_SEND_CALLBACK callback)
 {
-    dev_4g_direct_send(data, len, callback);
+    if((INT32)TBOX_E_OK == dev_4g_direct_send(data, len, callback))
+    {
+        return AT_4G_TRANS_SEND_OK;
+    }
 
-    return AT_4G_TRANS_SEND_OK;
+    return AT_4G_TRANS_SEND_IS_BUSY;
 }
 
 uint8 at_4g_transmit_direct_setcmd(AT_4G_CMD *cmd)
@@ -630,8 +633,6 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
 		 uint32 data_len = 0;
 		 uint16 size = strlen("+QIURC: \"recv\",");
 	
-		 MODULE_LOG_I(TBOX4G, "receive datain notify");
-	
 		 if(temp_len <= size)
 		 {
 			 return AT_4G_DECODE_CONTINUE;
@@ -700,6 +701,8 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
 			 temp_len--;
 		 }
 
+		 MODULE_LOG_I(TBOX4G, "receive datain notify");
+
 		 *len = *len - temp_len;
 		 return AT_4G_DECODE_ISMATCH;
 	 }
@@ -708,8 +711,6 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
     if(NULL != temp_ptr) /*+QIURC: "closed",<connectID>*/
     {
         uint32 conn_id = 0;
-
-        MODULE_LOG_I(TBOX4G, "receive connect close notify");
 
         temp_ptr = tbox_string_get_substring(token, temp_len, AT_4G_RESP_SUFFIX);
         if(NULL == temp_ptr)
@@ -760,6 +761,8 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
             at_decode_callbak[AT_4G_DECODE_STATE_IND](&resp,  (uint8*)&conn_id, &temp_len);
         }
 
+        MODULE_LOG_I(TBOX4G, "receive connect[%d] close notify", conn_id);
+
         return AT_4G_DECODE_ISMATCH;
     }
 
@@ -773,8 +776,6 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
         }
 
         *len = (uint16)(temp_ptr-data) + 2;
-
-        MODULE_LOG_I(TBOX4G, "receive incoming full notify");
 
         if(AT_CMD_STATE_IDLE != data_4g_cur_send.cmd.state)
         {
@@ -798,6 +799,9 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
             uint8 resp = AT_4G_RESP_IURC_FULL;
             at_decode_callbak[AT_4G_DECODE_STATE_IND](&resp, NULL, NULL);
         }
+
+        MODULE_LOG_I(TBOX4G, "receive incoming full notify");
+
         return AT_4G_DECODE_ISMATCH;
     }
 
@@ -805,8 +809,6 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
     if(NULL != temp_ptr) /*+QIURC: "pdpdeact",<contextID>*/
     {
         uint32 context_id = 0;
-
-        MODULE_LOG_I(TBOX4G, "receive context deactive notify");
 
         temp_ptr = tbox_string_get_substring(token, temp_len, AT_4G_RESP_SUFFIX);
         if(NULL == temp_ptr)
@@ -856,6 +858,8 @@ static uint8 at_4g_trans_parse_iurc(uint8 *data, uint16 *len)
             uint8 resp = AT_4G_RESP_IURC_DEACTIVE;
             at_decode_callbak[AT_4G_DECODE_STATE_IND](&resp,  (uint8*)&context_id, &temp_len);
         }
+        
+        MODULE_LOG_I(TBOX4G, "receive context[%d] deactive notify", context_id);
 
         return AT_4G_DECODE_ISMATCH;
     }

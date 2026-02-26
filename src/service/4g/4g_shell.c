@@ -9,7 +9,7 @@
 
 VOID shell_4g_at_send_callback(VOID)
 {
-	LOG_PRINT("\r\n4g at send seccess \r\n");
+	//LOG_PRINT("\r\n4g at send seccess \r\n");
 }
 
 static BaseType_t shell_4g_send_at(char *buf, size_t bufsz, const char *cmd)

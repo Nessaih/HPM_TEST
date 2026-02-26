@@ -14,17 +14,17 @@
 #define DEV_4G_STATE_OPENED 1U
 
 static DEV_4G_SEND_CALLBACK send_callback    = NULL_PTR;
-static UINT8                dev_4g_is_open   = (UINT8)DEV_4G_STATE_CLOSED;
+static volatile UINT8       dev_4g_is_open   = (UINT8)DEV_4G_STATE_CLOSED;
 static volatile BOOL        dev_4g_is_txbusy = FALSE;
 static volatile UINT8      *dev_4g_tx_buffer = NULL_PTR;
 static volatile UINT16      dev_4g_tx_length = 0U;
 
-void UART1_IRQHandler(void)
+VOID UART1_IRQHandler(VOID)
 {
-    uint32_t mask;
-    uint32_t error;
-    uint32_t reg;
-    uint8_t  data;
+    UINT32 mask;
+    UINT32 error;
+    UINT32 reg;
+    UINT8  data;
 
     mask  = 0x9EU;
     error = READ_BIT32(DEV_4G_UART->LSR0, mask);
@@ -78,7 +78,7 @@ void UART1_IRQHandler(void)
     }
 }
 
-void UART1_Tx(uint8 *data, uint16 len)
+VOID UART1_Tx(UINT8 *data, UINT16 len)
 {
     dev_4g_tx_buffer = data;
     dev_4g_tx_length = len;
@@ -86,7 +86,7 @@ void UART1_Tx(uint8 *data, uint16 len)
     Uart_Reg_SetIntMode(DEV_4G_UART, UART_INT_TX_NOT_FULL, TRUE);
 
     if (!Uart_Reg_GetIntMode(DEV_4G_UART, UART_INT_RX_NOT_EMPTY)) {
-        uint8_t TmpByte = 0U;
+        UINT8 TmpByte = 0U;
         Uart_Reg_GetChar(DEV_4G_UART, &TmpByte);
         Uart_Reg_SetReceiverCmd(DEV_4G_UART, TRUE);
         Uart_Reg_SetErrorInterrupts(DEV_4G_UART, TRUE);
@@ -149,44 +149,54 @@ BOOL dev_4g_is_opened(VOID)
     return (dev_4g_is_open == (UINT8)DEV_4G_STATE_OPENED) ? TRUE : FALSE;
 }
 
-VOID dev_4g_check_send(VOID)
+INT32 dev_4g_check_send(VOID)
 {
     uint8 *data_ptr = NULL;
     uint16 len      = 0;
 
     if (dev_4g_is_txbusy) {
-        return;
+        MODULE_LOG_E(TBOX4G, "4g uart is busy");
+        return (INT32)TBOX_E_IS_BUSY;
     }
 
     data_ptr = data_4g_get_send_data(&len);
     if (NULL == data_ptr || 0 == len) {
-        return;
+        return (INT32)TBOX_E_INVALID_DATA;
     }
 
     MODULE_LOG_I(TBOX4G, "send data len:%d, data:%s", len, data_ptr);
 
-    NVIC_DisableIRQ(UART1_IRQn);
+    Core_Hal_DisableIrq(UART1_IRQn);
     send_callback = data_4g_send_finish_ind;
-    NVIC_EnableIRQ(UART1_IRQn);
+    Core_Hal_ClearPendingIrq(UART1_IRQn);
 
     dev_4g_is_txbusy = TRUE;
 
     UART1_Tx(data_ptr, len);
+
+    return (INT32)TBOX_E_OK;
 }
 
-VOID dev_4g_direct_send(UINT8 *data, UINT16 len, DEV_4G_SEND_CALLBACK callback)
+INT32 dev_4g_direct_send(UINT8 *data, UINT16 len, DEV_4G_SEND_CALLBACK callback)
 {
+    if (dev_4g_is_txbusy) {
+        MODULE_LOG_E(TBOX4G, "4g uart is busy");
+        return (INT32)TBOX_E_IS_BUSY;
+    }
+
     MODULE_LOG_DUMP(TBOX4G, "direct send data", data, len);
 
-    NVIC_DisableIRQ(UART1_IRQn);
+    Core_Hal_DisableIrq(UART1_IRQn);
     send_callback = callback;
     if (NULL == callback) {
         send_callback = data_4g_send_finish_ind;
     }
-    NVIC_EnableIRQ(UART1_IRQn);
+    Core_Hal_ClearPendingIrq(UART1_IRQn);
 
     dev_4g_is_txbusy = TRUE;
 
     UART1_Tx(data, len);
+
+    return (INT32)TBOX_E_OK;
 }
 

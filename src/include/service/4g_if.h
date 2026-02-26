@@ -9,7 +9,7 @@
 #define IF_4G_MAX_ICCID_LEN             21U
 #define IF_4G_MAX_IMEI_LEN              15U
 #define IF_4G_MAX_PHONE_NUM_LEN         20U
-#define IF_4G_SOCKET_MAX_DATA_LEN       128U
+#define IF_4G_SOCKET_MAX_DATA_LEN       1460U /*EC200U一次发送最大长度*/
 
 typedef struct
 {
@@ -116,8 +116,8 @@ typedef enum
 
 typedef enum
 {
-    IF_4G_GBF_CONN_ID = 1U,
-    IF_4G_HPM_CONN_ID = 2U,
+    IF_4G_GBF_CONN_ID = 0U,
+    IF_4G_HPM_CONN_ID,
     IF_4G_CONN_MAX
 }IF_4G_CONN_ID;
 

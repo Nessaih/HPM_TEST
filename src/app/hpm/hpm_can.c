@@ -32,7 +32,7 @@ typedef struct
     uint8_t data[HPM_CAN_FETCH_DATA_LEN];
 } HPM_CAN_DATA;
 
-static VOID hpm_can_event_handler(UINT32 event, VOID *para);
+static INT32 hpm_can_event_handler(CAN_EVENT event, UINT32 arg1, UINT32 arg2);
 
 static HPM_CAN_TYPE1_SINGLE hpm_can1_single[HPM_PARAM_MAX_CAN_TYPE1_SINGLE];
 static HPM_CAN_DATA hpm_fetch_data;
@@ -70,7 +70,7 @@ VOID hpm_can_init(UINT8 seq)
     case MODULE_INIT_SEQ_STORAGE:
         break;
     case MODULE_INIT_SEQ_MODULE:
-        can_if_regcb(hpm_can_event_handler);
+        can_if_reg_cb(hpm_can_event_handler);
         hpm_can_fetch_data_reset();
         memset(&hpm_fetch_data, 0, sizeof(hpm_fetch_data));
         break;
@@ -88,23 +88,26 @@ VOID hpm_can_deinit(VOID)
     }
 }
 
-static VOID hpm_can_event_handler(UINT32 event, VOID *para)
+static INT32 hpm_can_event_handler(CAN_EVENT event, UINT32 arg1, UINT32 arg2)
 {
     switch (event)
     {
-    case CAN_IF_EVENT_RECEIVED:
+    case CAN_EVENT_DATAIN:
     {
-        can_msg_t *msg = (can_msg_t *)para;
-        if (msg)
-        {
-            UINT32 canid = msg->id & 0x7FFFFFFFU;
-            hpm_can_recv_can1(canid, msg->data);
+        can_msg_t *msgs = (can_msg_t *)arg1;
+        UINT32 count = arg2;
+        
+        for (UINT32 i = 0; i < count; i++) {
+            UINT32 canid = msgs[i].id & 0x7FFFFFFFU;
+            hpm_can_recv_can1(canid, msgs[i].data);
         }
         break;
     }
     default:
         break;
     }
+    
+    return 0;
 }
 
 static INT32 hpm_can_single_report(UINT8 *data)

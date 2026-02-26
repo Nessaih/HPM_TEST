@@ -23,6 +23,8 @@ static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     (VOID) cmd;
 
     len += snprintf(buf + len, bufsz - len, "\r\n=== CAN Status ===\r\n");
+    len += snprintf(buf + len, bufsz - len, "Bus Active: %s\r\n", can_if_is_bus_active() ? "YES" : "NO");
+    len += snprintf(buf + len, bufsz - len, "Bus Sleep:  %s\r\n", can_if_is_bus_sleep() ? "YES" : "NO");
 
     for (i = 0; i < DRV_CAN_INS_COUNT; i++) {
         state = can_if_state_get(i);
@@ -270,10 +272,173 @@ static BaseType_t can_setbaud_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     return pdFALSE;
 }
 
+/* CAN事件测试统计 */
+static struct {
+    uint32_t active_count;
+    uint32_t inactive_count;
+    uint32_t datain_count;
+    uint32_t sleep_count;
+    uint32_t wakeup_count;
+    uint32_t total_msg_count;
+} can_event_stat = {0};
+
+static bool can_event_test_enabled = false;
+
+/**
+ * @brief CAN事件回调测试函数
+ */
+static int32_t can_event_test_callback(CAN_EVENT event, uint32_t arg1, uint32_t arg2)
+{
+    if (!can_event_test_enabled) {
+        return 0;
+    }
+    
+    switch (event) {
+    case CAN_EVENT_ACTIVE:
+        can_event_stat.active_count++;
+        tbox_log_print("[CAN_EVENT_TEST] Bus active, count=%u\r\n", can_event_stat.active_count);
+        break;
+        
+    case CAN_EVENT_INACTIVE:
+        can_event_stat.inactive_count++;
+        tbox_log_print("[CAN_EVENT_TEST] Bus inactive, uptime=%u, count=%u\r\n", 
+                       arg1, can_event_stat.inactive_count);
+        break;
+        
+    case CAN_EVENT_DATAIN: {
+        can_msg_t *msgs = (can_msg_t *)arg1;
+        uint32_t count = arg2;
+        can_event_stat.datain_count++;
+        can_event_stat.total_msg_count += count;
+        
+        tbox_log_print("[CAN_EVENT_TEST] Received %u messages, total_datain=%u, total_msg=%u\r\n", 
+                       count, can_event_stat.datain_count, can_event_stat.total_msg_count);
+        
+        /* 打印前2条消息详情 */
+        for (uint32_t i = 0; i < count && i < 2; i++) {
+            tbox_log_print("  [%u] ins=%u, ID=0x%X, len=%u\r\n", 
+                           i, msgs[i].ins, msgs[i].id, msgs[i].len);
+        }
+        break;
+    }
+    
+    case CAN_EVENT_SLEEP:
+        can_event_stat.sleep_count++;
+        tbox_log_print("[CAN_EVENT_TEST] Sleep, count=%u\r\n", can_event_stat.sleep_count);
+        break;
+        
+    case CAN_EVENT_WAKEUP:
+        can_event_stat.wakeup_count++;
+        tbox_log_print("[CAN_EVENT_TEST] Wakeup, count=%u\r\n", can_event_stat.wakeup_count);
+        break;
+    }
+    
+    return 0;
+}
+
+/**
+ * @brief 启动CAN事件测试
+ */
+void test_can_event_start(void)
+{
+    int32_t ret;
+    
+    ret = can_if_reg_cb(can_event_test_callback);
+    if (ret == 0) {
+        can_event_test_enabled = true;
+        memset(&can_event_stat, 0, sizeof(can_event_stat));
+        tbox_log_print("[CAN_EVENT_TEST] Started\r\n");
+    } else {
+        tbox_log_print("[CAN_EVENT_TEST] Failed to start, ret=%d\r\n", ret);
+    }
+}
+
+/**
+ * @brief 停止CAN事件测试
+ */
+void test_can_event_stop(void)
+{
+    int32_t ret;
+    
+    can_event_test_enabled = false;
+    
+    ret = can_if_unreg_cb(can_event_test_callback);
+    if (ret == 0) {
+        tbox_log_print("[CAN_EVENT_TEST] Stopped\r\n");
+    } else {
+        tbox_log_print("[CAN_EVENT_TEST] Failed to stop, ret=%d\r\n", ret);
+    }
+    
+    /* 打印统计 */
+    tbox_log_print("=== CAN Event Test Statistics ===\r\n");
+    tbox_log_print("  Active:   %u\r\n", can_event_stat.active_count);
+    tbox_log_print("  Inactive: %u\r\n", can_event_stat.inactive_count);
+    tbox_log_print("  DataIn:   %u\r\n", can_event_stat.datain_count);
+    tbox_log_print("  Sleep:    %u\r\n", can_event_stat.sleep_count);
+    tbox_log_print("  Wakeup:   %u\r\n", can_event_stat.wakeup_count);
+    tbox_log_print("  Total:    %u\r\n", can_event_stat.total_msg_count);
+    tbox_log_print("=================================\r\n");
+}
+
+/**
+ * @brief 获取CAN事件测试统计
+ */
+void test_can_event_stat(void)
+{
+    tbox_log_print("=== CAN Event Test Statistics ===\r\n");
+    tbox_log_print("  Active:   %u\r\n", can_event_stat.active_count);
+    tbox_log_print("  Inactive: %u\r\n", can_event_stat.inactive_count);
+    tbox_log_print("  DataIn:   %u\r\n", can_event_stat.datain_count);
+    tbox_log_print("  Sleep:    %u\r\n", can_event_stat.sleep_count);
+    tbox_log_print("  Wakeup:   %u\r\n", can_event_stat.wakeup_count);
+    tbox_log_print("  Total:    %u\r\n", can_event_stat.total_msg_count);
+    tbox_log_print("=================================\r\n");
+}
+
+/* Shell 命令：CAN 事件测试 */
+static BaseType_t can_event_test_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
+{
+    const CHAR *param_ptr;
+    BaseType_t  param_len;
+    CHAR        param_str[32];
+
+    /* 格式: canevent <start|stop|stat> */
+
+    /* 获取子命令 */
+    param_ptr = FreeRTOS_CLIGetParameter(cmd, 1, &param_len);
+    if (NULL_PTR == param_ptr || param_len == 0) {
+        snprintf(buf, bufsz, "Usage: canevent <start|stop|stat>\r\n"
+                             "  start - Start event callback test\r\n"
+                             "  stop  - Stop event callback test and show statistics\r\n"
+                             "  stat  - Show current statistics\r\n");
+        return pdFALSE;
+    }
+
+    param_len = (param_len < (INT32)sizeof(param_str)) ? param_len : (INT32)sizeof(param_str) - 1;
+    strncpy(param_str, param_ptr, param_len);
+    param_str[param_len] = '\0';
+
+    if (strcmp(param_str, "start") == 0) {
+        test_can_event_start();
+        snprintf(buf, bufsz, "CAN event test started\r\n");
+    } else if (strcmp(param_str, "stop") == 0) {
+        test_can_event_stop();
+        snprintf(buf, bufsz, "CAN event test stopped (see log for statistics)\r\n");
+    } else if (strcmp(param_str, "stat") == 0) {
+        test_can_event_stat();
+        snprintf(buf, bufsz, "See log for statistics\r\n");
+    } else {
+        snprintf(buf, bufsz, "Unknown subcommand: %s\r\n", param_str);
+    }
+
+    return pdFALSE;
+}
+
 TBOX_SHELL_DEFINE(showcan, "Show CAN status and statistics", 0, show_can_cmd);
 TBOX_SHELL_DEFINE(canlog, "Show last received CAN messages", 0, can_log_cmd);
 TBOX_SHELL_DEFINE(cansend, "Send CAN message: cansend <port> <id> <len> <data...> (port: 1-3)", -1, can_send_cmd);
 TBOX_SHELL_DEFINE(setcanbaud, "Set CAN baudrate: cansetbaud <port> <baudrate> (port: 1-3)", 2, can_setbaud_cmd);
+TBOX_SHELL_DEFINE(canevent, "CAN event callback test: canevent <start|stop|stat>", 1, can_event_test_cmd);
 
 VOID can_shell_init(VOID)
 {
@@ -281,4 +446,5 @@ VOID can_shell_init(VOID)
     TBOX_SHELL_REGISTER(canlog);
     TBOX_SHELL_REGISTER(cansend);
     TBOX_SHELL_REGISTER(setcanbaud);
+    TBOX_SHELL_REGISTER(canevent);
 }

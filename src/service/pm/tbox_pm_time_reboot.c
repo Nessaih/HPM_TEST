@@ -7,8 +7,6 @@
 #include "tbox_pm_io.h"
 #include "tbox_pm_time_reboot.h"
 
-# define TBOX_PM_FIXED_REBOOT_HOUR (3UL)
-
 #define TBOX_PM_TIME_STATE_IDLE (0UL)
 #define TBOX_PM_TIME_STATE_START (1UL)
 #define TBOX_PM_TIME_STATE_FINISH (2UL)
@@ -45,6 +43,17 @@ static VOID tbox_pm_time_reboot_handle_idle(VOID)
         return;
     }
 
+    /* 如果重启使能，才会触发重启*/
+    TBOX_CFG_ID cfg_id;
+    TBOX_CFG_ID_GET(RTCENABLE, cfg_id);
+    int enable = 0; /* 默认为使能*/
+    tbox_cfg_read(cfg_id, (void*)&enable);
+    if (0 == enable)
+    {
+        MODULE_LOG_W(TBOXPM, "time reboot disable");
+        return;
+    }
+
     /* 已经重启过，无需再次重启*/
     if (TRUE == tbox_pm_is_reboot_same_date())
     {
@@ -55,34 +64,24 @@ static VOID tbox_pm_time_reboot_handle_idle(VOID)
     /* 只有在固定时间点才会触发重启*/
     DEV_TIME time;
     time_if_get(&time);
-    if (TBOX_PM_FIXED_REBOOT_HOUR != time.hour)
+    unsigned short reboot_min = time_if_reboot_time();
+    unsigned short cur_min = time.hour * 60 + time.min;
+
+    if (cur_min < reboot_min || (time.hour != (reboot_min / 60)))
     {
         return;
     }
 
-    /* 只有当RTC唤醒源使能时，才会触发重启*/
     UINT32 wake_source = tbox_pm_io_get_wakesrc();
     if ((wake_source & (1U << PM_WAKE_SOURCE_RTC)) != 0U)
     {
-        MODULE_LOG_W(TBOXPM, "time reboot rtc wake source");
-    }
-    else
-    {
-        MODULE_LOG_W(TBOXPM, "time reboot wake source %u", wake_source);
-    }
-
-    /* 如果重启使能，才会触发重启*/
-    TBOX_CFG_ID cfg_id;
-    TBOX_CFG_ID_GET(RTCENABLE, cfg_id);
-    int enable = 1; /* 默认为使能*/
-    tbox_cfg_read(cfg_id, (void *)&enable);
-    if (enable > 0)
-    {
+        MODULE_LOG_E(TBOXPM, "time reboot rtc wake source");
         tbox_pm_time_state_set(TBOX_PM_TIME_STATE_START);
     }
     else
     {
-        MODULE_LOG_W(TBOXPM, "time reboot disable");
+        MODULE_LOG_E(TBOXPM, "time reboot wake source %u", wake_source);
+        tbox_pm_time_state_set(TBOX_PM_TIME_STATE_START);
     }
 }
 

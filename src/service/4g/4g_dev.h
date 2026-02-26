@@ -9,9 +9,8 @@ INT32 dev_4g_close(VOID);
 
 BOOL dev_4g_is_opened(VOID);
 
-VOID dev_4g_check_send(VOID);
+INT32 dev_4g_check_send(VOID);
 
-VOID dev_4g_direct_send(UINT8 *data, UINT16 len, DEV_4G_SEND_CALLBACK callback);
-
+INT32 dev_4g_direct_send(UINT8 *data, UINT16 len, DEV_4G_SEND_CALLBACK callback);
 
 #endif /*TBOX_4G_DEV_H*/

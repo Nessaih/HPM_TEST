@@ -3,6 +3,7 @@
 #include "4g_data.h"
 #include "4g_at.h"
 #include "4g_sharememery.h"
+#include "Core_Hal.h"
 
 #define DATA_4G_RECV_BUFF_LEN (2686)
 #define DATA_4G_TEMP_BUFF_LEN (2560)
@@ -29,56 +30,52 @@ void data_4g_init(void)
 
 VOID data_4g_recv_push(UINT8 data)
 {
-   //NVIC_DisableIRQ(UART1_IRQn); /*中断已经关闭中断*/
-
+    Core_Hal_DisableIrq(UART1_IRQn);
     if(data_4g_temp_len >= DATA_4G_TEMP_BUFF_LEN)
     {
         data_4g_temp_len = 0;
         memset(data_4g_temp_buff, 0, sizeof(data_4g_temp_buff));
-        
-        //NVIC_EnableIRQ(UART1_IRQn);
-
-        //log_e(MODULE_ID_SVR, "the temp buffer is overflow");
+        Core_Hal_EnableIrq(UART1_IRQn);
         return;
     }
 
     data_4g_temp_buff[data_4g_temp_len] = data;
     data_4g_temp_len++;
-
-	//NVIC_EnableIRQ(UART1_IRQn);
+    Core_Hal_EnableIrq(UART1_IRQn);
 }
 
 uint8* data_4g_recv_pull(uint16 *len)
 {
     uint8 *temp_ptr = NULL;
+    uint8 overflow_flag = 0U;
 
-    NVIC_DisableIRQ(UART1_IRQn);
-
+    Core_Hal_DisableIrq(UART1_IRQn);
     if((data_4g_temp_len+data_4g_recv_len) >= DATA_4G_RECV_BUFF_LEN)
     {
         data_4g_recv_len = 0;
-        MODULE_LOG_E(TBOX4G, "the buffer is overflow");
+        overflow_flag = 1U;
     }
-
-    if(0 != data_4g_temp_len)
+    if(0U != data_4g_temp_len)
     {
         temp_ptr = data_4g_recv_buf+data_4g_recv_len;
         memcpy(temp_ptr, data_4g_temp_buff, data_4g_temp_len);
         data_4g_recv_len = data_4g_recv_len+data_4g_temp_len;
-
-        data_4g_temp_len = 0;
+        data_4g_temp_len = 0U;
     }
-
     *len = data_4g_recv_len;
+    Core_Hal_EnableIrq(UART1_IRQn);
 
-	NVIC_EnableIRQ(UART1_IRQn);
+    if(1U == overflow_flag)
+    {
+        MODULE_LOG_E(TBOX4G, "the buffer has overflow");
+    }
 
     return data_4g_recv_buf;
 }
 
 void data_4g_recv_remove(uint16 remove_len)
 {
-    NVIC_DisableIRQ(UART1_IRQn);
+    Core_Hal_DisableIrq(UART1_IRQn);
     if(remove_len >= data_4g_recv_len)
     {
         data_4g_recv_len = 0;
@@ -89,7 +86,7 @@ void data_4g_recv_remove(uint16 remove_len)
         data_4g_recv_len = data_4g_recv_len - remove_len;
         memmove(data_4g_recv_buf, data_4g_recv_buf+remove_len, data_4g_recv_len);
     }
-    NVIC_EnableIRQ(UART1_IRQn);
+    Core_Hal_EnableIrq(UART1_IRQn);
 }
 
 uint8* data_4g_get_send_data(uint16 *len)

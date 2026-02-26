@@ -139,7 +139,7 @@ static void dev_time_sync_ntp(void)
         }
         if (0 == dev_time_ntp_4g_time_cnt)
         {
-            MODULE_LOG_I(TIME, "NTP query time start");
+            MODULE_LOG_D(TIME, "NTP query time start");
             if_4g_ntp(IF_4G_PUBLIC_APN, (UINT8 *)"pool.ntp.org", 123, dev_time_sync_ntp_resp);
             dev_time_ntp_state = DEV_TIME_NTP_WAIT_NTP_RESP;
         }
@@ -194,7 +194,7 @@ static void dev_time_sync_ntp(void)
 
     if (prev_state != (DEV_TIME_NTP_SYNC_STATE)dev_time_ntp_state)
     {
-        MODULE_LOG_I(TIME,
+        MODULE_LOG_D(TIME,
                      "NTP state change: %s(%d) -> %s(%d)",
                      dev_time_ntp_state_to_str(prev_state),
                      prev_state,

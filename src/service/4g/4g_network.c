@@ -755,7 +755,10 @@ uint8 net_4g_send_data(uint8 *data, uint16 len)
         return 1;
     }
 
-    at_4g_transmit_direct_send(data, len, NULL);
+    if(AT_4G_TRANS_SEND_OK != at_4g_transmit_direct_send(data, len, NULL))
+    {
+        return 1;
+    }
 
     return 0;
 }

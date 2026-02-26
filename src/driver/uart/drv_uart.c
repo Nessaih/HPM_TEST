@@ -45,7 +45,7 @@ static uint8_t       uart_rq_buf[UART_DBG_RQ_SIZE];
 
 static uart_device_t uart_device;
 
-static void          rx_callback(uint8 instance, Uart_EventType event)
+static void rx_callback(uint8 instance, Uart_EventType event)
 {
     uart_device_t *dev = &uart_device;
     uint32_t       l   = 0U;

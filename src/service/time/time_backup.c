@@ -73,7 +73,7 @@ void dev_time_load_backuptime(void)
         tbox_cfg_setkv(TIME_BACKUP_NAME, (uint8_t *)&data, sizeof(data));
     }
 
-    MODULE_LOG_I(TIME, "Load backup time: 20%02u-%02u-%02u %02u:%02u:%02u",
+    MODULE_LOG_D(TIME, "Load backup time: 20%02u-%02u-%02u %02u:%02u:%02u",
                  dev_time_backuptime.year, dev_time_backuptime.month, dev_time_backuptime.day,
                  dev_time_backuptime.hour, dev_time_backuptime.min, dev_time_backuptime.sec);
 }

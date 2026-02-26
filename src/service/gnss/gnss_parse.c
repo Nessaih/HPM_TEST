@@ -320,7 +320,7 @@ static VOID gnss_parse_info_write_backup(VOID)
 	ret = tbox_cfg_setkv(GNSS_INFO_MANE, &gnss_parse_info_backup, sizeof(gnss_info_backup_t));
 	if(0 != ret)
 	{
-		MODULE_LOG_E(HPM, "gnss write pos backup info failed, ret: %d", ret);
+		MODULE_LOG_E(GNSS, "gnss write pos backup info failed, ret: %d", ret);
 	}
 }
 

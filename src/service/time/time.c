@@ -554,6 +554,12 @@ void dev_time_sleep(void)
     }
 }
 
+unsigned short time_if_reboot_time(void)
+{
+    unsigned short reboot_time = (FIXED_REBOOT_HOUR * 60) + dev_time_reboot_min;
+    return reboot_time;
+}
+
 void dev_time_wakeup(void)
 {
     dev_time_fail_cnt    = 0;
@@ -651,7 +657,7 @@ static int time_module_init(uint8_t seq)
 
         srand(time.sec);
         dev_time_reboot_min = rand() % 60;
-        MODULE_LOG_I(TIME, "reboot min:%d", dev_time_reboot_min);
+        MODULE_LOG_D(TIME, "reboot min:%d", dev_time_reboot_min);
         
         time_shell_init();
         GET_TBOX_MODULE_ID(TIME, time_module_id);

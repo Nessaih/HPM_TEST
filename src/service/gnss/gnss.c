@@ -41,7 +41,7 @@ static INT32 gnss_init(UINT8 seq)
 			gnss_mutex = xSemaphoreCreateMutex();
 			if(NULL == gnss_mutex)
 			{
-				MODULE_LOG_E(HPM, "hpm creat mutex faied");
+				MODULE_LOG_E(GNSS, "gnss creat mutex faied");
 				vSemaphoreDelete(gnss_mutex);
                 gnss_mutex = NULL;
 			}

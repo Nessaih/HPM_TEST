@@ -36,6 +36,9 @@ extern TIME_SYNC_SOURCE time_if_get_sync_source(void);
 extern bool         time_if_rtc_is_set(void);
 extern bool         time_if_is_set(void);
 
+/*Time reboot time*/
+extern unsigned short time_if_reboot_time(void);
+
 /* RTC alarm functions */
 extern int          time_if_set_rtcwake(unsigned char day, unsigned char hour, unsigned char min);
 

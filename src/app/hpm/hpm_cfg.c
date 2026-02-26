@@ -724,7 +724,7 @@ static INT32 hpm_cfg_tsp_set_main_port(UINT8 *data, UINT16 in_len)
 	UINT16 port = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(HPMMPORT, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &port);
+	ret = tbox_cfg_write(cfg_id, &port);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -773,7 +773,7 @@ static INT32 hpm_cfg_tsp_set_slaver_port(UINT8 *data, UINT16 in_len)
 	UINT16 port = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(HPMSPORT, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &port);
+	ret = tbox_cfg_write(cfg_id, &port);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -822,7 +822,7 @@ static INT32 hpm_cfg_tsp_set_heartbeat_intv(UINT8 *data, UINT16 in_len)
 	UINT16 intv = data[0];
 	
 	TBOX_CFG_ID_GET(HPMHTBT, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &intv);
+	ret = tbox_cfg_write(cfg_id, &intv);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -878,7 +878,7 @@ static INT32 hpm_cfg_tsp_set_sleep_delay(UINT8 *data, UINT16 in_len)
 	UINT16 intv = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(HPMSLPDY, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &intv);
+	ret = tbox_cfg_write(cfg_id, &intv);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -928,7 +928,7 @@ static INT32 hpm_cfg_tsp_set_report_intv(UINT8 *data, UINT16 in_len)
 	UINT16 intv = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(HPMCYCON, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &intv);
+	ret = tbox_cfg_write(cfg_id, &intv);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -1108,7 +1108,7 @@ static INT32 hpm_cfg_tsp_set_time_zone(UINT8 *data, UINT16 in_len)
 	UINT8 time_zone = data[0];
 	
 	TBOX_CFG_ID_GET(TIMEZONE, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &time_zone);
+	ret = tbox_cfg_write(cfg_id, &time_zone);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -1250,7 +1250,7 @@ static INT32 hpm_cfg_tsp_set_baud1(UINT8 *data, UINT16 in_len)
 	UINT32 baud = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &baud);
+	ret = tbox_cfg_write(cfg_id, &baud);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -1301,7 +1301,7 @@ static INT32 hpm_cfg_tsp_set_baud2(UINT8 *data, UINT16 in_len)
 	UINT32 baud = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &baud);
+	ret = tbox_cfg_write(cfg_id, &baud);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -1316,7 +1316,7 @@ static INT32 hpm_cfg_tsp_get_baud3(UINT8 *data, UINT16* out_len)
 	TBOX_CFG_ID cfg_id;
 	UINT32 baud = 0;
 	
-	TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
+	TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
 	ret = tbox_cfg_read(cfg_id, &baud);
 	if(0 != ret)
 	{
@@ -1352,7 +1352,7 @@ static INT32 hpm_cfg_tsp_set_baud3(UINT8 *data, UINT16 in_len)
 	UINT32 baud = (data[0] << 8) + data[1];
 	
 	TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &baud);
+	ret = tbox_cfg_write(cfg_id, &baud);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;
@@ -1402,7 +1402,7 @@ static INT32 hpm_cfg_tsp_set_gps_mode(UINT8 *data, UINT16 in_len)
 	UINT32 mode = data[0];
 	
 	TBOX_CFG_ID_GET(GPSMODE, cfg_id);
-	ret = tbox_cfg_read(cfg_id, &mode);
+	ret = tbox_cfg_write(cfg_id, &mode);
 	if(0 != ret)
 	{
 		return HPM_CFG_RESP_NG;

@@ -56,6 +56,10 @@ static BaseType_t show_time(char *buf, size_t bufsz, const char *cmd)
     } else {
         len += snprintf(&buf[len], bufsz - (size_t)len, "RTC Status  : OK\r\n");
     }
+
+    /*半夜重启时间*/
+    unsigned short reboot_time = time_if_reboot_time();
+    len += snprintf(&buf[len], bufsz - (size_t)len, "Reboot Time : %02u:%02u\r\n", reboot_time/ 60, reboot_time % 60);
     
     len += snprintf(&buf[len], bufsz - (size_t)len, "========================\r\n");
 

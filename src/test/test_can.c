@@ -4,7 +4,6 @@
 #include "tbox_pm_io.h"
 
 #define CAN_TEST_INSTANCE 0
-#define CAN_TEST_INSTANCE 0
 
 static TaskHandle_t  xTaskHandle  = NULL;
 static TimerHandle_t xTimerHandle = NULL;
@@ -30,14 +29,14 @@ void can_send_task(void *param)
         msg.id  = 0x9800E001;
         ret     = can_if_send(&msg);
         if (0 != ret) {
-            tbox_log_print("CAN send failed, ret = %d\r\n", ret);
+            tbox_log_print("CAN1 send failed, ret = %d\r\n", ret);
         }
 
         msg.ins = 1;
         msg.id  = 0x9800E002;
         ret     = can_if_send(&msg);
         if (0 != ret) {
-            tbox_log_print("CAN send failed, ret = %d\r\n", ret);
+            tbox_log_print("CAN2 send failed, ret = %d\r\n", ret);
         }
 
         seq++;
