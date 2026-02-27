@@ -93,19 +93,24 @@ void j1939_tl_periodic(void)
             {
                 if (J1939_rx_pdu.data[0] == TP_CM_RTS || J1939_rx_pdu.data[0] == TP_CM_BAM)
                 {
-                    J1939_rx_state_machine.PGN = J1939_rx_pdu.data[6];
-                    J1939_rx_state_machine.PGN <<= 8;
-                    J1939_rx_state_machine.PGN += J1939_rx_pdu.data[5];
+                    uint32_t volatile_pgn;
+                    uint32_t volatile_byte_count;
+
+                    volatile_pgn                               = J1939_rx_pdu.data[6];
+                    volatile_pgn                               = volatile_pgn << 8;
+                    volatile_pgn                               = volatile_pgn + J1939_rx_pdu.data[5];
+                    volatile_byte_count                        = J1939_rx_pdu.data[2];
+                    volatile_byte_count                        = volatile_byte_count << 8;
+                    volatile_byte_count                        = volatile_byte_count + J1939_rx_pdu.data[1];
+                    J1939_rx_state_machine.PGN                 = volatile_pgn;
                     J1939_rx_state_machine.dest_addr           = J1939_rx_pdu.dest_addr;
                     J1939_rx_state_machine.source_addr         = J1939_rx_pdu.source_addr;
                     J1939_rx_state_machine.packet_number       = 0;
                     J1939_rx_state_machine.timer_counter       = 0;
                     J1939_rx_state_machine.total_packet_number = J1939_rx_pdu.data[3];
-                    J1939_rx_state_machine.byte_count          = J1939_rx_pdu.data[2];
-                    J1939_rx_state_machine.byte_count <<= 8;
-                    J1939_rx_state_machine.byte_count += J1939_rx_pdu.data[1];
-                    J1939_rx_state_machine.status = INIT_REASSEMBLE_STRUCTURE;
-                    J1939_rx_state_machine.TP     = J1939_rx_pdu.data[0];
+                    J1939_rx_state_machine.byte_count          = volatile_byte_count;
+                    J1939_rx_state_machine.status              = INIT_REASSEMBLE_STRUCTURE;
+                    J1939_rx_state_machine.TP                  = J1939_rx_pdu.data[0];
                 }
                 else
                 {
@@ -208,9 +213,14 @@ void j1939_tl_periodic(void)
         {
             if (J1939_rx_state_machine.TP == TP_CM_BAM)
             {
-                if (J1939_rx_pdu.source_addr == J1939_rx_state_machine.source_addr && J1939_rx_pdu.dest_addr == J1939_rx_state_machine.dest_addr)
+                uint8_t volatile_pdu_src_addr = J1939_rx_pdu.source_addr;
+                uint8_t volatile_pdu_dst_addr = J1939_rx_pdu.dest_addr;
+
+                if (volatile_pdu_src_addr == J1939_rx_state_machine.source_addr && volatile_pdu_dst_addr == J1939_rx_state_machine.dest_addr)
                 {
-                    if (J1939_rx_state_machine.packet_number == J1939_rx_pdu.data[0] - 1)
+                    uint8_t volatile_packet_number = J1939_rx_state_machine.packet_number;
+
+                    if (volatile_packet_number == J1939_rx_pdu.data[0] - 1)
                     {
                         J1939_rx_state_machine.status        = SAVE_DATA;
                         J1939_rx_state_machine.timer_counter = 0;
@@ -243,16 +253,19 @@ void j1939_tl_periodic(void)
 
         case SAVE_DATA:
         {
-            uint8_t i = 0;
-            while ((i < 7) && ((J1939_rx_state_machine.packet_number * 7 + i) <= J1939_rx_state_machine.byte_count))
+            uint8_t i                      = 0;
+            uint8_t volatile_packet_number = J1939_rx_state_machine.packet_number * 7 + i;
+
+            while ((i < 7) && (volatile_packet_number <= J1939_rx_state_machine.byte_count))
             {
-                J1939_rx_message.data[J1939_rx_state_machine.packet_number * 7 + i] = J1939_rx_pdu.data[i + 1];
-                J1939_rx_pdu.data[i + 1]                                            = 0;
+                volatile_packet_number                        = J1939_rx_state_machine.packet_number * 7 + i;
+                J1939_rx_message.data[volatile_packet_number] = J1939_rx_pdu.data[i + 1];
+                J1939_rx_pdu.data[i + 1]                      = 0;
                 i++;
             }
             J1939_rx_state_machine.packet_number++;
-
-            if (J1939_rx_state_machine.packet_number == J1939_rx_state_machine.total_packet_number)
+            volatile_packet_number = J1939_rx_state_machine.packet_number;
+            if (volatile_packet_number == J1939_rx_state_machine.total_packet_number)
             {
                 J1939_rx_state_machine.status = FILL_USER_MESSAGE;
             }
@@ -285,7 +298,7 @@ void j1939_tl_periodic(void)
             break;
 
         } // end switch
-    }     // end while
+    } // end while
 }
 
 uint8_t j1939_tl_send(J1939_TX_MESSAGE_T *msg_ptr)

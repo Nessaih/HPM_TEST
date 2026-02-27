@@ -34,13 +34,13 @@
 // Hardware Abstraction Layer Interface Functions
 //==========================================================================================
 
-#include "common.h"
+#include "tbox_type.h"
 #include "can_if.h"
 #include "j1939.h"
 
 void j1939_hal_init(void);
 void j1939_hal_periodic(void);
 void j1939_hal_tx(const CAN_PACKET_T *pkt_ptr);
-void j1939_hal_rx(unsigned char instance, CAN_MSG *msg);
+void j1939_hal_rx(unsigned char instance, can_msg_t *msg);
 
 #endif

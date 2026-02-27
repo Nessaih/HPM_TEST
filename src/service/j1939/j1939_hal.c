@@ -26,13 +26,12 @@
 // incidental, punitive or consequential damages - of any kind whatsoever - with respect
 // to the software.
 /////////////////////////////////////////////////////////////////////////////////////////
-#include <string.h>
 #include <stdint.h>
-#include "task.h"
-#include "can_socket.h"
+#include <string.h>
+#include "tbox_type.h"
+#include "can_if.h"
+#include "drv_can.h"
 #include "j1939_includes.h"
-#include "can/can_data.h"
-#include "can/can_tp.h"
 
 //==========================================================================================
 // Hardware Abstraction Layer Interface Functions
@@ -48,28 +47,29 @@ void j1939_hal_periodic(void)
 
 void j1939_hal_tx(const CAN_PACKET_T *pkt_ptr)
 {
-
-    CAN_DATA msg;
+    can_msg_t msg;
+    uint32_t  eid;
 
     if (pkt_ptr->identifier > 0x7FF)
-        msg.msg.is_eid = 1;
+        eid = DRV_CAN_EXTEND_ID_MASK;
     else
-        msg.msg.is_eid = 0;
-    msg.instance     = 0;
-    msg.msg.can_id   = pkt_ptr->identifier;
-    msg.msg.data_len = pkt_ptr->byte_count;
-    memcpy((void *)msg.msg.data, (void *)pkt_ptr->data, pkt_ptr->byte_count);
-    can_tp_send(&msg);
+        eid = 0;
+
+    msg.ins = 0;
+    msg.id  = (uint32_t)(pkt_ptr->identifier | eid);
+    msg.len = pkt_ptr->byte_count;
+    memcpy((void *)msg.data, (void *)pkt_ptr->data, pkt_ptr->byte_count);
+    can_if_send(&msg);
 }
-void j1939_hal_rx(unsigned char instance, CAN_MSG *msg)
+void j1939_hal_rx(unsigned char instance, can_msg_t *msg)
 {
     CAN_PACKET_T rev_can_packet;
 
     (void)instance;
 
-    rev_can_packet.identifier = msg->can_id;
-    rev_can_packet.byte_count = msg->data_len;
-    memcpy((void *)rev_can_packet.data, (void *)msg->data, msg->data_len);
+    rev_can_packet.identifier = msg->id & (~DRV_CAN_EXTEND_ID_MASK);
+    rev_can_packet.byte_count = msg->len;
+    memcpy((void *)rev_can_packet.data, (void *)msg->data, msg->len);
 #if 0
     printf("ID:0x%08X %u %02X %02X %02X %02X %02X %02X %02X %02X\n", \
             rev_can_packet.identifier, \

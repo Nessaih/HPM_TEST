@@ -64,17 +64,17 @@ void j1939_al_periodic(void)
 
     for (size_t i = 0; i < al_table.cnt; i++)
     {
-        if(msg.PGN == al_table.sub[i].pgn && al_table.sub[i].cb)
+        uint32_t volatile_pgn = al_table.sub[i].pgn;
+        if (msg.PGN == volatile_pgn && al_table.sub[i].cb)
         {
-            al_table.sub[i].cb((uint8_t *)msg.data, msg.byte_count,(uint32_t *)&msg.PGN);
+            al_table.sub[i].cb((uint8_t *)msg.data, msg.byte_count, (uint32_t *)&msg.PGN);
         }
     }
-    
 }
 
 void j1939_al_process(J1939_RX_MESSAGE_T *msg_ptr)
 {
-    if(list_is_full(&rx_list))
+    if (list_is_full(&rx_list))
         return;
     list_put(&rx_list, *msg_ptr);
 }

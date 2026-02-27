@@ -35,7 +35,7 @@ list_define(dl_tx_list_t, CAN_PACKET_T, 8);
 static struct dl_rx_list_t rx_list;
 static struct dl_tx_list_t tx_list;
 
-uint8_t                    dl_state;
+uint8_t dl_state;
 
 //========================================================================================
 // Datalink Layer Interface Functions
@@ -96,11 +96,11 @@ void j1939_dl_periodic(void)
     list_get(&rx_list, &rpkt);
 
     m_ID  = rpkt.identifier;
-    m_PGN = (volatile uint32_t)((m_ID >> 8) & 0x3FFFF);
-    m_PF = (uint8_t)(m_ID >> 16);
-    m_PS = (uint8_t)(m_ID >> 8);
-    m_DA = m_PS;
-    m_SA = (uint8_t)m_ID;
+    m_PGN = (uint32_t)((m_ID >> 8) & 0x3FFFF);
+    m_PF  = (uint8_t)(m_ID >> 16);
+    m_PS  = (uint8_t)(m_ID >> 8);
+    m_DA  = m_PS;
+    m_SA  = (uint8_t)m_ID;
 
     // Handle PDU1
     if (m_PF < 240)
@@ -131,20 +131,24 @@ void j1939_dl_periodic(void)
 void j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr)
 {
     CAN_PACKET_T pkt;
-    uint8_t      i;
+    uint32_t     temp_identifier;
 
-    pkt.byte_count = (uint8_t)msg_ptr->byte_count;
-    pkt.identifier = msg_ptr->priority;
-    pkt.identifier = (pkt.identifier << 18) + msg_ptr->PGN;
+    pkt.byte_count  = (uint8_t)msg_ptr->byte_count;
+    pkt.identifier  = msg_ptr->priority;
+    temp_identifier = pkt.identifier << 18;
+    pkt.identifier  = temp_identifier + msg_ptr->PGN;
 
     // PDU1 - Peer-to-Peer
     if (msg_ptr->PGN < 0xF000)
     {
-        pkt.identifier = pkt.identifier + msg_ptr->dest_addr;
+        temp_identifier = pkt.identifier;
+        pkt.identifier  = temp_identifier + msg_ptr->dest_addr;
     }
-    pkt.identifier = (pkt.identifier << 8) + msg_ptr->sa_addr;
 
-    for (i = 0; i < pkt.byte_count; i++)
+    temp_identifier = pkt.identifier << 18;
+    pkt.identifier  = temp_identifier + msg_ptr->sa_addr;
+
+    for (uint8_t i = 0; i < pkt.byte_count; i++)
     {
         pkt.data[i] = msg_ptr->data[i];
     }

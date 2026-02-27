@@ -3864,9 +3864,6 @@
                 </file>
             </group>
             <group>
-                <name>circuit</name>
-            </group>
-            <group>
                 <name>fal</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\fal\fal.c</name>
@@ -4026,6 +4023,12 @@
                 </file>
             </group>
             <group>
+                <name>program</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\program\program.c</name>
+                </file>
+            </group>
+            <group>
                 <name>se</name>
                 <group>
                     <name>cfg</name>
@@ -4137,15 +4140,36 @@
                 </file>
             </group>
             <group>
-                <name>program</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\service\program\program.c</name>
-                </file>
-            </group>
-            <group>
                 <name>version</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\version\version.c</name>
+                </file>
+            </group>
+            <group>
+                <name>j1939</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_al.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_dl.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_hal.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_nml.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_pgn.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_service.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\j1939\j1939_tl.c</name>
                 </file>
             </group>
             <file>
@@ -4165,6 +4189,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_flash.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\test\test_j1939.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_led.c</name>

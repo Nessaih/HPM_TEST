@@ -31,6 +31,8 @@
 #define _J1939_INCLUDES_H
 
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 
 #include "j1939.h"
 #include "j1939_hal.h"

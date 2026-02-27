@@ -8,6 +8,9 @@
 //#include "test_rtc.h"
 //#include "test_timer.h"
 
+extern void test_j1939_init(void);
+
+
 
 void test_init_task(void *param)
 {
@@ -20,6 +23,7 @@ void test_init_task(void *param)
     // test_adc_init(NULL);
     // test_log_init(NULL);
     // test_flash_init(NULL);
+    test_j1939_init();
     vTaskDelete(NULL);
 }
 

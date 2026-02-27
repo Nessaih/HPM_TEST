@@ -1,6 +1,7 @@
 
 
 #include "j1939_includes.h"
+#include "tbox_log.h"
 
 #define PGN_TABLE_CNT 64
 
@@ -15,23 +16,23 @@ struct PGN_TABLE pgn_table =
     {
         .count = 18,
         .pgn = {
-            J1939_PGN_ACK_1, 
-            J1939_PGN_ACK_2, 
-            J1939_PGN_ACK_3, 
-            J1939_PGN_REQ_1, 
-            J1939_PGN_REQ_2, 
-            J1939_PGN_REQ_3, 
-            J1939_PGN_CM_1, 
+            J1939_PGN_ACK_1,
+            J1939_PGN_ACK_2,
+            J1939_PGN_ACK_3,
+            J1939_PGN_REQ_1,
+            J1939_PGN_REQ_2,
+            J1939_PGN_REQ_3,
+            J1939_PGN_CM_1,
             J1939_PGN_CM_2,
-            J1939_PGN_CM_3, 
-            J1939_PGN_DT_1, 
-            J1939_PGN_DT_2, 
-            J1939_PGN_DT_3, 
-            J1939_PGN_ENGINE_CONSTRUCTION, 
+            J1939_PGN_CM_3,
+            J1939_PGN_DT_1,
+            J1939_PGN_DT_2,
+            J1939_PGN_DT_3,
+            J1939_PGN_ENGINE_CONSTRUCTION,
             J1939_PGN_ENGINE_RUN_TIME,
-            J1939_PGN_FUEL_CONSUMPTION, 
-            J1939_PGN_INGREDIENT_IDENTIFICATION, 
-            J1939_PGN_VIN, 
+            J1939_PGN_FUEL_CONSUMPTION,
+            J1939_PGN_INGREDIENT_IDENTIFICATION,
+            J1939_PGN_VIN,
             J1939_PGN_DM1}
     };
 // clang-format on
@@ -69,7 +70,7 @@ void j1939_pgn_show(void)
 
     for (i = 0; i < pgn_table.count; i++)
     {
-        printf("%2u  PGN = %u\n", (unsigned int)i, (unsigned int)pgn_table.pgn[i]);
+        LOG_PRINT("%2u  PGN = %u\n", (unsigned int)i, (unsigned int)pgn_table.pgn[i]);
     }
 }
 
@@ -140,7 +141,7 @@ void j1939_pgn_req(uint32_t pgn, uint8_t dstaddr,uint8_t saaddr)
 	msg.data[5]    = 0xFF;
 	msg.data[6]    = 0xFF;
 	msg.data[7]    = 0xFF;
-	
+
 
     j1939_tl_send(&msg);
 }
