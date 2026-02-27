@@ -10,12 +10,14 @@
 #include "can_types.h"
 #include "tbox_cfg_if.h"
 #include "drv_can.h"
+#include "time_if.h"
 
 extern INT32 can_if_init(UINT8 ins, UINT32 rate, UINT8 mode);
 extern INT32 can_if_deinit(UINT8 ins);
 
 /* CAN 统计信息 */
 #define CAN_STAT_LAST_MSG_COUNT  (10)  /* 每路 CAN 保存最近 10 条消息 */
+#define CAN_RATE_UPDATE_PERIOD_MS (100)  /* 帧率更新周期：100ms */
 
 typedef struct {
     uint32_t total_recv[DRV_CAN_INS_COUNT];     /* 各端口总接收条数 */
@@ -23,10 +25,52 @@ typedef struct {
     can_msg_t last_msgs[DRV_CAN_INS_COUNT][CAN_STAT_LAST_MSG_COUNT]; /* 每路 CAN 最近接收的消息 */
     uint8_t   last_msg_idx[DRV_CAN_INS_COUNT];  /* 每路 CAN 的消息索引 */
     uint8_t   last_msg_count[DRV_CAN_INS_COUNT]; /* 每路 CAN 的消息数量 */
+    
+    /* 帧率统计 */
+    uint32_t recv_count_current_sec[DRV_CAN_INS_COUNT];  /* 当前周期的接收计数 */
+    uint32_t send_count_current_sec[DRV_CAN_INS_COUNT];  /* 当前周期的发送计数 */
+    double   recv_rate[DRV_CAN_INS_COUNT];               /* 接收帧率（fps） */
+    double   send_rate[DRV_CAN_INS_COUNT];               /* 发送帧率（fps） */
+    uint32_t last_update_time_ms[DRV_CAN_INS_COUNT];     /* 上次更新时间戳(ms) */
 } can_stat_t;
 
 static uint32_t tbox_can_baudrate[DRV_CAN_INS_COUNT] = {0};
 static can_stat_t can_stat;
+static TimerHandle_t xRateUpdateTimer = NULL;
+
+/* 帧率更新定时器回调 */
+static void can_rate_timer_callback(TimerHandle_t xTimer)
+{
+    uint8_t ins;
+    uint32_t current_time_ms;
+    uint32_t elapsed_ms;
+    
+    (void)xTimer;
+    
+    current_time_ms = time_if_get_systick_ms();
+    
+    /* 更新所有CAN通道的帧率 */
+    for (ins = 0; ins < DRV_CAN_INS_COUNT; ins++) {
+        elapsed_ms = current_time_ms - can_stat.last_update_time_ms[ins];
+        
+        if (elapsed_ms > 0) {
+            /* 计算帧率（fps）
+             * 帧率 = (本周期计数 / 经过时间) × 1000ms
+             */
+            can_stat.recv_rate[ins] = 
+                (double)can_stat.recv_count_current_sec[ins] * 1000.0 / (double)elapsed_ms;
+            can_stat.send_rate[ins] = 
+                (double)can_stat.send_count_current_sec[ins] * 1000.0 / (double)elapsed_ms;
+        }
+        
+        /* 重置本周期计数器 */
+        can_stat.recv_count_current_sec[ins] = 0;
+        can_stat.send_count_current_sec[ins] = 0;
+        
+        /* 更新时间戳 */
+        can_stat.last_update_time_ms[ins] = current_time_ms;
+    }
+}
 
 /* 更新统计信息 - 保存最近消息 */
 void can_mgr_stat_add_recv_msgs(can_msg_t *msgs, uint32_t count)
@@ -42,6 +86,8 @@ void can_mgr_stat_add_recv_msgs(can_msg_t *msgs, uint32_t count)
         
         can_stat.total_recv[ins]++;
         
+        can_stat.recv_count_current_sec[ins]++;
+        
         /* 保存到对应 CAN 通道的环形缓冲区 */
         memcpy(&can_stat.last_msgs[ins][can_stat.last_msg_idx[ins]], &msgs[i], sizeof(can_msg_t));
         can_stat.last_msg_idx[ins] = (can_stat.last_msg_idx[ins] + 1) % CAN_STAT_LAST_MSG_COUNT;
@@ -55,6 +101,7 @@ void can_mgr_stat_add_send_msg(uint8_t ins)
 {
     if (ins < DRV_CAN_INS_COUNT) {
         can_stat.total_send[ins]++;
+        can_stat.send_count_current_sec[ins]++;
     }
 }
 
@@ -121,6 +168,20 @@ void can_mgr_init(void)
 
     memset(&can_stat, 0, sizeof(can_stat));
 
+    /* 创建帧率更新定时器（100ms周期，自动重载） */
+    xRateUpdateTimer = xTimerCreate(
+        "CanRateTmr",                           /* 定时器名称 */
+        pdMS_TO_TICKS(CAN_RATE_UPDATE_PERIOD_MS), /* 100ms周期 */
+        pdTRUE,                                 /* 自动重载 */
+        (void *)0,                              /* 定时器ID */
+        can_rate_timer_callback);               /* 回调函数 */
+    
+    if (xRateUpdateTimer != NULL) {
+        xTimerStart(xRateUpdateTimer, 0);
+    } else {
+        MODULE_LOG_E(CAN, "create rate update timer failed");
+    }
+
     for (i = 0; i < DRV_CAN_INS_COUNT; i++) {
         ret = can_if_init(i, 0, DRV_CAN_MODE_NORMAL);
         if (ret == 0) {
@@ -136,6 +197,12 @@ void can_mgr_deinit(void)
 {
     int          ret;
     unsigned int i;
+
+    if (xRateUpdateTimer != NULL) {
+        xTimerStop(xRateUpdateTimer, 0);
+        xTimerDelete(xRateUpdateTimer, 0);
+        xRateUpdateTimer = NULL;
+    }
 
     for (i = 0; i < DRV_CAN_INS_COUNT; i++) {
         ret = can_if_deinit(i);
@@ -174,6 +241,22 @@ uint8_t can_if_state_get(uint8_t instance)
     }
 
     return state;
+}
+
+double can_mgr_stat_get_recv_rate(uint8_t ins)
+{
+    if (ins >= DRV_CAN_INS_COUNT) {
+        return 0.0;
+    }
+    return can_stat.recv_rate[ins];
+}
+
+double can_mgr_stat_get_send_rate(uint8_t ins)
+{
+    if (ins >= DRV_CAN_INS_COUNT) {
+        return 0.0;
+    }
+    return can_stat.send_rate[ins];
 }
 
 uint32_t can_if_get_recv_count(uint8_t instance)

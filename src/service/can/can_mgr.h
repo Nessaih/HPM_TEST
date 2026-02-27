@@ -17,6 +17,10 @@ uint32_t can_mgr_stat_get_recv_count(uint8_t ins);
 
 uint32_t can_mgr_stat_get_send_count(uint8_t ins);
 
+double can_mgr_stat_get_recv_rate(uint8_t ins);
+
+double can_mgr_stat_get_send_rate(uint8_t ins);
+
 uint8_t can_mgr_stat_get_last_msg_count(uint8_t ins);
 
 can_msg_t *can_mgr_stat_get_last_msg(uint8_t ins, uint8_t idx);

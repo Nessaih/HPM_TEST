@@ -355,9 +355,6 @@
                     <state>$PROJ_DIR$\..\..\sdk\hal\src\hsm\hsmpackage\include\common</state>
                     <state>$PROJ_DIR$\..\..\sdk\hal\src\hsm\hsmpackage\include\config</state>
                     <state>$PROJ_DIR$\..\..\src</state>
-                    <state>$PROJ_DIR$\..\..\src\app</state>
-                    <state>$PROJ_DIR$\..\..\src\app\dev</state>
-                    <state>$PROJ_DIR$\..\..\src\app\dm</state>
                     <state>$PROJ_DIR$\..\..\src\driver</state>
                     <state>$PROJ_DIR$\..\..\src\driver\adc</state>
                     <state>$PROJ_DIR$\..\..\src\driver\can</state>
@@ -379,24 +376,12 @@
                     <state>$PROJ_DIR$\..\..\src\include\service</state>
                     <state>$PROJ_DIR$\..\..\src\include\common</state>
                     <state>$PROJ_DIR$\..\..\src\include\core</state>
-                    <state>$PROJ_DIR$\..\..\src\service</state>
-                    <state>$PROJ_DIR$\..\..\src\service\analog</state>
-                    <state>$PROJ_DIR$\..\..\src\service\battery</state>
-                    <state>$PROJ_DIR$\..\..\src\service\cfg</state>
-                    <state>$PROJ_DIR$\..\..\src\service\can</state>
-                    <state>$PROJ_DIR$\..\..\src\service\circuit</state>
                     <state>$PROJ_DIR$\..\..\src\service\fal</state>
                     <state>$PROJ_DIR$\..\..\src\service\fdb</state>
-                    <state>$PROJ_DIR$\..\..\src\service\led</state>
-                    <state>$PROJ_DIR$\..\..\src\service\timer</state>
-                    <state>$PROJ_DIR$\..\..\src\service\upgrade</state>
                     <state>$PROJ_DIR$\..\..\src\service\se\inc</state>
-                    <state>$PROJ_DIR$\..\..\src\service\shell</state>
                     <state>$PROJ_DIR$\..\..\src\service\program</state>
                     <state>$PROJ_DIR$\..\..\src\service\j1939</state>
                     <state>$PROJ_DIR$\..\..\src\test</state>
-                    <state>$PROJ_DIR$\..\..\src\common</state>
-                    <state>$PROJ_DIR$\..\..\src\core</state>
                 </option>
                 <option>
                     <name>CCStdIncCheck</name>
@@ -2660,15 +2645,6 @@
         <name>src</name>
         <group>
             <name>app</name>
-            <group>
-                <name>dev</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\dev\dev_time.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\dev\dev_time.h</name>
-                </file>
-            </group>
             <group>
                 <name>dm</name>
             </group>

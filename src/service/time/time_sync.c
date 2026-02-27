@@ -340,7 +340,7 @@ static void dev_time_sync_cclk_resp(IF_4G_TIMINFO *info)
         {
             time_if_set_with_source(TIME_SYNC_SOURCE_NTP, &time);
             dev_time_ntp_state = DEV_TIME_NTP_FINISH;
-            MODULE_LOG_I(TIME, "NTP set time: 20%02u-%02u-%02u %02u:%02u:%02u, timezone: %d",
+            MODULE_LOG_D(TIME, "NTP set time: 20%02u-%02u-%02u %02u:%02u:%02u, timezone: %d",
                          time.year, time.month, time.day, time.hour, time.min, time.sec, timezone);
         }
         else

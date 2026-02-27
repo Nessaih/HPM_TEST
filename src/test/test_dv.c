@@ -826,7 +826,7 @@ void dv_test_task(void *param)
         {
             continue;
         }
-
+		
         dv_diag_timeout();
     }
 }
@@ -848,7 +848,7 @@ void test_dv_init(void *param)
                           (const char *)"dv_test",      /* 任务名称 */
                           (configSTACK_DEPTH_TYPE)256,   /* 任务堆栈大小 */
                           (void *)NULL,                  /* 传递给任务函数的参数 */
-                          (UBaseType_t)19,               /* 任务优先级 */
+                          (UBaseType_t)10,               /* 任务优先级 */
                           (TaskHandle_t *)&xTaskHandle); /* 任务句柄 */
 
     configASSERT(pdPASS == xReturn);

@@ -39,7 +39,7 @@ void test_init(void)
         (const char *)"test_init",      /* 任务名称 */
         (configSTACK_DEPTH_TYPE)256,    /* 任务堆栈大小 */
         (void *)NULL,                   /* 传递给任务函数的参数 */
-        (UBaseType_t)19,                /* 任务优先级 */
+        (UBaseType_t)10U,                /* 任务优先级 */
         (TaskHandle_t *)NULL);          /* 任务句柄 */
 
     (void)xReturn;

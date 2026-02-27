@@ -179,7 +179,7 @@ INT32 tbox_log_init(VOID)
     }
     
     INT32 ret = xTaskCreate(tbox_log_task, 
-                            "TBOX_LOG_TASK",
+                            "TBOXLOG",
                             TBOX_TASK_SMALL_STACK_SIZE/sizeof(StackType_t), 
                             NULL_PTR, 
                             TBOX_TASK_PRIORITY_LOW, 

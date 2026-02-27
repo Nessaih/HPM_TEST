@@ -382,7 +382,7 @@ INT32 tbox_supervise_init(VOID)
     cqueue_init(&tbox_supervise_mgr.queue, buffer, TBOX_SUPERVISE_QUEUE_SIZE);
 
     if(pdPASS != xTaskCreate(tbox_supervise_task, 
-                             "supervise_task", 
+                             "TBOXSUPERVISE", 
                              768U/sizeof(StackType_t), 
                              NULL_PTR, 
                              TBOX_TASK_PRIORITY_LOW, 

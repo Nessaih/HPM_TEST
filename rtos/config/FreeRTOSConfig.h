@@ -201,7 +201,7 @@
  * 因此其优先级设置与其他任务相同。参见
  * https://www.freertos.org/RTOS-software-timer-service-daemon-task.html
  * 仅在configUSE_TIMERS设置为1时使用。 */
-#define configTIMER_TASK_PRIORITY                            (configMAX_PRIORITIES - 1)
+#define configTIMER_TASK_PRIORITY                            (17U)     /*同TBOX_TASK_PRIORITY_MID3*/
 
 /* configTIMER_TASK_STACK_DEPTH设置分配给定时器任务的堆栈大小（以字为单位，不是字节！）。
  * 定时器任务是标准的FreeRTOS任务。参见

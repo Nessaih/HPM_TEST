@@ -19,6 +19,7 @@ static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
     UINT8       state;
     const CHAR *state_str[] = {"NOUSED", "IDLE", "BUSY", "ERROR", "OFF"};
     INT32       len         = 0;
+    double      recv_rate, send_rate;
 
     (VOID) cmd;
 
@@ -28,12 +29,23 @@ static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
 
     for (i = 0; i < DRV_CAN_INS_COUNT; i++) {
         state = can_if_state_get(i);
+        recv_rate = can_mgr_stat_get_recv_rate(i);
+        send_rate = can_mgr_stat_get_send_rate(i);
+        
         if (state < sizeof(state_str) / sizeof(state_str[0])) {
-            len += snprintf(buf + len, bufsz - len, "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu, send=%lu\r\n", i + 1, state_str[state],
-                            can_mgr_get_baudrate(i), can_mgr_stat_get_recv_count(i), can_mgr_stat_get_send_count(i));
+            len += snprintf(buf + len, bufsz - len, 
+                "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu(%.1f fps), send=%lu(%.1f fps)\r\n", 
+                i + 1, state_str[state],
+                can_mgr_get_baudrate(i), 
+                can_mgr_stat_get_recv_count(i), recv_rate,
+                can_mgr_stat_get_send_count(i), send_rate);
         } else {
-            len += snprintf(buf + len, bufsz - len, "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu, send=%lu\r\n", i + 1, can_mgr_get_baudrate(i),
-                            can_mgr_stat_get_recv_count(i), can_mgr_stat_get_send_count(i));
+            len += snprintf(buf + len, bufsz - len, 
+                "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu(%.1f fps), send=%lu(%.1f fps)\r\n", 
+                i + 1, 
+                can_mgr_get_baudrate(i),
+                can_mgr_stat_get_recv_count(i), recv_rate,
+                can_mgr_stat_get_send_count(i), send_rate);
         }
     }
 

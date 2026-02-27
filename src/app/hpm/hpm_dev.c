@@ -136,54 +136,56 @@ static INT32 hpm_get_position_data(UINT8 *buf)
     buf[len++] = 0;
     buf[len++] = 0;
 
+    UINT8 status = 0;
     GNSS_POSITION_DATA pos;
+    gnss_get_position(&pos);
+
     if (GNSS_POS_STATE_FIX == gnss_get_fix_state())
     {
-        gnss_get_position(&pos);
-        UINT8 status = 0;
-        status |= (pos.is_east << 1);
-        status |= (pos.is_north << 2);
-        buf[len++] = status;
-
-        UINT32 longitude = (UINT32)(pos.longitude * 1000000);
-        buf[len++] = (UINT8)(longitude >> 24);
-        buf[len++] = (UINT8)(longitude >> 16);
-        buf[len++] = (UINT8)(longitude >> 8);
-        buf[len++] = (UINT8)(longitude >> 0);
-
-        UINT32 latitude = (UINT32)(pos.latitude * 1000000);
-        buf[len++] = (UINT8)(latitude >> 24);
-        buf[len++] = (UINT8)(latitude >> 16);
-        buf[len++] = (UINT8)(latitude >> 8);
-        buf[len++] = (UINT8)(latitude >> 0);
-
-        UINT16 speed = (UINT16)(gnss_get_speed() * 10);
-        buf[len++] = (UINT8)(speed >> 8);
-        buf[len++] = (UINT8)(speed >> 0);
-
-        UINT8 direction = (UINT8)(gnss_get_direction() / 2);
-        buf[len++] = direction;
-
-        UINT16 altitude = (UINT16)(gnss_get_altitude() + 100);
-        buf[len++] = (UINT8)(altitude >> 8);
-        buf[len++] = (UINT8)(altitude >> 0);
+        status |= (pos.is_north << 1);
+        status |= (pos.is_east << 2);
     }
     else
     {
-        buf[len++] = 0x01;
-        memset(&buf[len], 0, 13);
-        len += 13;
+        status = 0x01;
+        status |= (pos.is_north << 1);
+        status |= (pos.is_east << 2);
     }
 
+    buf[len++] = status;
+
+    UINT32 longitude = (UINT32)(pos.longitude * 1000000);
+    buf[len++] = (UINT8)(longitude >> 24);
+    buf[len++] = (UINT8)(longitude >> 16);
+    buf[len++] = (UINT8)(longitude >> 8);
+    buf[len++] = (UINT8)(longitude >> 0);
+
+    UINT32 latitude = (UINT32)(pos.latitude * 1000000);
+    buf[len++] = (UINT8)(latitude >> 24);
+    buf[len++] = (UINT8)(latitude >> 16);
+    buf[len++] = (UINT8)(latitude >> 8);
+    buf[len++] = (UINT8)(latitude >> 0);
+
+    UINT16 speed = (UINT16)(gnss_get_speed() * 10);
+    buf[len++] = (UINT8)(speed >> 8);
+    buf[len++] = (UINT8)(speed >> 0);
+
+    UINT8 direction = (UINT8)(gnss_get_direction() / 2);
+    buf[len++] = direction;
+
+    UINT16 altitude = (UINT16)(gnss_get_altitude() + 1000);
+    buf[len++] = (UINT8)(altitude >> 8);
+    buf[len++] = (UINT8)(altitude >> 0);
+
     // acctime
-    UINT32 acctime = 0x12345678;
+    UINT32 acctime = hpm_cfg_get_run_acc_time();
     buf[len++] = (UINT8)(acctime >> 24);
     buf[len++] = (UINT8)(acctime >> 16);
     buf[len++] = (UINT8)(acctime >> 8);
     buf[len++] = (UINT8)(acctime >> 0);
 
     // odometer
-    UINT32 odometer = 0x87654321;
+    UINT32 odometer = hpm_cfg_get_run_gps_odo();
     buf[len++] = (UINT8)(odometer >> 24);
     buf[len++] = (UINT8)(odometer >> 16);
     buf[len++] = (UINT8)(odometer >> 8);
@@ -195,11 +197,11 @@ static INT32 hpm_get_position_data(UINT8 *buf)
     buf[len++] = (UINT8)(devinfo >> 8);
     buf[len++] = (UINT8)(devinfo >> 0);
 
-    UINT16 main_vol = (UINT16)(analog_pwr_vtg() * 10);
+    UINT16 main_vol = (UINT16)(analog_pwr_vtg() / 10);
     buf[len++] = (UINT8)(main_vol >> 8);
     buf[len++] = (UINT8)(main_vol >> 0);
 
-    UINT16 bat_vol = (UINT16)(analog_bat_vtg() * 10);
+    UINT16 bat_vol = (UINT16)(analog_bat_vtg() / 10);
     buf[len++] = (UINT8)(bat_vol >> 8);
     buf[len++] = (UINT8)(bat_vol >> 0);
 

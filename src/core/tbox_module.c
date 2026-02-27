@@ -306,7 +306,8 @@ INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fu
     }
     tbox_module_exit_critical(critical);
 
-    task_id = tbox_task_create_runloop(module_id, priority, stack_size, runloop_fun);
+    task_id = tbox_task_create_runloop(module_id, tbox_modules[module_id].module_info.name, 
+                                       priority, stack_size, runloop_fun);
     if(TBOX_ID_INVALID == task_id)
     {
         MODULE_LOG_E(ICORE, "create runloop task failed");

@@ -108,12 +108,11 @@ VOID hpm_socket_force_stop(VOID)
     hpm_socket_info.status = HPM_SOCKET_STATUS_CLOSED;
     hpm_socket_info.run = HPM_SOCKET_STOPPED;
     hpm_socket_info.tick = 0;
-    hpm_session_stop();
+    hpm_session_force_stop();
 }
 
 VOID hpm_socket_handle_msg(TBOX_MSG_DATA *data)
 {
-#if 0
     TBOX_CFG_CHANGE_INFO *info = (TBOX_CFG_CHANGE_INFO *)data->data;
     if (NULL_PTR == info)
     {
@@ -146,7 +145,6 @@ VOID hpm_socket_handle_msg(TBOX_MSG_DATA *data)
             }
         }
     }
-#endif
 }
 
 BOOL hpm_socket_is_connected(VOID)
@@ -158,7 +156,7 @@ BOOL hpm_socket_in_idle(VOID)
 {
     BOOL idle = FALSE;
     if ((HPM_SOCKET_STATUS_IDLE == hpm_socket_info.status) ||
-        (HPM_SOCKET_STATUS_WAIT_DIAL == hpm_socket_info.status))
+        (HPM_SOCKET_STATUS_CLOSED == hpm_socket_info.status))
     {
         idle = TRUE;
     }

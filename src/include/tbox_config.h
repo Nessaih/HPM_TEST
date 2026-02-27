@@ -30,6 +30,7 @@
  *变更，下面配置也需要跟着变更。
  */
 #define TBOX_TASK_PRIORITY_HIGH              (18U)
+#define TBOX_TASK_PRIORITY_MID3              (17U)
 #define TBOX_TASK_PRIORITY_MID2              (16U)
 #define TBOX_TASK_PRIORITY_MID1              (13U)
 #define TBOX_TASK_PRIORITY_MID               (10U)
@@ -48,7 +49,7 @@
 #define TBOX_TASK_LARGER_SIZE_NUM            (1U)
 #define TBOX_TASK_MEDIUM_SIZE_NUM            (6U)
 #define TBOX_TASK_SMALL_SIZE_NUM             (1U)
-#define TBOX_RUNLOOP_TASK_NUM                (10U)
+#define TBOX_RUNLOOP_TASK_NUM                (16U)
 #define TBOX_TASK_HIGHWATER_THRESHOLD        (8U)  //32B
 #define TBOX_TASK_MSG_QUEUE_SIZE             (512U)  //每个任务消息队列的长度，单位为字节
 

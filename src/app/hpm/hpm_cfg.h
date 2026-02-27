@@ -7,6 +7,8 @@ VOID hpm_cfg_wake(VOID);
 
 VOID hpm_cfg_sleep(VOID);
 
+VOID hpm_cfg_process(VOID);
+
 INT32 hpm_cfg_tsp_get_param(UINT8 *in_data, UINT16 in_len, UINT8 *out_data, UINT16 *out_len);
 
 INT32 hpm_cfg_tsp_set_param(UINT8 *in_data, UINT16 in_len, UINT8 *out_data, UINT16 *out_len);
@@ -36,5 +38,11 @@ INT32 hpm_cfg_get_report_intv(UINT32 *data, INT32 len);
 INT32 hpm_cfg_get_report_accof_intv(UINT32 *data, INT32 len);
 
 INT32 hpm_cfg_get_server_timeout(UINT32 *data, INT32 len);
+
+VOID hpm_cfg_show_odomter(VOID);
+
+UINT32 hpm_cfg_get_run_acc_time(VOID);
+
+UINT32 hpm_cfg_get_run_gps_odo(VOID);
 
 #endif

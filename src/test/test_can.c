@@ -29,14 +29,14 @@ void can_send_task(void *param)
         msg.id  = 0x9800E001;
         ret     = can_if_send(&msg);
         if (0 != ret) {
-            tbox_log_print("CAN1 send failed, ret = %d\r\n", ret);
+            // tbox_log_print("CAN1 send failed, ret = %d\r\n", ret);
         }
 
         msg.ins = 1;
         msg.id  = 0x9800E002;
         ret     = can_if_send(&msg);
         if (0 != ret) {
-            tbox_log_print("CAN2 send failed, ret = %d\r\n", ret);
+            // tbox_log_print("CAN2 send failed, ret = %d\r\n", ret);
         }
 
         seq++;
@@ -58,7 +58,7 @@ void test_can_init(void *param)
                           (const char *)"can_send",      /* 任务名称 */
                           (configSTACK_DEPTH_TYPE)256,   /* 任务堆栈大小 */
                           (void *)NULL,                  /* 传递给任务函数的参数 */
-                          (UBaseType_t)19,               /* 任务优先级 */
+                          (UBaseType_t)16,               /* 任务优先级 */
                           (TaskHandle_t *)&xTaskHandle); /* 任务句柄 */
 
     configASSERT(pdPASS == xReturn);

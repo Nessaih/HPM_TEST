@@ -22,6 +22,7 @@ static INT32 tbox_cfg_inner_init(VOID);
 static VOID tbox_cfg_lock(fdb_kvdb_t db);
 static VOID tbox_cfg_unlock(fdb_kvdb_t db);
 static INT32 tbox_cfg_init_kvdb(VOID);
+INT32 tbox_cfg_inner_set_default(TBOX_CFG_ID id);
 static BaseType_t tbox_cfg_shell_lscfg(CHAR *buf, UINT32 bufsz, const CHAR *cmd);
 static BaseType_t tbox_cfg_shell_setdefault(CHAR *buf, UINT32 bufsz, const CHAR *cmd);
 static BaseType_t tbox_cfg_shell_setcfg(CHAR *buf, UINT32 bufsz, const CHAR *cmd);
@@ -87,7 +88,6 @@ TBOX_CFG_DEFINE(HPMCYCON, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "20", TBOX_CFG_REPOT_I
 TBOX_CFG_DEFINE(HPMCYCOFF, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "60", TBOX_CFG_REPOT_INTV_LEN);
 TBOX_CFG_DEFINE(HPMSLPDY, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "60", TBOX_CFG_REPOT_INTV_LEN);
 TBOX_CFG_DEFINE(HPMSVRINTV, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "10", TBOX_CFG_REPOT_INTV_LEN);
-
 
 INT32 tbox_cfg_reset(VOID)
 {
@@ -260,8 +260,16 @@ INT32 tbox_cfg_read(TBOX_CFG_ID id, VOID *buf)
     fdb_blob_make(&blob, buf, cfg_info->len);
     if(0U == fdb_kv_get_blob(&cfg_fdb, cfg_info->name, &blob))
     {
-        MODULE_LOG_E(TBOXCFG, "read cfg[%s] failed", cfg_info->name);
-        return (INT32)TBOX_E_FAILED;
+        MODULE_LOG_W(TBOXCFG, "read cfg[%s] failed and use default value", cfg_info->name);
+        if((INT32)TBOX_E_OK != tbox_cfg_inner_set_default(id))
+        {
+            return (INT32)TBOX_E_FAILED;
+        }
+        if(0U == fdb_kv_get_blob(&cfg_fdb, cfg_info->name, &blob))
+        {
+            MODULE_LOG_E(TBOXCFG, "read cfg[%s] failed and use default value failed", cfg_info->name);
+            return (INT32)TBOX_E_FAILED;
+        }
     }
 
     return (INT32)TBOX_E_OK;
@@ -280,87 +288,14 @@ INT32 tbox_cfg_set_default(TBOX_CFG_ID id)
         return (INT32)TBOX_E_NOEXISTS;
     }
 
-    UINT8 *def_buff = mempool_alloc(TBOX_CFG_VALUE_MAX_LEN);
-    if(NULL_PTR == def_buff)
+    if((INT32)TBOX_E_OK != tbox_cfg_inner_set_default(id))
     {
-        MODULE_LOG_E(TBOXCFG, "failed to alloc memory");
-        return (INT32)TBOX_E_FAILED_ALLOC;
-    }
-
-    CHAR *end_str;
-    struct fdb_blob blob;
-    TBOX_CFG_INFO *cfg_info = &cfg_items[id].info;
-    if(CFG_TYPE_NUMBER == cfg_info->type)
-    {
-        UINT32 value = 0U;
-        if(NULL_PTR != cfg_info->def_value && 
-           strlen(cfg_info->def_value) > 0U)
-        {
-            value = (UINT32)strtol(cfg_info->def_value, &end_str, 10U);
-            if(end_str == cfg_info->def_value)
-            {
-                MODULE_LOG_E(TBOXCFG, "invalid number:%s", cfg_info->def_value);
-                mempool_free(def_buff); 
-                return (INT32)TBOX_E_FAILED;
-            }
-        }
-        fdb_blob_make(&blob, &value, cfg_info->len);
-    }
-    else if(CFG_TYPE_NUMBER16 == cfg_info->type)
-    {
-        UINT32 value = 0U;
-        if(NULL_PTR != cfg_info->def_value && 
-           strlen(cfg_info->def_value) > 0U)
-        {
-            value = (UINT32)strtol(cfg_info->def_value, &end_str, 16U);
-            if(end_str == cfg_info->def_value)
-            {
-                MODULE_LOG_E(TBOXCFG, "invalid number:%s", cfg_info->def_value);
-                mempool_free(def_buff); 
-                return (INT32)TBOX_E_FAILED;
-            }
-        }
-        fdb_blob_make(&blob, &value, cfg_info->len);
-    }
-    else if(CFG_TYPE_STRING == cfg_info->type)
-    {
-        memset(def_buff, 0U, TBOX_CFG_VALUE_MAX_LEN);
-        if(NULL_PTR != cfg_info->def_value && 
-           strlen(cfg_info->def_value) > 0U)
-        {
-            strncpy((CHAR*)def_buff, cfg_info->def_value, cfg_info->len);
-        }        
-        strncpy((CHAR*)def_buff, cfg_info->def_value, cfg_info->len);
-        fdb_blob_make(&blob, def_buff, cfg_info->len);
-    }
-    else if(CFG_TYPE_BYTE == cfg_info->type)
-    {
-        memset(def_buff, 0U, TBOX_CFG_VALUE_MAX_LEN);
-        if(NULL_PTR != cfg_info->def_value && 
-           strlen(cfg_info->def_value) > 0U)
-        {
-            tbox_string_to_bytes(cfg_info->def_value, def_buff, cfg_info->len);
-        }
-        fdb_blob_make(&blob, def_buff, cfg_info->len);
-    }
-    else
-    {
-        mempool_free(def_buff);
         return (INT32)TBOX_E_FAILED;
     }
-    
-    if ((INT32)FDB_NO_ERR != fdb_kv_set_blob(&cfg_fdb, cfg_info->name, &blob)) 
-    {
-        MODULE_LOG_E(TBOXCFG, "failed to set kvdb value");
-        mempool_free(def_buff); 
-        return (INT32)TBOX_E_FAILED;
-    }
-
-    mempool_free(def_buff); 
 
     TBOX_CFG_CHANGE_INFO change_info;
     change_info.id = id;
-    change_info.name = cfg_info->name;
+    change_info.name = cfg_items[id].info.name;
     TBOX_MSG_DATA data = {.data = (UINT8 *)&change_info, .size = sizeof(change_info)};
     tbox_message_publish(TBOX_CFG_EVENT_VALUE_CHANGE, &data);
 
@@ -490,6 +425,89 @@ static INT32 tbox_cfg_init_kvdb(VOID)
     {
         return (INT32)TBOX_E_FAILED;
     }
+
+    return (INT32)TBOX_E_OK;
+}
+
+INT32 tbox_cfg_inner_set_default(TBOX_CFG_ID id)
+{
+    UINT8 *def_buff = mempool_alloc(TBOX_CFG_VALUE_MAX_LEN);
+    if(NULL_PTR == def_buff)
+    {
+        MODULE_LOG_E(TBOXCFG, "failed to alloc memory");
+        return (INT32)TBOX_E_FAILED_ALLOC;
+    }
+
+    CHAR *end_str;
+    struct fdb_blob blob;
+    TBOX_CFG_INFO *cfg_info = &cfg_items[id].info;
+    if(CFG_TYPE_NUMBER == cfg_info->type)
+    {
+        UINT32 value = 0U;
+        if(NULL_PTR != cfg_info->def_value && 
+           strlen(cfg_info->def_value) > 0U)
+        {
+            value = (UINT32)strtol(cfg_info->def_value, &end_str, 10U);
+            if(end_str == cfg_info->def_value)
+            {
+                MODULE_LOG_E(TBOXCFG, "invalid number:%s", cfg_info->def_value);
+                mempool_free(def_buff); 
+                return (INT32)TBOX_E_FAILED;
+            }
+        }
+        fdb_blob_make(&blob, &value, cfg_info->len);
+    }
+    else if(CFG_TYPE_NUMBER16 == cfg_info->type)
+    {
+        UINT32 value = 0U;
+        if(NULL_PTR != cfg_info->def_value && 
+           strlen(cfg_info->def_value) > 0U)
+        {
+            value = (UINT32)strtol(cfg_info->def_value, &end_str, 16U);
+            if(end_str == cfg_info->def_value)
+            {
+                MODULE_LOG_E(TBOXCFG, "invalid number:%s", cfg_info->def_value);
+                mempool_free(def_buff); 
+                return (INT32)TBOX_E_FAILED;
+            }
+        }
+        fdb_blob_make(&blob, &value, cfg_info->len);
+    }
+    else if(CFG_TYPE_STRING == cfg_info->type)
+    {
+        memset(def_buff, 0U, TBOX_CFG_VALUE_MAX_LEN);
+        if(NULL_PTR != cfg_info->def_value && 
+           strlen(cfg_info->def_value) > 0U)
+        {
+            strncpy((CHAR*)def_buff, cfg_info->def_value, cfg_info->len);
+        }        
+        strncpy((CHAR*)def_buff, cfg_info->def_value, cfg_info->len);
+        fdb_blob_make(&blob, def_buff, cfg_info->len);
+    }
+    else if(CFG_TYPE_BYTE == cfg_info->type)
+    {
+        memset(def_buff, 0U, TBOX_CFG_VALUE_MAX_LEN);
+        if(NULL_PTR != cfg_info->def_value && 
+           strlen(cfg_info->def_value) > 0U)
+        {
+            tbox_string_to_bytes(cfg_info->def_value, def_buff, cfg_info->len);
+        }
+        fdb_blob_make(&blob, def_buff, cfg_info->len);
+    }
+    else
+    {
+        mempool_free(def_buff);
+        return (INT32)TBOX_E_FAILED;
+    }
+    
+    if ((INT32)FDB_NO_ERR != fdb_kv_set_blob(&cfg_fdb, cfg_info->name, &blob)) 
+    {
+        MODULE_LOG_E(TBOXCFG, "failed to set kvdb value");
+        mempool_free(def_buff); 
+        return (INT32)TBOX_E_FAILED;
+    }
+
+    mempool_free(def_buff);
 
     return (INT32)TBOX_E_OK;
 }

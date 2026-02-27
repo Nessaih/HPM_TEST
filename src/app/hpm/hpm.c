@@ -44,6 +44,7 @@ static VOID hpm_handle_message_event(const CHAR *name, TBOX_MSG_DATA *data)
 		hpm_socket_process();
 		hpm_session_process();
 		hpm_dev_process();
+		hpm_cfg_process();
 	}
 	else if (0 == strncmp(name, TBOX_CFG_EVENT_VALUE_CHANGE, strlen(TBOX_CFG_EVENT_VALUE_CHANGE)))
 	{

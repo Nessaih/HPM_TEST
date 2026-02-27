@@ -1008,6 +1008,7 @@ INT32 tbox_task_stop(VOID)
 }
 
 TBOX_ID tbox_task_create_runloop(TBOX_ID module_id, 
+                               CHAR *task_name, 
                                UINT8 pripority, 
                                UINT32 stack_size, 
                                MODULE_RUNLOOP_FUN runloop)
@@ -1041,8 +1042,6 @@ TBOX_ID tbox_task_create_runloop(TBOX_ID module_id,
         return task_id;        
     }
 
-    CHAR task_name[16];
-    snprintf(task_name, 16, "TBOX_RUNLOOP%d", task_id);
     if(pdPASS != xTaskCreate(tbox_task_runloop_process, 
                              task_name,
                              stack_size/sizeof(StackType_t),

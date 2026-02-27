@@ -12,7 +12,7 @@
 #include "tbox_cfg_if.h"
 #include "stimer.h"
 #include "4g_if.h"
-#include "dev_time.h"
+#include "time_if.h"
 #include "driver.h"
 #include "delay.h"
 
@@ -67,7 +67,7 @@ VOID tbox_pm_action_init(VOID)
     tbox_pm_action_shutdown_count = 0U;
     tbox_pm_action_4greset_count = 0U;
 
-    dev_time_get(&time);
+    time_if_get(&time);
     tbox_cfg_getkv(TBOX_PM_4GMCUREST_CFG_NAME, &tbox_pm_4gmcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
     if(TBOX_PM_ACTION_4GMCURESET_MAGIC_NO != tbox_pm_4gmcu_reboot_info.magic_no)
     {
@@ -243,7 +243,7 @@ BOOL tbox_pm_action_is_cando(TBOX_PM_SLEEPPOST_ACTION type)
         case TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU:
             {
                 DEV_TIME time;
-                dev_time_get(&time);
+                time_if_get(&time);
                 if(time.year == tbox_pm_4gmcu_reboot_info.data[0] &&
                     time.month == tbox_pm_4gmcu_reboot_info.data[1] &&
                     time.day == tbox_pm_4gmcu_reboot_info.data[2] &&
@@ -265,7 +265,7 @@ BOOL tbox_pm_action_is_cando(TBOX_PM_SLEEPPOST_ACTION type)
 VOID tbox_pm_action_cleanresetinfo(VOID)
 {
     DEV_TIME time;
-    dev_time_get(&time);    
+    time_if_get(&time);    
     tbox_pm_action_4greset_count = 0U;
     tbox_pm_action_shutdown_count = 0U;
 
@@ -479,7 +479,7 @@ static INT32 tbox_pm_action_do_4gdeepreset(VOID)
 static INT32 tbox_pm_action_do_4g_mcureset(VOID)
 {
     DEV_TIME time;
-    dev_time_get(&time);
+    time_if_get(&time);
 
     if(time.year != tbox_pm_4gmcu_reboot_info.data[0] ||
        time.month != tbox_pm_4gmcu_reboot_info.data[1] ||
@@ -509,7 +509,7 @@ static INT32 tbox_pm_action_do_4g_mcureset(VOID)
 BOOL tbox_pm_is_reboot_same_date(void)
 {
     DEV_TIME time;
-    dev_time_get(&time);
+    time_if_get(&time);
 
     if (time.year == tbox_pm_4gmcu_reboot_info.data[0] &&
         time.month == tbox_pm_4gmcu_reboot_info.data[1] &&

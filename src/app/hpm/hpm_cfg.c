@@ -4,6 +4,8 @@
 #include "tbox_log.h"
 #include "flash_common.h"
 #include "version.h"
+#include "tbox_pm_io.h"
+#include "gnss_if.h"
 
 #include "hpm_content.h"
 #include "hpm_cfg.h"
@@ -30,7 +32,55 @@ typedef struct
     UINT32 acc_tim;
 } HPM_CFG_RUN_INFO_T;
 
+// 卡尔曼滤波结构体定义
+typedef struct
+{
+    DOUBLE x; // 状态估计值（速度）
+    DOUBLE P; // 状态协方差
+    DOUBLE Q; // 过程噪声协方差
+    DOUBLE R; // 测量噪声协方差
+    DOUBLE K; // 卡尔曼增益
+    DOUBLE S; // 里程信息
+} KalmanFilter;
+
 static HPM_CFG_RUN_INFO_T hpm_cfg_run_info;
+static KalmanFilter speed_filter;
+
+static INT32 hpm_cfg_speed_init(void)
+{
+    // 初始化卡尔曼滤波参数
+    speed_filter.x = 0.0;
+    speed_filter.P = 1.0;
+    speed_filter.Q = 0.05; // 过程噪声（根据实际场景调整）
+    speed_filter.R = 0.3;  // 测量噪声（根据GNSS精度调整）
+    speed_filter.S = 0.0;
+    return 0;
+}
+
+static VOID hpm_cfg_speed_process(VOID)
+{
+    // 获取GNSS原始速度测量值
+    DOUBLE z = gnss_get_speed();
+
+    // 检查定位状态和速度有效性（速度范围0~160km/h为有效）
+    if ((gnss_get_fix_state() != GNSS_POS_STATE_FIX) || (z < 0.0) || (z > 160.0))
+    {
+        // 定位无效或速度异常时，仅执行预测步骤（不更新）
+        speed_filter.x = speed_filter.x;                  // 保持上一状态估计值
+        speed_filter.P = speed_filter.P + speed_filter.Q; // 协方差增长
+        return;
+    }
+
+    // 预测步骤
+    DOUBLE x_predict = speed_filter.x; // 状态转移（恒速模型，无控制输入）
+    DOUBLE P_predict = speed_filter.P + speed_filter.Q;
+
+    // 更新步骤
+    speed_filter.K = P_predict / (P_predict + speed_filter.R);
+    speed_filter.x = x_predict + speed_filter.K * (z - x_predict);
+    speed_filter.P = (1 - speed_filter.K) * P_predict;
+    speed_filter.S += speed_filter.x;
+}
 
 static VOID hpm_cfg_run_info_write(VOID)
 {
@@ -60,6 +110,7 @@ INT32 hpm_cfg_init(UINT8 seq)
 
     case MODULE_INIT_SEQ_MODULE:
         hpm_cfg_run_info_read();
+        hpm_cfg_speed_init();
         break;
 
     default:
@@ -78,6 +129,27 @@ VOID hpm_cfg_sleep(VOID)
 {
     hpm_cfg_run_info_write();
     return;
+}
+
+VOID hpm_cfg_process(VOID)
+{
+    if (tbox_pm_io_acc_is_active())
+    {
+        HPM_MUTEX_LOCK();
+        hpm_cfg_run_info.acc_tim++;
+        HPM_MUTEX_UNLOCK();
+    }
+
+    hpm_cfg_speed_process();
+
+    if (GNSS_POS_STATE_FIX == gnss_get_fix_state())
+    {
+        UINT32 odomter = (UINT32)(speed_filter.S / 3.6);
+        speed_filter.S -= (odomter * 3.6);
+        HPM_MUTEX_LOCK();
+        hpm_cfg_run_info.gps_odo += odomter;
+        HPM_MUTEX_UNLOCK();
+    }
 }
 
 UINT32 hpm_cfg_get_run_acc_time(VOID)
@@ -113,6 +185,14 @@ VOID hpm_cfg_set_run_gps_odo(UINT32 odo)
     HPM_MUTEX_LOCK();
     hpm_cfg_run_info.gps_odo = odo;
     HPM_MUTEX_UNLOCK();
+}
+
+VOID hpm_cfg_show_odomter(VOID)
+{
+    tbox_log_print("\r\n-------------------------------------------------------------\r\n");
+    tbox_log_print(" %-24s : %-10u s\r\n", "acc on time", hpm_cfg_get_run_acc_time());
+    tbox_log_print(" %-24s : %-10u m\r\n", "odomter", hpm_cfg_get_run_gps_odo());
+    tbox_log_print("-------------------------------------------------------------\r\n");
 }
 
 INT32 hpm_cfg_get_devid(UINT8 *data, INT32 len)
@@ -1077,12 +1157,12 @@ static INT32 hpm_cfg_tsp_set_gps_odo(UINT8 *data, UINT16 in_len)
 static INT32 hpm_cfg_tsp_get_sleep_mode(UINT8 *data, UINT16 *out_len)
 {
 #if 0
-	UINT8 sleep_mode = 0;
-	dev_cfg_get(CFG_ITEM_SLEEP_MODE,(UINT8 *)&sleep_mode);
-	data[0] = sleep_mode;
+    UINT8 sleep_mode = 0;
+    dev_cfg_get(CFG_ITEM_SLEEP_MODE,(UINT8 *)&sleep_mode);
+    data[0] = sleep_mode;
 
-	*out_len = 1;
-	return HPM_CFG_RESP_OK;
+    *out_len = 1;
+    return HPM_CFG_RESP_OK;
 #else
     return HPM_CFG_RESP_NG;
 #endif
@@ -1091,15 +1171,15 @@ static INT32 hpm_cfg_tsp_get_sleep_mode(UINT8 *data, UINT16 *out_len)
 static INT32 hpm_cfg_tsp_check_sleep_mode(UINT8 *data, UINT16 in_len)
 {
 #if 0
-	UNUSED(data);
+    UNUSED(data);
 
-	if(1 != in_len)
-	{
+    if(1 != in_len)
+    {
         MODULE_LOG_E(HPM, "hpm_cfg_check_sleep_mode len:%d", in_len);
-		return 0;
-	}
+        return 0;
+    }
 
-	return HPM_CFG_RESP_OK;
+    return HPM_CFG_RESP_OK;
 #else
     return HPM_CFG_RESP_NG;
 #endif
@@ -1108,12 +1188,12 @@ static INT32 hpm_cfg_tsp_check_sleep_mode(UINT8 *data, UINT16 in_len)
 static INT32 hpm_cfg_tsp_set_sleep_mode(UINT8 *data, UINT16 in_len)
 {
 #if 0
-	UNUSED(in_len);
+    UNUSED(in_len);
 
-	UINT8 sleep_mode =  data[0];
+    UINT8 sleep_mode =  data[0];
 
 
-	return ret;
+    return ret;
 #else
     return HPM_CFG_RESP_NG;
 #endif
@@ -1220,12 +1300,12 @@ static INT32 hpm_cfg_tsp_set_vin(UINT8 *data, UINT16 in_len)
 static INT32 hpm_cfg_tsp_get_obd_type(UINT8 *data, UINT16 *out_len)
 {
 #if 0
-	UINT8 obd_type = 0;
-	dev_cfg_get(CFG_ITEM_HPM_OBD_TYPE,(UINT8 *)&obd_type);
-	data[0] = obd_type;
+    UINT8 obd_type = 0;
+    dev_cfg_get(CFG_ITEM_HPM_OBD_TYPE,(UINT8 *)&obd_type);
+    data[0] = obd_type;
 
-	*out_len = 1;
-	return HPM_CFG_RESP_OK;
+    *out_len = 1;
+    return HPM_CFG_RESP_OK;
 #else
     return HPM_CFG_RESP_OK;
 #endif
@@ -1247,13 +1327,13 @@ static INT32 hpm_cfg_tsp_check_obd_type(UINT8 *data, UINT16 in_len)
 static INT32 hpm_cfg_tsp_set_obd_type(UINT8 *data, UINT16 in_len)
 {
 #if 0
-	UNUSED(in_len);
+    UNUSED(in_len);
 
-	UINT8 obd_type =  data[0];
+    UINT8 obd_type =  data[0];
 
-	INT32 ret =  dev_cfg_set(CFG_ITEM_HPM_OBD_TYPE, (UINT8 *)&obd_type);
+    INT32 ret =  dev_cfg_set(CFG_ITEM_HPM_OBD_TYPE, (UINT8 *)&obd_type);
 
-	return ret;
+    return ret;
 #else
     return HPM_CFG_RESP_OK;
 #endif
@@ -1462,58 +1542,58 @@ static INT32 hpm_cfg_tsp_set_gps_mode(UINT8 *data, UINT16 in_len)
     return HPM_CFG_RESP_OK;
 
 #if 0
-	UNUSED(in_len);
-	UINT8 gps_mode =  data[0];
-	INT32 ret =  dev_cfg_set(CFG_ITEM_HPM_GPS_MODE, (UINT8 *)&gps_mode);
-	switch(gps_mode)
-	{
-		case 1:
-		{
-			//GPS
-			gnss_dev_send("$PCAS04,1*18\r\n", strlen("$PCAS04,1*18\r\n"));
-			break;
-		}
-		case 2:
-		{
-			//BDS
-			gnss_dev_send("$PCAS04,2*1B\r\n", strlen("$PCAS04,2*1B\r\n"));			
-			break;
-		}
-		case 3:
-		{
-			//GPS + BDS
-			gnss_dev_send("$PCAS04,3*1A\r\n", strlen("$PCAS04,3*1A\r\n"));				
-			break;
-		}
-		case 4:
-		{
-			//GLONASS
-			gnss_dev_send("$PCAS04,4*1D\r\n", strlen("$PCAS04,4*1D\r\n"));			
-			break;
-		}
-		case 5:
-		{
-			//GPS + GLONASS
-			gnss_dev_send("$PCAS04,5*1C\r\n", strlen("$PCAS04,5*1C\r\n"));				
-			break;
-		}
-		case 6:
-		{
-			//BDS + GLONASS
-			gnss_dev_send("$PCAS04,6*1F\r\n", strlen("$PCAS04,6*1F\r\n"));			
-			break;
-		}
-		case 7:
-		{
-			//BDS + GPS + GLONASS
-			gnss_dev_send("$PCAS04,7*1E\r\n", strlen("$PCAS04,7*1E\r\n"));			
-			break;
-		}
-		default:
-			break;
-	}
+    UNUSED(in_len);
+    UINT8 gps_mode =  data[0];
+    INT32 ret =  dev_cfg_set(CFG_ITEM_HPM_GPS_MODE, (UINT8 *)&gps_mode);
+    switch(gps_mode)
+    {
+        case 1:
+        {
+            //GPS
+            gnss_dev_send("$PCAS04,1*18\r\n", strlen("$PCAS04,1*18\r\n"));
+            break;
+        }
+        case 2:
+        {
+            //BDS
+            gnss_dev_send("$PCAS04,2*1B\r\n", strlen("$PCAS04,2*1B\r\n"));			
+            break;
+        }
+        case 3:
+        {
+            //GPS + BDS
+            gnss_dev_send("$PCAS04,3*1A\r\n", strlen("$PCAS04,3*1A\r\n"));				
+            break;
+        }
+        case 4:
+        {
+            //GLONASS
+            gnss_dev_send("$PCAS04,4*1D\r\n", strlen("$PCAS04,4*1D\r\n"));			
+            break;
+        }
+        case 5:
+        {
+            //GPS + GLONASS
+            gnss_dev_send("$PCAS04,5*1C\r\n", strlen("$PCAS04,5*1C\r\n"));				
+            break;
+        }
+        case 6:
+        {
+            //BDS + GLONASS
+            gnss_dev_send("$PCAS04,6*1F\r\n", strlen("$PCAS04,6*1F\r\n"));			
+            break;
+        }
+        case 7:
+        {
+            //BDS + GPS + GLONASS
+            gnss_dev_send("$PCAS04,7*1E\r\n", strlen("$PCAS04,7*1E\r\n"));			
+            break;
+        }
+        default:
+            break;
+    }
 
-	//gnss_dev_send("$PCAS00*01\r\n", strlen("$PCAS00*01\r\n"));
+    //gnss_dev_send("$PCAS00*01\r\n", strlen("$PCAS00*01\r\n"));
 
 #endif
 }

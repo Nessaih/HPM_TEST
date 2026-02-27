@@ -24,7 +24,8 @@ INT32 tbox_task_init(VOID);
 VOID tbox_task_deinit(VOID);
 INT32 tbox_task_start(VOID);
 INT32 tbox_task_stop(VOID);
-TBOX_ID tbox_task_create_runloop(TBOX_ID module_id, 
+TBOX_ID tbox_task_create_runloop(TBOX_ID module_id,
+                               CHAR *task_name, 
                                UINT8 pripority, 
                                UINT32 stack_size, 
                                MODULE_RUNLOOP_FUN runloop);
