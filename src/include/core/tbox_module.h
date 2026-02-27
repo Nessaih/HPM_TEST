@@ -45,7 +45,9 @@ typedef enum tag_tbox_module_state
 }TBOX_MODULE_STATE;
 
 VOID tbox_module_start(VOID);
+VOID tbox_module_start_specific(TBOX_ID module_id);
 VOID tbox_module_stop(VOID);
+VOID tbox_module_stop_specific(TBOX_ID module_id);
 TBOX_ID tbox_module_register(TBOX_MODULE_INFO *module_info);
 VOID tbox_module_show_allname(VOID);
 INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fun);

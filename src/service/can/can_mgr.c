@@ -29,22 +29,25 @@ static uint32_t tbox_can_baudrate[DRV_CAN_INS_COUNT] = {0};
 static can_stat_t can_stat;
 
 /* 更新统计信息 - 保存最近消息 */
-void can_mgr_stat_add_recv_msg(can_msg_t *msg)
+void can_mgr_stat_add_recv_msgs(can_msg_t *msgs, uint32_t count)
 {
+    uint32_t i;
     uint8_t ins;
     
-    if (msg == NULL) return;
+    if (msgs == NULL || count == 0) return;
     
-    ins = msg->ins;
-    if (ins >= DRV_CAN_INS_COUNT) return;
-    
-    can_stat.total_recv[ins]++;
-    
-    /* 保存到对应 CAN 通道的环形缓冲区 */
-    memcpy(&can_stat.last_msgs[ins][can_stat.last_msg_idx[ins]], msg, sizeof(can_msg_t));
-    can_stat.last_msg_idx[ins] = (can_stat.last_msg_idx[ins] + 1) % CAN_STAT_LAST_MSG_COUNT;
-    if (can_stat.last_msg_count[ins] < CAN_STAT_LAST_MSG_COUNT) {
-        can_stat.last_msg_count[ins]++;
+    for (i = 0; i < count; i++) {
+        ins = msgs[i].ins;
+        if (ins >= DRV_CAN_INS_COUNT) continue;
+        
+        can_stat.total_recv[ins]++;
+        
+        /* 保存到对应 CAN 通道的环形缓冲区 */
+        memcpy(&can_stat.last_msgs[ins][can_stat.last_msg_idx[ins]], &msgs[i], sizeof(can_msg_t));
+        can_stat.last_msg_idx[ins] = (can_stat.last_msg_idx[ins] + 1) % CAN_STAT_LAST_MSG_COUNT;
+        if (can_stat.last_msg_count[ins] < CAN_STAT_LAST_MSG_COUNT) {
+            can_stat.last_msg_count[ins]++;
+        }
     }
 }
 

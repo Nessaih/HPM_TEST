@@ -5,4 +5,6 @@ INT32 hpm_ota_tbox_status(VOID);
 
 VOID hpm_ota_tbox_handle(VOID);
 
+BOOL hpm_ota_tbox_upgrading(VOID);
+
 #endif

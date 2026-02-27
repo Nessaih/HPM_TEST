@@ -40,14 +40,15 @@ static VOID hpm_handle_message_event(const CHAR *name, TBOX_MSG_DATA *data)
 {
 	if (0 == strncmp(name, HPM_APP_TIMER_EVENT, strlen(HPM_APP_TIMER_EVENT)))
 	{
-		hpm_socket_timeout_proc();
+		hpm_mgr_process();
+		hpm_socket_process();
+		hpm_session_process();
 		hpm_dev_process();
-		hpm_param_timeout();
 	}
 	else if (0 == strncmp(name, TBOX_CFG_EVENT_VALUE_CHANGE, strlen(TBOX_CFG_EVENT_VALUE_CHANGE)))
 	{
 		MODULE_LOG_I(HPM, "tbox cfg value change\r\n");
-		hpm_cfg_changed_handle(data);
+		hpm_socket_handle_msg(data);
 	}
 }
 

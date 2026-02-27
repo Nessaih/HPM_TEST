@@ -12,7 +12,7 @@
 #include "tbox_cfg_if.h"
 #include "stimer.h"
 #include "4g_if.h"
-#include "dev_time.h" //TODO:变更后同步修改
+#include "dev_time.h"
 #include "driver.h"
 #include "delay.h"
 
@@ -21,7 +21,6 @@
 #define TBOX_PM_ACTION_NOABORT    (0U)
 #define TBOX_PM_ACTION_MCURESET_MAGIC_NO (0x5A5A5A5AU)
 #define TBOX_PM_ACTION_4GMCURESET_MAGIC_NO (0xA55A5A5AU)
-#define TBOX_PM_MCUREST_CFG_NAME "MCURESET_COUNT"
 #define TBOX_PM_4GMCUREST_CFG_NAME "4GMCURESET_COUNT"
 
 typedef enum
@@ -56,7 +55,6 @@ static UINT8 tbox_pm_action_state;
 static UINT8 tbox_pm_action_shutdown_count;
 static UINT8 tbox_pm_action_4greset_count;
 static UINT8 tbox_pm_action_abort_flag; /*只有shutdown和sleep支持abort*/
-static TBOX_PM_REBOOT_INFO tbox_pm_mcu_reboot_info;
 static TBOX_PM_REBOOT_INFO tbox_pm_4gmcu_reboot_info;
 
 VOID tbox_pm_action_init(VOID)
@@ -70,17 +68,6 @@ VOID tbox_pm_action_init(VOID)
     tbox_pm_action_4greset_count = 0U;
 
     dev_time_get(&time);
-    tbox_cfg_getkv(TBOX_PM_MCUREST_CFG_NAME, &tbox_pm_mcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
-    if(TBOX_PM_ACTION_MCURESET_MAGIC_NO != tbox_pm_mcu_reboot_info.magic_no)
-    {
-        tbox_pm_mcu_reboot_info.magic_no = TBOX_PM_ACTION_MCURESET_MAGIC_NO;
-        tbox_pm_mcu_reboot_info.count = 0U;
-        tbox_pm_mcu_reboot_info.data[0] = (UINT8)time.year;
-        tbox_pm_mcu_reboot_info.data[1] = (UINT8)time.month;
-        tbox_pm_mcu_reboot_info.data[2] = (UINT8)time.day;
-        tbox_cfg_setkv(TBOX_PM_MCUREST_CFG_NAME, &tbox_pm_mcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
-    }
-
     tbox_cfg_getkv(TBOX_PM_4GMCUREST_CFG_NAME, &tbox_pm_4gmcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
     if(TBOX_PM_ACTION_4GMCURESET_MAGIC_NO != tbox_pm_4gmcu_reboot_info.magic_no)
     {
@@ -113,14 +100,14 @@ VOID tbox_pm_action_period(VOID)
     {
         tbox_pm_action_timer_count--;
     }
-    if(tbox_pm_action_timer_count > 0)
-    {
-        return;
-    }
 
     switch ((TBOX_PM_ACTION_STATE)tbox_pm_action_state)
     {
         case TBOX_PM_ACTION_SHUTDOWN:
+            if(tbox_pm_action_timer_count > 0)
+            {
+                return;
+            }
             if(TBOX_PM_ACTION_ABORT == tbox_pm_action_abort_flag)
             {
                 tbox_pm_state_stop();
@@ -136,15 +123,26 @@ VOID tbox_pm_action_period(VOID)
 
         case TBOX_PM_ACTION_4G_RESET:
         case TBOX_PM_ACTION_4G_DEEP_RESET:
-            tbox_pm_action_4greset_count++;
-            tbox_pm_action_state = (UINT8)TBOX_PM_ACTION_NONE;
+            if(0U == tbox_pm_action_timer_count || 
+              TBOX_PM_4G_DO_NOTHING == tbox_pm_4g_get_do_state())
+            {
+                tbox_pm_action_timer_count = 0U;
+                tbox_pm_action_4greset_count++;
+                tbox_pm_action_state = (UINT8)TBOX_PM_ACTION_NONE;
+            }
             break;
 
         case TBOX_PM_ACTION_4G_MCU_RESET:
-            tbox_pm_4gmcu_reboot_info.count++;
-            tbox_cfg_setkv(TBOX_PM_4GMCUREST_CFG_NAME, &tbox_pm_4gmcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
-            tbox_pm_action_state = (UINT8)TBOX_PM_ACTION_NONE;
-            NVIC_SystemReset();
+            if(0U == tbox_pm_action_timer_count || 
+              TBOX_PM_4G_DO_NOTHING == tbox_pm_4g_get_do_state())
+            {
+                tbox_pm_action_timer_count = 0U;
+                tbox_pm_4gmcu_reboot_info.count++;
+                tbox_cfg_setkv(TBOX_PM_4GMCUREST_CFG_NAME, &tbox_pm_4gmcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
+                tbox_pm_action_state = (UINT8)TBOX_PM_ACTION_NONE;
+
+                tbox_pm_reboot(TBOX_PM_REBOOT_MCU);
+            }
             break;
 
         default:
@@ -239,18 +237,7 @@ BOOL tbox_pm_action_is_cando(TBOX_PM_SLEEPPOST_ACTION type)
             break;
                     
         case TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU:
-            {
-                DEV_TIME time;
-                dev_time_get(&time);
-                if(time.year == tbox_pm_mcu_reboot_info.data[0] &&
-                    time.month == tbox_pm_mcu_reboot_info.data[1] &&
-                    time.day == tbox_pm_mcu_reboot_info.data[2] &&
-                    tbox_pm_mcu_reboot_info.count >= TBOX_PM_ACTION_MAX_COUNT)
-                {
-                    MODULE_LOG_W(TBOXPM, "the reset mcu count has reached max:%d in one day", TBOX_PM_ACTION_MAX_COUNT);
-                    ret = FALSE;
-                }               
-            }
+            /*不限制MCU重启次数*/
             break;
         
         case TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU:
@@ -272,7 +259,7 @@ BOOL tbox_pm_action_is_cando(TBOX_PM_SLEEPPOST_ACTION type)
             break;
     }
 
-    return ret;
+    return (BOOL)ret;
 }
 
 VOID tbox_pm_action_cleanresetinfo(VOID)
@@ -281,13 +268,6 @@ VOID tbox_pm_action_cleanresetinfo(VOID)
     dev_time_get(&time);    
     tbox_pm_action_4greset_count = 0U;
     tbox_pm_action_shutdown_count = 0U;
-
-    tbox_pm_mcu_reboot_info.magic_no = TBOX_PM_ACTION_MCURESET_MAGIC_NO;
-    tbox_pm_mcu_reboot_info.count = 0U;
-    tbox_pm_mcu_reboot_info.data[0] = (UINT8)time.year;
-    tbox_pm_mcu_reboot_info.data[1] = (UINT8)time.month;
-    tbox_pm_mcu_reboot_info.data[2] = (UINT8)time.day;
-    tbox_cfg_setkv(TBOX_PM_MCUREST_CFG_NAME, &tbox_pm_mcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
 
     tbox_pm_4gmcu_reboot_info.magic_no = TBOX_PM_ACTION_4GMCURESET_MAGIC_NO;
     tbox_pm_4gmcu_reboot_info.count = 0U;
@@ -461,30 +441,7 @@ static  INT32 tbox_pm_action_do_shutdown(VOID)
 
 static INT32 tbox_pm_action_do_mcureset(VOID)
 {
-    DEV_TIME time;
-    dev_time_get(&time);
-    if(time.year != tbox_pm_mcu_reboot_info.data[0] ||
-       time.month != tbox_pm_mcu_reboot_info.data[1] ||
-       time.day != tbox_pm_mcu_reboot_info.data[2])
-    {
-        tbox_pm_mcu_reboot_info.count = 0U;
-        tbox_pm_mcu_reboot_info.data[0] = (UINT8)time.year;
-        tbox_pm_mcu_reboot_info.data[1] = (UINT8)time.month;
-        tbox_pm_mcu_reboot_info.data[2] = (UINT8)time.day;
-        tbox_cfg_setkv(TBOX_PM_MCUREST_CFG_NAME, &tbox_pm_mcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
-    }
-    else
-    {
-        if(tbox_pm_mcu_reboot_info.count >= TBOX_PM_ACTION_MAX_COUNT)
-        {
-            MODULE_LOG_E(TBOXPM, "mcu reset count has reached max:%d", TBOX_PM_ACTION_MAX_COUNT);
-            return (INT32)TBOX_E_FAILED;
-        }
-
-        tbox_pm_mcu_reboot_info.count++;
-        tbox_cfg_setkv(TBOX_PM_MCUREST_CFG_NAME, &tbox_pm_mcu_reboot_info, sizeof(TBOX_PM_REBOOT_INFO));
-    }
-
+    /*不对MCU重启添加条件限制*/
     NVIC_SystemReset();
 
     return (INT32)TBOX_E_OK;

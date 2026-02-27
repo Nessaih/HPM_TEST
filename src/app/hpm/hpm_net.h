@@ -11,6 +11,4 @@ INT32 hpm_net_disconnect(VOID);
 
 INT32 hpm_net_send(UINT8 *data, UINT16 len);
 
-INT32 hpm_net_recv(UINT8 *data, UINT16 *len);
-
 #endif

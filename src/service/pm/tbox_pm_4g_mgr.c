@@ -13,6 +13,7 @@
 #define TBOX_PM_4G_SHUTDOWN_TIME           (3300U) /* >= 3100ms(EC200x) */
 #define TBOX_PM_4G_STARTUP_TIME            (2200U) /* >= 2000ms(EC200x) */
 #define TBOX_PM_4G_RESET_TIME              (500U)  /* >= 300ms (EC200x) */
+#define TBOX_PM_4G_DEEPRESET_STOP4G_TIME   (20U)    /*20S*/
 #define TBOX_PM_4G_DEEPRESET_SHUTDOWN_TIME (30000U)  /* 30000ms(30s) */
 #define TBOX_PM_4G_DEEPRESET_POWEROFF_TIME (174000U) /* 174000ms(174s) */
 #define TBOX_PM_4G_DEEPRESET_POWERON_TIME  (100U)    /* 100ms */
@@ -32,6 +33,8 @@ typedef struct
 typedef enum
 {
     TBOX_PM_4G_DEEPRESET_STATE_NONE,
+    TBOX_PM_4G_DEEPRESET_STATE_STOP4G,
+    TBOX_PM_4G_DEEPRESET_STATE_WAIT_STOP4G,
     TBOX_PM_4G_DEEPRESET_STATE_SHUTDOWN,
     TBOX_PM_4G_DEEPRESET_STATE_WAIT_SHUTDOWN,
     TBOX_PM_4G_DEEPRESET_STATE_POWEROFF,
@@ -213,32 +216,34 @@ INT32 tbox_pm_4g_do_deepreset(VOID)
         return (INT32)TBOX_E_IS_BUSY;
     }
     tbox_pm_4g_do_action = (UINT8)TBOX_PM_4G_DO_DEEPRESET;    
-    tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_SHUTDOWN;
-    tbox_pm_4g_handle_deepreset();
+    tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_STOP4G;
     tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_NONE;
     tbox_pm_4g_check_startup_count = 0U;    
     xSemaphoreGive(tbox_pm_4g_mutex);
 
+    tbox_pm_4g_handle_deepreset();
+    
     return (INT32)TBOX_E_OK; 
 }
 
 VOID tbox_pm_4g_do_timeout(VOID)
 {
-    xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
     switch((TBOX_PM_4G_DO_STATE)tbox_pm_4g_do_action)
     {
         case TBOX_PM_4G_DO_STARTUP:
         case TBOX_PM_4G_DO_SHUTDOWN:
             {
                 drv_pin_set_level(PIN_PWRKEY_MPU, 0U);
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
                 if((UINT8)TBOX_PM_4G_DO_STARTUP == tbox_pm_4g_do_action)
                 {
                     if_4g_reset();
                     tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_WAIT_STARTUP4G;
                     tbox_pm_4g_check_startup_count = 0U;               
                 }
-                MODULE_LOG_I(TBOXPM, "4g action:%d", tbox_pm_4g_do_action);
                 tbox_pm_4g_do_action = (UINT8)TBOX_PM_4G_DO_NOTHING;
+                xSemaphoreGive(tbox_pm_4g_mutex);
+                MODULE_LOG_I(TBOXPM, "4g action:%d", tbox_pm_4g_do_action);
             }
             break;
 
@@ -246,9 +251,11 @@ VOID tbox_pm_4g_do_timeout(VOID)
             {
                 drv_pin_set_level(PIN_RESET_MPU, 0U);
                 if_4g_reset();
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
                 tbox_pm_4g_do_action = (UINT8)TBOX_PM_4G_DO_NOTHING;
                 tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_WAIT_STARTUP4G;
                 tbox_pm_4g_check_startup_count = 0U;
+                xSemaphoreGive(tbox_pm_4g_mutex);
                 MODULE_LOG_I(TBOXPM, "reset 4g success"); 
             }
             break;
@@ -262,7 +269,6 @@ VOID tbox_pm_4g_do_timeout(VOID)
         default:
             break;
     }
-    xSemaphoreGive(tbox_pm_4g_mutex);
 }
 
 TBOX_PM_4G_DO_STATE tbox_pm_4g_get_do_state(VOID)
@@ -283,67 +289,133 @@ static VOID tbox_pm_4g_do_timer_callback(VOID)
 
 static VOID tbox_pm_4g_handle_deepreset(VOID)
 {
+    xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
     TBOX_PM_4G_DEEPRESET_STATE state = (TBOX_PM_4G_DEEPRESET_STATE)tbox_pm_4g_deepreset_state;
+    xSemaphoreGive(tbox_pm_4g_mutex);
 
     MODULE_LOG_D(TBOXPM, "handle deepreset, state:%d", state);
 
     switch(state)
     {
+        case TBOX_PM_4G_DEEPRESET_STATE_STOP4G:
+            {
+                TBOX_ID module_id;
+                GET_TBOX_MODULE_ID(TBOX4G, module_id);
+                tbox_module_stop_specific(module_id);
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_WAIT_STOP4G;
+                xSemaphoreGive(tbox_pm_4g_mutex);
+                stimer_start(tbox_pm_4g_do_timer_id, 1000U);  
+            }
+            break;
+
+        case TBOX_PM_4G_DEEPRESET_STATE_WAIT_STOP4G:
+            {
+                static UINT8 tm_count = 0U;
+                
+                TBOX_ID module_id;
+                GET_TBOX_MODULE_ID(TBOX4G, module_id);
+                if(TBOX_MODULE_STATE_STOP == tbox_module_get_state(module_id))
+                {
+                    tm_count = 0U;
+                    xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                    tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_SHUTDOWN;
+                    xSemaphoreGive(tbox_pm_4g_mutex);
+                    stimer_start(tbox_pm_4g_do_timer_id, 100U); 
+                }
+                else
+                {
+                    tm_count++;
+                    if(tm_count >= TBOX_PM_4G_DEEPRESET_STOP4G_TIME)
+                    {
+                        xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                        tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_SHUTDOWN;
+                        xSemaphoreGive(tbox_pm_4g_mutex);
+                        stimer_start(tbox_pm_4g_do_timer_id, 100U);
+                        MODULE_LOG_W(TBOXPM, "stop 4g timeout");
+                    }
+                    else
+                    {
+                        stimer_start(tbox_pm_4g_do_timer_id, 1000U);  
+                    }
+                }
+            }
+            break;
+
         case TBOX_PM_4G_DEEPRESET_STATE_SHUTDOWN:
             {
                 drv_pin_set_level(PIN_PWRKEY_MPU, 1U);
+                stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_SHUTDOWN_TIME);
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_WAIT_SHUTDOWN;
-                stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_SHUTDOWN_TIME);          
+                xSemaphoreGive(tbox_pm_4g_mutex);          
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_WAIT_SHUTDOWN:
             {
                 drv_pin_set_level(PIN_PWRKEY_MPU, 0U);
-                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_POWEROFF;
                 stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_DEEPRESET_SHUTDOWN_TIME);
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_POWEROFF;
+                xSemaphoreGive(tbox_pm_4g_mutex);
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_POWEROFF:
             {
                  drv_pin_set_level(PIN_POWER_MPU, 0U);
-                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_POWERON;
                  stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_DEEPRESET_POWEROFF_TIME);
+                 xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_POWERON;
+                 xSemaphoreGive(tbox_pm_4g_mutex);
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_POWERON:
             {
                 drv_pin_set_level(PIN_POWER_MPU, 1U);
-                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_STARTUP;
                 stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_DEEPRESET_POWERON_TIME);
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_STARTUP;
+                xSemaphoreGive(tbox_pm_4g_mutex);
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_STARTUP:
             {
                  drv_pin_set_level(PIN_PWRKEY_MPU, 1U);
-                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_WAIT_STARTUP;
                  stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_STARTUP_TIME);
+                 xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_WAIT_STARTUP;
+                 xSemaphoreGive(tbox_pm_4g_mutex);
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_WAIT_STARTUP:
             {
+                TBOX_ID module_id;
+                GET_TBOX_MODULE_ID(TBOX4G, module_id);
+                
                 drv_pin_set_level(PIN_PWRKEY_MPU, 0U);
-                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_FINISH;
                 stimer_start(tbox_pm_4g_do_timer_id, TBOX_PM_4G_DEEPRESET_STARTUP_TIME);
+                tbox_module_start_specific(module_id);
+
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
+                tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_FINISH;
+                xSemaphoreGive(tbox_pm_4g_mutex);
             }
             break;
 
         case TBOX_PM_4G_DEEPRESET_STATE_FINISH:
             {
-                if_4g_reset();
+                //if_4g_reset();
+                xSemaphoreTake(tbox_pm_4g_mutex, portMAX_DELAY);
                 tbox_pm_4g_do_action = (UINT8)TBOX_PM_4G_DO_NOTHING;
                 tbox_pm_4g_deepreset_state = (UINT8)TBOX_PM_4G_DEEPRESET_STATE_NONE;
                 tbox_pm_4g_check_startup_state = (UINT8)TBOX_PM_4G_CHECK_STARTUP_STATE_WAIT_STARTUP4G;
                 tbox_pm_4g_check_startup_count = 0U;
+                xSemaphoreGive(tbox_pm_4g_mutex);
                 MODULE_LOG_I(TBOXPM, "deepreset 4g success");
             }
             break;

@@ -12,6 +12,7 @@
 #include "hpm_session.h"
 #include "hpm_param_fetch.h"
 #include "tbox_cfg_if.h"
+#include "hpm_cfg.h"
 
 #define HPM_DEV_WAIT_FIX (50) // 50s
 
@@ -246,12 +247,12 @@ static INT32 hpm_get_real_data(UINT8 *buf, UINT8 *subcmd)
     return len;
 }
 
-static INT32 hpm_make_report_pack(UINT8* data)
+static INT32 hpm_make_report_pack(UINT8 *data)
 {
     UINT8 count = 0;
     UINT16 len = 0;
     len += hpm_sesion_get_data_seq(data + len);
-    data[len++] = 0x00; // ¨ºy?Y¨ºy¨¢?
+    data[len++] = 0x00;
     len += hpm_get_real_data(data + len, &count);
     data[2] = count;
     return len;
@@ -399,8 +400,8 @@ static VOID hpm_dev_handle_idle(VOID)
         return;
     }
 
-    // TODO: add config interval
     UINT32 interval = 60;
+    hpm_cfg_get_report_intv(&interval, sizeof(interval));
     if ((time_if_get_systick_ms() - hpm_dev_tick) >= (interval * 1000))
     {
         hpm_dev_handle_event(HPM_DEV_EVENT_CYCLE);

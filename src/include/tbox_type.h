@@ -88,6 +88,130 @@ extern "C" {
 #define TBOX_ID_INVALID (-1)
 #endif
 
+
+typedef union
+{
+    UINT8 byte;
+
+    struct
+    {
+        UINT8 B0    :1;
+        UINT8 B1    :1;
+        UINT8 B2    :1;
+        UINT8 B3    :1;
+        UINT8 B4    :1;
+        UINT8 B5    :1;
+        UINT8 B6    :1;
+        UINT8 B7    :1;
+    }bit;
+
+    struct
+    {
+        UINT8 L :4;
+        UINT8 H :4;
+    }half;
+}UNION8;
+
+
+typedef union
+{
+	UINT16 word;
+
+	struct
+	{
+		UINT16 B00 : 1;
+		UINT16 B01 : 1;
+		UINT16 B02 : 1;
+		UINT16 B03 : 1;
+		UINT16 B04 : 1;
+		UINT16 B05 : 1;
+		UINT16 B06 : 1;
+		UINT16 B07 : 1;
+		UINT16 B08 : 1;
+		UINT16 B09 : 1;
+		UINT16 B10 : 1;
+		UINT16 B11 : 1;
+		UINT16 B12 : 1;
+		UINT16 B13 : 1;
+		UINT16 B14 : 1;
+		UINT16 B15 : 1;
+	} bit;
+
+	struct
+	{
+		UINT8 L;
+		UINT8 H;
+	} byte;
+} UNION16;
+
+typedef union
+{
+	UINT32 dword;
+
+	struct
+	{
+		UINT32 B00 : 1;
+		UINT32 B01 : 1;
+		UINT32 B02 : 1;
+		UINT32 B03 : 1;
+		UINT32 B04 : 1;
+		UINT32 B05 : 1;
+		UINT32 B06 : 1;
+		UINT32 B07 : 1;
+		UINT32 B08 : 1;
+		UINT32 B09 : 1;
+		UINT32 B10 : 1;
+		UINT32 B11 : 1;
+		UINT32 B12 : 1;
+		UINT32 B13 : 1;
+		UINT32 B14 : 1;
+		UINT32 B15 : 1;
+		UINT32 B16 : 1;
+		UINT32 B17 : 1;
+		UINT32 B18 : 1;
+		UINT32 B19 : 1;
+		UINT32 B20 : 1;
+		UINT32 B21 : 1;
+		UINT32 B22 : 1;
+		UINT32 B23 : 1;
+		UINT32 B24 : 1;
+		UINT32 B25 : 1;
+		UINT32 B26 : 1;
+		UINT32 B27 : 1;
+		UINT32 B28 : 1;
+		UINT32 B29 : 1;
+		UINT32 B30 : 1;
+		UINT32 B31 : 1;
+	} bit;
+
+	struct
+	{
+		UINT8 LL;
+		UINT8 LH;
+		UINT8 HL;
+		UINT8 HH;
+	} byte;
+
+	struct
+	{
+		UINT16 L;
+		UINT16 H;
+	} word;
+
+} UNION32;
+
+typedef union
+{
+	FLOAT 	f;
+	UINT8   bytes[4];
+} UNION_FLOAT;
+
+typedef union
+{
+	INT64 	d;
+	UINT8   bytes[8];
+} UNION_DOUBLE;
+
 typedef enum tag_tbox_error_code
 {
     TBOX_E_OK                 = 0,

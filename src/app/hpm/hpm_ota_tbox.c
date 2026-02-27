@@ -9,3 +9,7 @@ VOID hpm_ota_tbox_handle(VOID)
 {
 }
 
+BOOL hpm_ota_tbox_upgrading(VOID)
+{
+	return FALSE;
+}

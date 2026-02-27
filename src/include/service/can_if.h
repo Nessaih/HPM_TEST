@@ -36,7 +36,7 @@ typedef enum {
     CAN_EVENT_WAKEUP           /* 唤醒 */
 } CAN_EVENT;
 
-typedef void (*can_callback_t)(uint32_t event, void *para);
+typedef void (*can_callback_t)(uint32_t event, void *para, uint32_t count);
 typedef int32_t (*can_event_callback_t)(CAN_EVENT event, uint32_t arg1, uint32_t arg2);
 
 extern int32_t  can_if_setbaud(uint8_t ins, uint32_t baudrate, uint8_t reinit);

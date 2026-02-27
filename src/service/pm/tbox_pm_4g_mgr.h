@@ -8,7 +8,7 @@ extern "C" {
 #define TBOX_PM_4G_STARTUP_MAX_TIME  2500U    /*2500ms*/
 #define TBOX_PM_4G_SHUTDOWN_MAX_TIME 3500U    /*3500ms*/
 #define TBOX_PM_4G_RESET_MAX_TIME    500U     /*500ms*/
-#define TBOX_PM_4G_DEEPRESET_MAX_TIME 210000U /*210000ms(210s)*/
+#define TBOX_PM_4G_DEEPRESET_MAX_TIME 230000U /*230000ms(230s)*/
 
 typedef enum
 {

@@ -22,10 +22,10 @@ static VOID hpm_net_recv_cb(UINT8 conn_id, UINT8 *data, UINT16 len)
         return;
     }
 
-    res = hpm_data_recv_put(data, len);
-    if (0 != res)
+    res = hpm_data_recv_push(data, len);
+    if (0 == res)
     {
-        MODULE_LOG_E(HPM, "put data fail, len:%u",len);
+        MODULE_LOG_E(HPM, "put data fail, len:%u", len);
     }
 }
 
@@ -33,22 +33,22 @@ INT32 hpm_net_init(UINT8 seq)
 {
     switch (seq)
     {
-        case MODULE_INIT_SEQ_OS:
-            
-            break;
+    case MODULE_INIT_SEQ_OS:
 
-        case MODULE_INIT_SEQ_STORAGE:
-            break;
+        break;
 
-        case MODULE_INIT_SEQ_MODULE:           
-			if_4g_reg_transmit_callback(IF_4G_HPM_CONN_ID, hpm_net_send_cb, hpm_net_recv_cb);
-            break;
-            
-        default:
-            break;
+    case MODULE_INIT_SEQ_STORAGE:
+        break;
+
+    case MODULE_INIT_SEQ_MODULE:
+        if_4g_reg_transmit_callback(IF_4G_HPM_CONN_ID, hpm_net_send_cb, hpm_net_recv_cb);
+        break;
+
+    default:
+        break;
     }
 
-	return 0;
+    return 0;
 }
 
 BOOL hpm_net_is_ready(VOID)
@@ -79,13 +79,3 @@ INT32 hpm_net_send(UINT8 *data, UINT16 len)
     }
     return if_4g_socket_send(IF_4G_HPM_CONN_ID, data, len);
 }
-
-INT32 hpm_net_recv(UINT8 *data, UINT16 *len)
-{
-    if (NULL == data || NULL == len)
-    {
-        return -1;
-    }
-    return hpm_data_recv_get(data, len);
-}
-

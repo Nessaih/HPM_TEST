@@ -3243,6 +3243,30 @@
                 </file>
             </group>
             <group>
+                <name>fota</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota_com.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota_com.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota_content.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota_shell.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\fota\fota_shell.h</name>
+                </file>
+            </group>
+            <group>
                 <name>gnss</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\gnss\gnss.c</name>
@@ -3541,6 +3565,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_can.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\test\test_dv.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_flash.c</name>

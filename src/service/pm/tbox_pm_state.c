@@ -174,7 +174,8 @@ INT32 tbox_pm_reboot(TBOX_PM_REBOOT_TYPE type)
     }
 
     if(TBOX_PM_REBOOT_4G == type   ||
-       TBOX_PM_DEEPREBOOT_4G == type)
+       TBOX_PM_DEEPREBOOT_4G == type ||
+       TBOX_PM_REBOOT_4G_MCU == type)
     {
         MODULE_LOG_I(TBOXPM, "it is not need stop module for reboot type:%d", type);
         xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
@@ -182,9 +183,13 @@ INT32 tbox_pm_reboot(TBOX_PM_REBOOT_TYPE type)
         {
             tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G;
         }
-        else
+        else if(TBOX_PM_DEEPREBOOT_4G == type)
         {
             tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_DEEPREBOOT_4G;
+        }
+        else
+        {
+            tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU;
         }
         xSemaphoreGive(tbox_pm_state_mutex);
         return tbox_pm_action_do((TBOX_PM_SLEEPPOST_ACTION)tbox_pm_post_action);
@@ -361,43 +366,31 @@ static VOID tbox_pm_reboot_in_running(VOID)
         tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU;
         tbox_pm_state_enter(TBOX_PM_STATE_SLEEP_PRE_CHECK);   
     }
-    else if((UINT8)TBOX_PM_REBOOT_4G_MCU == tbox_pm_reboot_type)
-    {
-        tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU;
-        tbox_pm_state_enter(TBOX_PM_STATE_SLEEP_PRE_CHECK);
-    }
-    else
-    {
-        /*TODO*/
-    }
     xSemaphoreGive(tbox_pm_state_mutex);    
 }
 
 static VOID tbox_pm_wakeup_in_sleepprecheck(VOID)
 {
-    MODULE_LOG_I(TBOXPM, "wakeup in sleepprecheck, wake type:%d", tbox_pm_wake_type);
+    MODULE_LOG_I(TBOXPM, "wakeup in sleepprecheck, wake type:%d and post action:%d", tbox_pm_wake_type, tbox_pm_post_action);
 
     xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
-    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU != tbox_pm_post_action &&
-       (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU != tbox_pm_post_action)
+    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == tbox_pm_post_action)
     {
-        if(tbox_pm_io_acc_is_active())
-        {
-            tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
-        }
-        tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
-    }
-    else
-    {
+        xSemaphoreGive(tbox_pm_state_mutex);
         MODULE_LOG_I(TBOXPM, "continue to execute the reboot action, type:%d", tbox_pm_post_action);
+        return;
     }
+    if(tbox_pm_io_acc_is_active())
+    {
+        tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
+    }
+    tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
     xSemaphoreGive(tbox_pm_state_mutex);
 }
 
 static VOID tbox_pm_timeout_in_sleepprecheck(VOID)
 {
-    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == tbox_pm_post_action ||
-       (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU == tbox_pm_post_action)
+    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == tbox_pm_post_action)
     {
         UINT8 do_state = (UINT8)tbox_pm_4g_get_do_state();
         if(TBOX_PM_4G_DO_NOTHING != do_state)
@@ -431,9 +424,6 @@ static VOID tbox_pm_timeout_in_sleepprecheck(VOID)
             }
             else
             {
-                tbox_pm_4g_mgr_stop_check_startup();
-                tbox_module_stop();
-
                 UINT8 sleep_mode = 0U;
                 TBOX_CFG_ID sleep_mode_id;
                 TBOX_CFG_ID_GET(SLEEPMODE, sleep_mode_id);
@@ -462,6 +452,9 @@ static VOID tbox_pm_timeout_in_sleepprecheck(VOID)
                 tbox_pm_tmcount = 0U;
                 tbox_pm_state_enter(TBOX_PM_STATE_SLEEP_POST_CHECK);
                 xSemaphoreGive(tbox_pm_state_mutex);
+
+                tbox_pm_4g_mgr_stop_check_startup();
+                tbox_module_stop();
             }
         }
     }
@@ -482,58 +475,34 @@ static VOID tbox_pm_reboot_in_sleepprecheck(VOID)
             return;
         }
 
-        tbox_pm_4g_mgr_stop_check_startup();
-        tbox_module_stop();
         xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
         tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU;
         tbox_pm_state_enter(TBOX_PM_STATE_SLEEP_POST_CHECK);
         tbox_pm_tmcount = 0U;
-        xSemaphoreGive(tbox_pm_state_mutex);    
-    }
-    else if((UINT8)TBOX_PM_REBOOT_4G_MCU == tbox_pm_reboot_type)
-    {
-        if(TBOX_PM_4G_DO_NOTHING != do_state)
-        {
-            xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
-            tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU;
-            xSemaphoreGive(tbox_pm_state_mutex);              
-            MODULE_LOG_I(TBOXPM, "4g do [%d], wait finish", do_state);
-            return;
-        }
+        xSemaphoreGive(tbox_pm_state_mutex);  
 
         tbox_pm_4g_mgr_stop_check_startup();
         tbox_module_stop();
-        xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
-        tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU;
-        tbox_pm_state_enter(TBOX_PM_STATE_SLEEP_POST_CHECK);
-        tbox_pm_tmcount = 0U;
-        xSemaphoreGive(tbox_pm_state_mutex);
     }
-    else
-    {
-        /*TODO*/
-    } 
 }
 
 static VOID tbox_pm_wakeup_in_sleeppostcheck(VOID)
 {
-    MODULE_LOG_I(TBOXPM, "wakeup in sleeppostcheck, wake type:%d", tbox_pm_wake_type);
+    MODULE_LOG_I(TBOXPM, "wakeup in sleeppostcheck, wake type:%d and post action:%d", tbox_pm_wake_type, tbox_pm_post_action);
    
     xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
-    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU != tbox_pm_post_action &&
-       (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU != tbox_pm_post_action)
+    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == tbox_pm_post_action)
     {
-        tbox_module_start();
-        if(tbox_pm_io_acc_is_active())
-        {
-            tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
-        }
-        tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
+        xSemaphoreGive(tbox_pm_state_mutex);
+        MODULE_LOG_I(TBOXPM, "continue to execute the reboot action, type:%d", tbox_pm_post_action);
+        return;
     }
-    else
+    tbox_module_start();
+    if(tbox_pm_io_acc_is_active())
     {
-         MODULE_LOG_I(TBOXPM, "continue to execute the reboot action, type:%d", tbox_pm_post_action);
+        tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
     }
+    tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
     xSemaphoreGive(tbox_pm_state_mutex);
 }
 
@@ -545,8 +514,7 @@ static VOID tbox_pm_timeout_in_sleeppostcheck(VOID)
 
     MODULE_LOG_I(TBOXPM, "wait module stop finish[%u S], post action:%d", tbox_pm_tmcount, post_action);
 
-    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == post_action ||
-       (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU == post_action)
+    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == post_action)
     {
         if(TRUE == tbox_allmodule_isstoped())
         {
@@ -554,15 +522,7 @@ static VOID tbox_pm_timeout_in_sleeppostcheck(VOID)
             tbox_pm_state_enter(TBOX_PM_STATE_DOACITON);
             tbox_pm_tmcount = 0U;
             xSemaphoreGive(tbox_pm_state_mutex);
-
-            if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == post_action)
-            {
-                tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU);
-            }
-            else
-            {
-                tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU);
-            }
+            tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU);
         }
         else
         {
@@ -579,14 +539,7 @@ static VOID tbox_pm_timeout_in_sleeppostcheck(VOID)
             }
             xSemaphoreGive(tbox_pm_state_mutex);
             
-            if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == post_action)
-            {
-                tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU);
-            }
-            else
-            {
-                tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU);
-            }          
+            tbox_pm_action_do(TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU);         
         }
     }
     else
@@ -655,36 +608,26 @@ static VOID tbox_pm_reboot_in_sleeppostcheck(VOID)
         tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU;
         xSemaphoreGive(tbox_pm_state_mutex);    
     }
-    else if((UINT8)TBOX_PM_REBOOT_4G_MCU == tbox_pm_reboot_type)
-    {
-        xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
-        tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU;
-        xSemaphoreGive(tbox_pm_state_mutex);
-    }
-    else
-    {
-        /*TODO*/
-    }
 }
 
 static VOID tbox_pm_wakeup_in_doaction(VOID)
 {
-    MODULE_LOG_I(TBOXPM, "wakeup in doaction, wake type:%d", tbox_pm_wake_type);
+    MODULE_LOG_I(TBOXPM, "wakeup in doaction, wake type:%d and post action:%d", tbox_pm_wake_type, tbox_pm_post_action);
     
-    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU != tbox_pm_post_action &&
-       (UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_4G_MCU != tbox_pm_post_action)
+    xSemaphoreTake(tbox_pm_state_mutex, portMAX_DELAY);
+    if((UINT8)TBOX_PM_SLEEPPOST_ACTION_REBOOT_MCU == tbox_pm_post_action )
     {
-        tbox_module_start();
-        if(tbox_pm_io_acc_is_active())
-        {
-            tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
-        }
-        tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
-    }
-    else
-    {
+        xSemaphoreGive(tbox_pm_state_mutex);
         MODULE_LOG_I(TBOXPM, "continue to execute the reboot action, type:%d", tbox_pm_post_action);
+        return;
     }
+    tbox_module_start();
+    if(tbox_pm_io_acc_is_active())
+    {
+        tbox_pm_wake_type = TBOX_PM_WAKEUP_BY_KEY;
+    }
+    tbox_pm_state_enter(TBOX_PM_STATE_RUNNING);  
+    xSemaphoreGive(tbox_pm_state_mutex);
 }
 
 static VOID tbox_pm_timeout_in_doaction(VOID)
@@ -716,7 +659,7 @@ static VOID tbox_pm_reboot_in_doaction(VOID)
 
 static VOID tbox_pm_wakeup_in_finish(VOID)
 {
-    MODULE_LOG_I(TBOXPM, "wakeup in finish, wake type:%d", tbox_pm_wake_type);
+    MODULE_LOG_I(TBOXPM, "wakeup in finish, wake type:%d and post action:%d", tbox_pm_wake_type, tbox_pm_post_action);
 
     tbox_module_start();
 
@@ -725,7 +668,6 @@ static VOID tbox_pm_wakeup_in_finish(VOID)
     {
         tbox_pm_4g_do_startup();
         tbox_pm_post_action = (UINT8)TBOX_PM_SLEEPPOST_ACTION_NONE;
-        MODULE_LOG_I(TBOXPM, "start up 4g");        
     }
     if(tbox_pm_io_acc_is_active())
     {

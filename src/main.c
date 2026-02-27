@@ -26,6 +26,7 @@ VOID tbox_load_all_module(VOID)
     LOAD_TBOX_MODULE(TIME);
     LOAD_TBOX_MODULE(CAN);
     LOAD_TBOX_MODULE(J1939);
+	LOAD_TBOX_MODULE(FOTA);
 
     /*load app module*/     
     LOAD_TBOX_MODULE(FCT);

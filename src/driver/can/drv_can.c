@@ -20,7 +20,7 @@
 typedef struct
 {
     volatile uint8_t  is_init   : 1;
-    volatile uint8_t  is_busoff : 1;
+    volatile uint8_t  is_busoff : 1;//暂不使用，此状态统一由服务层处理
     volatile uint8_t  tx_buzy   : 1;
     volatile uint8_t  rx_buzy   : 1;
     volatile uint32_t rx_tick;
@@ -42,9 +42,9 @@ int32_t drv_can_send(const can_msg_t *msg)
         return -2;
     }
 
-    if (can_state[msg->ins].is_busoff) {
-        return -3;
-    }
+    // if (can_state[msg->ins].is_busoff) {
+    //     return -3;
+    // }
 
     if (CAN_STATE_RUNNING != Can_Hal_GetControllerState(msg->ins)) {
         return -4;

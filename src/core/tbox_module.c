@@ -384,6 +384,41 @@ VOID tbox_module_start(VOID)
     MODULE_LOG_I(ICORE, "all modules has been started");
 }
 
+VOID tbox_module_start_specific(TBOX_ID module_id)
+{
+    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    {
+        MODULE_LOG_E(ICORE, "module id:%d is invalid", (INT32)module_id);
+        return;
+    }
+
+    if(FALSE == tbox_module_is_init)
+    {
+        MODULE_LOG_E(ICORE, "module is not init");       
+        return;
+    }
+
+    MODULE_START_FUN start_fun;
+    UBaseType_t critical = tbox_module_enter_critical();
+    {
+        if(FALSE == tbox_modules[module_id].is_used || 
+           FALSE == tbox_modules[module_id].is_enabled ||
+           TBOX_MODULE_STATE_START == tbox_modules[module_id].state)
+        {
+            tbox_module_exit_critical(critical);
+            return;
+        }
+        tbox_modules[module_id].state = TBOX_MODULE_STATE_START;
+        start_fun = tbox_modules[module_id].module_info.start_fun;
+    }
+    tbox_module_exit_critical(critical);
+
+    if (NULL_PTR != start_fun)
+    {
+        (*start_fun)();
+    }
+}
+
 VOID tbox_module_stop(VOID)
 {
     if(FALSE == tbox_module_is_init)
@@ -424,6 +459,44 @@ VOID tbox_module_stop(VOID)
             tbox_modules[i].state = TBOX_MODULE_STATE_STOP;
         }
         tbox_module_exit_critical(critical);*/        
+    }
+}
+
+VOID tbox_module_stop_specific(TBOX_ID module_id)
+{
+    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    {
+        MODULE_LOG_E(ICORE, "module id:%d is invalid", (INT32)module_id);
+        return;
+    }
+
+    if(FALSE == tbox_module_is_init)
+    {
+        MODULE_LOG_E(ICORE, "module is not init");       
+        return;
+    }
+
+    MODULE_STOP_FUN stop_fun;
+    UBaseType_t critical = tbox_module_enter_critical();
+    {
+        if(FALSE == tbox_modules[module_id].is_used || 
+           FALSE == tbox_modules[module_id].is_enabled ||
+           TBOX_MODULE_STATE_STOP == tbox_modules[module_id].state)
+        {
+            tbox_module_exit_critical(critical);
+            return;
+        }
+        if(NULL_PTR == tbox_modules[module_id].module_info.stop_fun)
+        {
+            tbox_modules[module_id].state = TBOX_MODULE_STATE_STOP;
+        }
+        stop_fun = tbox_modules[module_id].module_info.stop_fun;
+    }
+    tbox_module_exit_critical(critical);
+
+    if(NULL_PTR != stop_fun)
+    {
+        (*stop_fun)();
     }
 }
 

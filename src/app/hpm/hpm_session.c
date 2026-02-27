@@ -3,18 +3,23 @@
 #include "tbox_memory.h"
 #include "flash_common.h"
 #include "time_if.h"
+#include "tbox_cfg_if.h"
+#include "tbox_pm_io.h"
 
 #include "hpm_content.h"
 #include "hpm_session.h"
 #include "hpm_pack.h"
 #include "hpm_net.h"
-#include "hpm_mgr.h"
 #include "hpm_data.h"
 #include "hpm_control.h"
 #include "hpm_data_recv.h"
 #include "hpm_socket.h"
+#include "hpm_ota_tbox.h"
+#include "hpm_cfg.h"
+#include "hpm_data_recv.h"
 
-#define HPM_SESSION_RUN_INFO_MIGC (0x11223344)
+#define HPM_SESSION_RUN_INFO_MIGC (0x20260225)
+#define HPM_SESSION_SEQ_NAME "HPM_SESSION_SEQ"
 
 #define HPM_SESSION_MAX_RECV_LEN (256)
 #define HPM_SESSION_MAX_SEND_LEN (1024)
@@ -66,37 +71,27 @@ typedef struct
 typedef struct
 {
     UINT32 migc;
-    UINT32 login_seq_info;
-    UINT32 data_seq_info;
+    UINT16 login_seq;
+    UINT16 login_date;
+    UINT16 data_seq;
+    UINT16 data_date;
 } HPM_SESSION_RUN_INFO_T;
 
 typedef enum
 {
-    HPM_SESSION_STEP_INIT = 0x00,
-    HPM_SESSION_STEP_LOGIN = 0x01,
-    HPM_SESSION_STEP_SESSION = 0x02,
-    HPM_SESSION_STEP_LOGOUT = 0x03,
-    HPM_SESSION_STEP_MAX
-} HPM_SESSION_STEP_E;
-
-typedef struct
-{
-    UINT16 cmd;
-    UINT16 seq_id;
-    UINT16 sub_cmd;
-    UINT16 resp_flag;
-    UINT16 data_len;
-    UINT8 data[HPM_SESSION_MAX_RECV_LEN];
-} HPM_SESSION_RECV_INFO;
+    HPM_SESSION_STOP = 0,
+    HPM_SESSION_START = 1,
+} hpm_session_run_e;
 
 static INT32 hpm_session_send_login(UINT8 resp);
 static INT32 hpm_session_send_logout(UINT8 resp);
 static INT32 hpm_session_send_heartbeat(UINT8 resp);
 static INT32 hpm_session_send_report(UINT8 resp);
 
+static UINT8 hpm_session_send_buffer[HPM_SESSION_MAX_SEND_LEN];
 static HPM_SESSION_RUN_INFO_T hpm_session_run_info;
 static HPM_SESSION_STEP_E hpm_session_step;
-static HPM_SESSION_RECV_INFO hpm_session_recv_info;
+static hpm_session_run_e hpm_session_run_status;
 
 static hpm_session_send_info_t hpm_session_send_info[HPM_SESSION_EVENT_MAX] = {
     {0, 0, 0, 0, 0, hpm_session_send_login},
@@ -105,93 +100,68 @@ static hpm_session_send_info_t hpm_session_send_info[HPM_SESSION_EVENT_MAX] = {
     {0, 0, 0, 0, 0, hpm_session_send_report},
 };
 
-static UINT8 hpm_session_send_buffer[HPM_SESSION_MAX_SEND_LEN];
-
-static UINT16 hpm_login_date;
-static UINT16 hpm_login_seq;
-static UINT16 hpm_data_date;
-static UINT16 hpm_data_seq;
-
 static VOID hpm_session_run_info_write(VOID)
 {
-    INT32 ret = 0;
     hpm_session_run_info.migc = HPM_SESSION_RUN_INFO_MIGC;
-    drv_flash_nor_erase(FLASH_NOR_ADDR_HPM_SES_INFO, 1);
-    ret = drv_flash_nor_write(FLASH_NOR_ADDR_HPM_SES_INFO, (uint8_t *)&hpm_session_run_info, sizeof(hpm_session_run_info));
-    if (0 != ret)
+    if (0 != tbox_cfg_setkv(HPM_SESSION_SEQ_NAME, (uint8_t *)&hpm_session_run_info, sizeof(hpm_session_run_info)))
     {
-        MODULE_LOG_E(HPM, "hpm session write run info failed, ret: %d", ret);
+        MODULE_LOG_E(HPM, "hpm session write run info failed");
+    }
+    else
+    {
+        MODULE_LOG_I(HPM, "hpm session write run info success");
     }
 }
 
 static VOID hpm_session_run_info_read(VOID)
 {
-    INT32 ret = 0;
-    DEV_TIME time;
-
-    ret = drv_flash_nor_read(FLASH_NOR_ADDR_HPM_SES_INFO, (uint8_t *)&hpm_session_run_info, sizeof(hpm_session_run_info));
-    if (0 != ret)
-    {
-        MODULE_LOG_E(HPM, "hpm session run info read failed, ret: %d", ret);
-        time_if_get(&time);
-        hpm_login_date = time.month * 100 + time.day;
-        hpm_login_seq = 1;
-        hpm_session_run_info.login_seq_info = (hpm_login_date << 16) | hpm_login_seq;
-
-        hpm_data_date = time.month * 100 + time.day;
-        hpm_data_seq = 1;
-        hpm_session_run_info.data_seq_info = (hpm_data_date << 16) | hpm_data_seq;
-        hpm_session_run_info_write();
-        return;
-    }
+    memset(&hpm_session_run_info, 0, sizeof(hpm_session_run_info));
+    tbox_cfg_getkv(HPM_SESSION_SEQ_NAME, (uint8_t *)&hpm_session_run_info, sizeof(hpm_session_run_info));
 
     if (HPM_SESSION_RUN_INFO_MIGC != hpm_session_run_info.migc)
     {
-        MODULE_LOG_E(HPM, "hpm session run info migc err, migc: 0x%x", hpm_session_run_info.migc);
-
+        MODULE_LOG_E(HPM, "hpm session run info read failed");
+        DEV_TIME time;
         time_if_get(&time);
-        hpm_login_date = time.month * 100 + time.day;
-        hpm_login_seq = 1;
-        hpm_session_run_info.login_seq_info = (hpm_login_date << 16) | hpm_login_seq;
-
-        hpm_data_date = time.month * 100 + time.day;
-        hpm_data_seq = 1;
-        hpm_session_run_info.data_seq_info = (hpm_data_date << 16) | hpm_data_seq;
+        UINT16 date = time.month * 100 + time.day;
+        hpm_session_run_info.login_date = date;
+        hpm_session_run_info.login_seq = 1;
+        hpm_session_run_info.data_date = date;
+        hpm_session_run_info.data_seq = 1;
         hpm_session_run_info_write();
-        return;
     }
-
-    hpm_login_date = hpm_session_run_info.login_seq_info >> 16;
-    hpm_login_seq = (UINT16)hpm_session_run_info.login_seq_info & 0x00FF;
-    hpm_data_date = hpm_session_run_info.login_seq_info >> 16;
-    hpm_data_seq = (UINT16)hpm_session_run_info.login_seq_info & 0x00FF;
-    return;
 }
 
 INT32 hpm_sesion_get_login_seq(UINT8 *buf)
 {
     DEV_TIME time;
     time_if_get(&time);
-    if (0 == (hpm_login_seq++))
+    UINT16 date = time.month * 100 + time.day;
+    if (date != hpm_session_run_info.login_date)
     {
-        hpm_login_seq = 1;
+        hpm_session_run_info.login_date = date;
+        hpm_session_run_info.login_seq = 1;
+        hpm_session_run_info_write();
     }
-    else if (hpm_login_date != time.month * 100 + time.day)
+    else
     {
-        hpm_login_date = time.month * 100 + time.day;
-        hpm_login_seq = 1;
+        hpm_session_run_info.login_seq++;
+        if (0 == hpm_session_run_info.login_seq)
+        {
+            hpm_session_run_info.login_seq = 1;
+        }
     }
 
-    buf[0] = hpm_login_seq >> 8;
-    buf[1] = hpm_login_seq;
+    buf[0] = hpm_session_run_info.login_seq >> 8;
+    buf[1] = hpm_session_run_info.login_seq;
 
     return 2;
 }
 
 INT32 hpm_session_get_logout_seq(UINT8 *buf)
 {
-    buf[0] = hpm_login_seq >> 8;
-    buf[1] = hpm_login_seq;
+    buf[0] = hpm_session_run_info.login_seq >> 8;
+    buf[1] = hpm_session_run_info.login_seq;
 
     return 2;
 }
@@ -200,19 +170,24 @@ INT32 hpm_sesion_get_data_seq(UINT8 *buf)
 {
     DEV_TIME time;
     time_if_get(&time);
-
-    if (0 == (hpm_data_seq++))
+    UINT16 date = time.month * 100 + time.day;
+    if (date != hpm_session_run_info.data_date)
     {
-        hpm_data_seq = 1;
+        hpm_session_run_info.data_date = date;
+        hpm_session_run_info.data_seq = 1;
+        hpm_session_run_info_write();
     }
-    else if (hpm_data_date != time.month * 100 + time.day)
+    else
     {
-        hpm_data_date = time.month * 100 + time.day;
-        hpm_data_seq = 1;
+        hpm_session_run_info.data_seq++;
+        if (0 == hpm_session_run_info.data_seq)
+        {
+            hpm_session_run_info.data_seq = 1;
+        }
     }
 
-    buf[0] = hpm_data_seq >> 8;
-    buf[1] = hpm_data_seq;
+    buf[0] = hpm_session_run_info.data_seq >> 8;
+    buf[1] = hpm_session_run_info.data_seq;
 
     return 2;
 }
@@ -223,8 +198,8 @@ UINT32 hpm_session_init(UINT8 seq)
     {
     case MODULE_INIT_SEQ_OS:
         memset(&hpm_session_run_info, 0, sizeof(hpm_session_run_info));
-        memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
         hpm_session_step = HPM_SESSION_STEP_INIT;
+        hpm_session_run_status = HPM_SESSION_STOP;
         break;
 
     case MODULE_INIT_SEQ_STORAGE:
@@ -244,7 +219,6 @@ UINT32 hpm_session_init(UINT8 seq)
 
 VOID hpm_session_wake(VOID)
 {
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
     hpm_session_step = HPM_SESSION_STEP_INIT;
     hpm_data_flush_trans_list();
     hpm_data_flush_realtm_data();
@@ -280,7 +254,7 @@ static INT32 hpm_session_com_login(VOID)
 
     if (0 != hpm_net_send(buf, len))
     {
-        hpm_socket_reset();
+        hpm_session_force_stop();
         MODULE_LOG_E(HPM, "send failed, len: %d", len);
     }
 
@@ -341,7 +315,7 @@ static INT32 hpm_session_com_heartbeat(VOID)
     MODULE_LOG_DUMP(HPM, "hpm heartbeat:", buf, len);
     if (0 != hpm_net_send(buf, len))
     {
-        hpm_socket_reset();
+        hpm_session_force_stop();
         MODULE_LOG_E(HPM, "send failed, len: %d", len);
     }
 
@@ -349,108 +323,13 @@ static INT32 hpm_session_com_heartbeat(VOID)
     return 0;
 }
 
-static VOID hpm_session_receive(VOID)
-{
-    UINT8 *recv;
-    HPM_PACK_FRAME_T *parse;
-    UINT16 parse_len;
-    UINT16 read_len;
-    UINT16 data_len;
-
-    recv = mempool_alloc(HPM_SESSION_RECV_MEM_SIZE);
-    if (NULL == recv)
-    {
-        MODULE_LOG_E(HPM, "memalloc recv buf failed");
-        return;
-    }
-    data_len = HPM_SESSION_RECV_MEM_SIZE;
-
-    if (0 != hpm_net_recv(recv, &data_len))
-    {
-        mempool_free(recv);
-        return;
-    }
-
-    parse = mempool_alloc(HPM_SESSION_RECV_MEM_SIZE);
-    if (NULL == parse)
-    {
-        MODULE_LOG_E(HPM, "memalloc recv parse buf failed");
-        mempool_free(recv);
-        return;
-    }
-
-    read_len = 0;
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
-    parse_len = HPM_SESSION_RECV_MEM_SIZE;
-    read_len = hpm_pack_unpack(recv, data_len, parse, &parse_len);
-    if (read_len <= 0)
-    {
-        mempool_free(recv);
-        mempool_free(parse);
-        return;
-    }
-    MODULE_LOG_DUMP(HPM, "receive:", recv, read_len);
-
-    switch (parse->cmd)
-    {
-    case HPM_CMD_TSP_COMMON_ACK:
-    {
-        hpm_session_recv_info.data_len = parse_len;
-        hpm_session_recv_info.cmd = parse->cmd;
-        hpm_session_recv_info.seq_id = parse->data[0] * 256 + parse->data[1];
-        hpm_session_recv_info.sub_cmd = parse->data[2];
-        hpm_session_recv_info.resp_flag = parse->data[3];
-        memcpy(hpm_session_recv_info.data, parse, parse_len);
-        MODULE_LOG_I(HPM, "receive common ack");
-        data_len -= read_len;
-        if (data_len > 0)
-        {
-            hpm_data_recv_put(recv + read_len, data_len);
-        }
-        break;
-    }
-    case HPM_CMD_CONTROL:
-    {
-        hpm_session_recv_info.cmd = parse->cmd;
-        hpm_session_recv_info.data_len = parse_len;
-        memcpy(hpm_session_recv_info.data, parse->data, parse_len);
-        MODULE_LOG_I(HPM, "receive control cmd: 0x%02x", hpm_session_recv_info.cmd);
-        hpm_control_cmd_handle(hpm_session_recv_info.cmd, hpm_session_recv_info.data, hpm_session_recv_info.data_len);
-        data_len -= read_len;
-        if (data_len > 0)
-        {
-            hpm_data_recv_put(recv + read_len, data_len);
-        }
-        break;
-    }
-
-    default:
-        MODULE_LOG_E(HPM, "unknow cmd: 0x%02X", parse->cmd);
-        break;
-    }
-
-    mempool_free(recv);
-    mempool_free(parse);
-}
-
-VOID hpm_session_reset(VOID)
-{
-    hpm_session_step = HPM_SESSION_STEP_INIT;
-    for (INT32 i = 0; i < HPM_SESSION_EVENT_MAX; i++)
-    {
-        hpm_session_send_info[i].state = HPM_SESSION_SEND_INIT;
-        hpm_session_send_info[i].retry_count = 0;
-        hpm_session_send_info[i].wait_time = 0;
-        hpm_session_send_info[i].result = 0;
-    }
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
-}
-
 static INT32 hpm_session_send_login(UINT8 resp)
 {
     INT32 ret = 0;
     INT32 send_intv = 10;
-    INT32 server_timeout = 10;
+
+    UINT32 server_timeout = 10UL;
+    hpm_cfg_get_server_timeout(&server_timeout, sizeof(server_timeout));
 
     hpm_session_send_info_t *sender = &hpm_session_send_info[HPM_SESSION_EVENT_LOGIN];
     UINT32 current_tick = time_if_get_systick_s();
@@ -492,7 +371,7 @@ static INT32 hpm_session_send_login(UINT8 resp)
             {
                 MODULE_LOG_E(HPM, "login timeout");
                 sender->state = HPM_SESSION_SEND_SUCCESS;
-                hpm_socket_reset();
+                hpm_session_step = HPM_SESSION_STEP_INIT;
                 break;
             }
 
@@ -518,7 +397,8 @@ static INT32 hpm_session_send_login(UINT8 resp)
 static INT32 hpm_session_send_logout(UINT8 resp)
 {
     INT32 ret = 0;
-    INT32 server_timeout = 10;
+    UINT32 server_timeout = 10UL;
+    hpm_cfg_get_server_timeout(&server_timeout, sizeof(server_timeout));
 
     hpm_session_send_info_t *sender = &hpm_session_send_info[HPM_SESSION_EVENT_LOGOUT];
     UINT32 current_tick = time_if_get_systick_s();
@@ -544,7 +424,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->state = HPM_SESSION_SEND_SUCCESS;
             sender->retry_count = 0;
             sender->wait_time = 0;
-            hpm_socket_reset();
+            hpm_session_step = HPM_SESSION_STEP_INIT;
             break;
         }
 
@@ -568,7 +448,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->state = HPM_SESSION_SEND_SUCCESS;
             sender->retry_count = 0;
             sender->wait_time = 0;
-            hpm_socket_reset();
+            hpm_session_step = HPM_SESSION_STEP_INIT;
             break;
         }
 
@@ -578,7 +458,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             {
                 sender->retry_count = 0;
                 sender->state = HPM_SESSION_SEND_SUCCESS;
-                hpm_socket_reset();
+                hpm_session_step = HPM_SESSION_STEP_INIT;
             }
             else
             {
@@ -603,7 +483,8 @@ static INT32 hpm_session_send_logout(UINT8 resp)
 static INT32 hpm_session_send_heartbeat(UINT8 resp)
 {
     INT32 ret = 0;
-    INT32 send_intv = 60;
+    UINT32 send_intv = 60UL;
+    hpm_cfg_get_htbt(&send_intv, sizeof(send_intv));
     hpm_session_send_info_t *sender = &hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT];
     UINT32 current_tick = time_if_get_systick_s();
 
@@ -631,7 +512,8 @@ static INT32 hpm_session_send_heartbeat(UINT8 resp)
 static INT32 hpm_session_send_report(UINT8 resp)
 {
     INT32 ret = 0;
-    INT32 server_timeout = 10;
+    UINT32 server_timeout = 10;
+    hpm_cfg_get_server_timeout(&server_timeout, sizeof(server_timeout));
     UINT32 current_tick = time_if_get_systick_s();
     hpm_session_send_info_t *sender = &hpm_session_send_info[HPM_SESSION_EVENT_REPORT];
 
@@ -713,9 +595,8 @@ static INT32 hpm_session_send_report(UINT8 resp)
 
 static VOID hpm_session_proc_init(VOID)
 {
-    if (FALSE == hpm_mgr_acc_is_active())
+    if (HPM_SESSION_STOP == hpm_session_run_status)
     {
-        hpm_socket_reset();
         return;
     }
 
@@ -727,17 +608,19 @@ static VOID hpm_session_proc_init(VOID)
 
 static VOID hpm_session_proc_login(VOID)
 {
-    if (FALSE == hpm_mgr_acc_is_active())
+    if (HPM_SESSION_STOP == hpm_session_run_status)
     {
         hpm_session_step = HPM_SESSION_STEP_INIT;
         return;
     }
 
+    hpm_pack_recv_t *recv_info = hpm_data_recv_info_get();
+
     UINT8 resp = 0;
-    if (HPM_CMD_TSP_COMMON_ACK == hpm_session_recv_info.cmd &&
-        HPM_CMD_LOGIN == hpm_session_recv_info.sub_cmd)
+    if (HPM_CMD_TSP_COMMON_ACK == recv_info->cmd &&
+        HPM_CMD_LOGIN == recv_info->common_resp.cmd)
     {
-        if (HPM_RECV_RESP_SUCCESS == hpm_session_recv_info.resp_flag)
+        if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {
             resp = HPM_SESSION_LOGIN_ACK;
             hpm_session_step = HPM_SESSION_STEP_SESSION;
@@ -753,17 +636,24 @@ static VOID hpm_session_proc_login(VOID)
         }
     }
     hpm_session_send_info[HPM_SESSION_EVENT_LOGIN].handle(resp);
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
 }
 
 static VOID hpm_session_proc_session(VOID)
 {
-    UINT8 resp = 0;
-    if (HPM_CMD_TSP_COMMON_ACK == hpm_session_recv_info.cmd &&
-        (HPM_CMD_LIVE_DATA == hpm_session_recv_info.sub_cmd ||
-         HPM_CMD_REISSUE_DATA == hpm_session_recv_info.sub_cmd))
+    if (HPM_SESSION_STOP == hpm_session_run_status)
     {
-        if (HPM_RECV_RESP_SUCCESS == hpm_session_recv_info.resp_flag)
+        hpm_session_step = HPM_SESSION_STEP_LOGOUT;
+        return;
+    }
+
+    hpm_pack_recv_t *recv_info = hpm_data_recv_info_get();
+
+    UINT8 resp = 0;
+    if (HPM_CMD_TSP_COMMON_ACK == recv_info->cmd &&
+        (HPM_CMD_LIVE_DATA == recv_info->common_resp.cmd ||
+         HPM_CMD_REISSUE_DATA == recv_info->common_resp.cmd))
+    {
+        if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {
             resp = HPM_SESSION_REPORT_ACK;
         }
@@ -775,21 +665,17 @@ static VOID hpm_session_proc_session(VOID)
 
     hpm_session_send_info[HPM_SESSION_EVENT_REPORT].handle(resp);
     hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT].handle(resp);
-
-    if (FALSE == hpm_mgr_acc_is_active())
-    {
-        hpm_session_step = HPM_SESSION_STEP_LOGOUT;
-    }
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
 }
 
 static VOID hpm_session_proc_logout(VOID)
 {
+    hpm_pack_recv_t *recv_info = hpm_data_recv_info_get();
+
     UINT8 resp = 0;
-    if (HPM_CMD_TSP_COMMON_ACK == hpm_session_recv_info.cmd &&
-        HPM_CMD_LOGOUT == hpm_session_recv_info.sub_cmd)
+    if (HPM_CMD_TSP_COMMON_ACK == recv_info->cmd &&
+        HPM_CMD_LOGOUT == recv_info->common_resp.cmd)
     {
-        if (HPM_RECV_RESP_SUCCESS == hpm_session_recv_info.resp_flag)
+        if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {
             resp = HPM_SESSION_LOGOUT_ACK;
             hpm_session_step = HPM_SESSION_STEP_INIT;
@@ -800,12 +686,11 @@ static VOID hpm_session_proc_logout(VOID)
         }
     }
     hpm_session_send_info[HPM_SESSION_EVENT_LOGOUT].handle(resp);
-    memset(&hpm_session_recv_info, 0, sizeof(hpm_session_recv_info));
 }
 
-VOID hpm_session_proc(VOID)
+VOID hpm_session_process(VOID)
 {
-    hpm_session_receive();
+    hpm_data_recv_process();
     switch (hpm_session_step)
     {
     case HPM_SESSION_STEP_INIT:
@@ -824,4 +709,43 @@ VOID hpm_session_proc(VOID)
         break;
     }
     MODULE_LOG_I(HPM, "hpm session step: %d", hpm_session_step);
+}
+
+HPM_SESSION_STEP_E hpm_session_get_step(VOID)
+{
+    return hpm_session_step;
+}
+
+VOID hpm_session_start(VOID)
+{
+    if (HPM_SESSION_START == hpm_session_run_status)
+    {
+        MODULE_LOG_E(HPM, "session already start");
+        return;
+    }
+    hpm_session_run_status = HPM_SESSION_START;
+}
+
+VOID hpm_session_stop(VOID)
+{
+    if (HPM_SESSION_STOP == hpm_session_run_status)
+    {
+        MODULE_LOG_E(HPM, "session already stop");
+        return;
+    }
+    hpm_session_run_status = HPM_SESSION_STOP;
+}
+
+VOID hpm_session_force_stop(VOID)
+{
+    hpm_session_step = HPM_SESSION_STEP_INIT;
+    for (INT32 i = 0; i < HPM_SESSION_EVENT_MAX; i++)
+    {
+        hpm_session_send_info[i].state = HPM_SESSION_SEND_INIT;
+        hpm_session_send_info[i].retry_count = 0;
+        hpm_session_send_info[i].wait_time = 0;
+        hpm_session_send_info[i].result = 0;
+    }
+    hpm_session_run_status = HPM_SESSION_STOP;
+    hpm_data_recv_clear();
 }

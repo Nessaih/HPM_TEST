@@ -9,7 +9,7 @@ void can_mgr_init(void);
 
 void can_mgr_deinit(void);
 
-void can_mgr_stat_add_recv_msg(can_msg_t *msg);
+void can_mgr_stat_add_recv_msgs(can_msg_t *msgs, uint32_t count);
 
 void can_mgr_stat_add_send_msg(uint8_t ins);
 

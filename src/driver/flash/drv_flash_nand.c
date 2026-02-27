@@ -89,7 +89,7 @@ static int32_t nand_write_status(uint8_t sr, uint8_t status)
 
 static int32_t nand_wait_ready(void)
 {
-    int32_t timeout = 50;
+    int32_t timeout = 500;
     uint8_t status;
 
     do

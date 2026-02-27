@@ -113,7 +113,7 @@ static VOID hpm_control_send_resp(UINT8 *res, UINT16 res_len)
 
 	if(0 != hpm_net_send(buf, len))
 	{		
-		hpm_socket_reset();
+		hpm_socket_force_stop();
 		MODULE_LOG_E(HPM, "hpm send control response failed");
 	}
 

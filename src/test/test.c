@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include "api_rtos.h"
 #include "test_can.h"
+#include "test_dv.h"
 //#include "test_adc.h"
 //#include "test_flash.h"
 //#include "test_led.h"
@@ -24,6 +25,7 @@ void test_init_task(void *param)
     // test_log_init(NULL);
     // test_flash_init(NULL);
     test_j1939_init();
+	test_dv_init(NULL);
     vTaskDelete(NULL);
 }
 

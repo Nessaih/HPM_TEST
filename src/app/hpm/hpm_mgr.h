@@ -3,7 +3,9 @@
 
 INT32 hpm_mgr_init(UINT8 seq);
 
-BOOL hpm_mgr_acc_is_active(VOID);
+VOID hpm_mgr_process(VOID);
+
+VOID hpm_mgr_wakeup(VOID);
 
 BOOL hpm_mgr_allow_sleep(VOID);
 
