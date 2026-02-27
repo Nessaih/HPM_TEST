@@ -57,7 +57,7 @@ void j1939_dl_process(const CAN_PACKET_T *pkt)
 {
     uint32_t pgn;
 
-    pgn = (pkt->identifier >> 8) & 0x7FFFFU;
+    pgn = (pkt->identifier >> 8) & 0x3FFFFU;
 
     if (!j1939_pgn_filter(pgn))
         return;

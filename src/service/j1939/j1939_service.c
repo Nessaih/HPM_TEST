@@ -4,11 +4,12 @@
 #include "api_rtos.h"
 #include "j1939_includes.h"
 
-
-#define J1939_SVR_TASK_EVENT_CAN_ACTIVE   0x01U
-#define J1939_SVR_TASK_EVENT_CAN_INACTIVE 0x02U
-#define J1939_SVR_TASK_EVENT_CAN_DATAIN   0x04U
-#define J1939_SVR_TASK_EVENT_ALL          0x07U
+#define J1939_SVR_TASK_EVENT_TASK_START   0x01U
+#define J1939_SVR_TASK_EVENT_TASK_STOP    0x02U
+#define J1939_SVR_TASK_EVENT_CAN_ACTIVE   0x04U
+#define J1939_SVR_TASK_EVENT_CAN_INACTIVE 0x08U
+#define J1939_SVR_TASK_EVENT_CAN_DATAIN   0x10U
+#define J1939_SVR_TASK_EVENT_ALL          0x1FU
 
 static INT32 j1939_svr_init(UINT8 seq);
 static VOID  j1939_svr_stop(VOID);
@@ -23,7 +24,7 @@ TBOX_MODULE_LOADER(J1939)
 {
 }
 
-// static TBOX_ID       j1939_svr_module_id;
+static TBOX_ID       j1939_svr_module_id;
 static MODULE_HANDLE j1939_svr_module_handle;
 
 static INT32 j1939_svr_init(UINT8 seq)
@@ -33,7 +34,7 @@ static INT32 j1939_svr_init(UINT8 seq)
     switch (seq)
     {
     case MODULE_INIT_SEQ_OS:
-        // GET_TBOX_MODULE_ID(J1939, j1939_svr_module_id);
+        GET_TBOX_MODULE_ID(J1939, j1939_svr_module_id);
         GET_TBOX_MODULE_HANDLE(J1939, j1939_svr_module_handle);
         break;
     case MODULE_INIT_SEQ_STORAGE:
@@ -51,10 +52,14 @@ static INT32 j1939_svr_init(UINT8 seq)
 
 static VOID j1939_svr_stop(VOID)
 {
+    if (j1939_svr_module_handle)
+        xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_TASK_STOP, eSetBits);
 }
 
 static VOID j1939_svr_start(VOID)
 {
+    if (j1939_svr_module_handle)
+        xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_TASK_START, eSetBits);
 }
 
 static VOID j1939_svr_exit(VOID)
@@ -64,22 +69,36 @@ static VOID j1939_svr_exit(VOID)
 static VOID j1939_svr_task(VOID *param)
 {
     UINT32        notify_value = 0;
+    UINT32        event_mask   = J1939_SVR_TASK_EVENT_ALL;
+    UINT32        wait_ticks   = pdTICKS_TO_MS(10);
     volatile BOOL is_active    = FALSE;
 
     for (;;)
     {
-        if (pdPASS == xTaskNotifyWait(0, J1939_SVR_TASK_EVENT_ALL, &notify_value, pdTICKS_TO_MS(100)))
+        if (pdPASS == xTaskNotifyWait(0, event_mask, &notify_value, wait_ticks))
         {
+            if (notify_value & J1939_SVR_TASK_EVENT_TASK_START)
+            {
+                wait_ticks = pdTICKS_TO_MS(10);
+                event_mask = J1939_SVR_TASK_EVENT_ALL;
+                tbox_module_set_state(j1939_svr_module_id, TBOX_MODULE_STATE_START);
+            }
+
+            if (notify_value & J1939_SVR_TASK_EVENT_TASK_STOP)
+            {
+                wait_ticks = portMAX_DELAY;
+                event_mask = J1939_SVR_TASK_EVENT_TASK_START;
+                tbox_module_set_state(j1939_svr_module_id, TBOX_MODULE_STATE_STOP);
+            }
+
             if (notify_value & J1939_SVR_TASK_EVENT_CAN_ACTIVE)
             {
                 is_active = TRUE;
             }
-            else if (notify_value & J1939_SVR_TASK_EVENT_CAN_INACTIVE)
+
+            if (notify_value & J1939_SVR_TASK_EVENT_CAN_INACTIVE)
             {
                 is_active = FALSE;
-            }
-            else
-            {
             }
         }
 

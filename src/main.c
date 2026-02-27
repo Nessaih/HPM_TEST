@@ -5,6 +5,7 @@
 #include "driver.h"
 #include "version.h"
 #include "stimer.h"
+#include "test.h"
 
 VOID tbox_load_all_module(VOID)
 {

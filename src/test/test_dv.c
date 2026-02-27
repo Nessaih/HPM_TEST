@@ -180,7 +180,7 @@ static INT8 dv_diag_gns_ant(CHAR *des, INT32 deslen)
     return -1;
 }
 
-static INT8 dv_diag_ble_sta(CHAR *des, INT32 deslen)
+static INT8 __attribute__((unused)) dv_diag_ble_sta(CHAR *des, INT32 deslen)
 {
 	return -1;
 #if 0
@@ -195,7 +195,7 @@ static INT8 dv_diag_ble_sta(CHAR *des, INT32 deslen)
 #endif
 }
 
-static INT8 dv_diag_ble_com(CHAR *des, INT32 deslen)
+static INT8 __attribute__((unused)) dv_diag_ble_com(CHAR *des, INT32 deslen)
 {	
 	return -1;
 #if 0
@@ -265,7 +265,6 @@ static INT8 dv_diag_norflash_wr(CHAR *des, INT32 deslen)
 
 static INT8 dv_diag_nandflash_wr(CHAR *des, INT32 deslen)
 {
-#if 1
 #define NAND_ERASE_SIZE 0x20000U
 #define NAND_WRBUF_SIZE 512U
 
@@ -345,10 +344,9 @@ next_nand_test:
         need_erase = true;
     }
     return status;
-#endif
 }
 
-static INT8 dv_diag_se_spi(CHAR *des, INT32 deslen)
+static INT8 __attribute__((unused)) dv_diag_se_spi(CHAR *des, INT32 deslen)
 {
 	return -1;
 #if 0
@@ -382,7 +380,7 @@ static INT8 dv_diag_rs485(CHAR *des, INT32 deslen)
 		return -1;
 	}
 
-	snprintf(des, deslen, "+rs485:%s", dv_diag_485_info.data);
+	snprintf(des, deslen, "+rs485:[flag: %d][len: %d][data: %s]", dv_diag_485_info.flag, dv_diag_485_info.len, dv_diag_485_info.data);
     return 0;
 }
 
@@ -417,13 +415,13 @@ static INT8 dv_diag_can1_com(CHAR *des, INT32 deslen)
 	INT32 count = -1;
 	count = can_if_get_recv_count(0);
 
-	if(count < 0)
+	if(count <= 0)
 	{
 		return -1;
 	}
 
 	snprintf(des, deslen, "+Can1:%d", count);
-    return -1;
+    return 0;
 }
 
 static INT8 dv_diag_can2_com(CHAR *des, INT32 deslen)
@@ -431,13 +429,13 @@ static INT8 dv_diag_can2_com(CHAR *des, INT32 deslen)
 	INT32 count = -1;
 	count = can_if_get_recv_count(1);
 
-	if(count < 0)
+	if(count <= 0)
 	{
 		return -1;
 	}
 
 	snprintf(des, deslen, "+Can2:%d", count);
-    return -1;
+    return 0;
 }
 
 static INT8 dv_diag_io_state(CHAR *des, INT32 deslen)
@@ -501,7 +499,7 @@ static INT8 dv_diag_io_state(CHAR *des, INT32 deslen)
     return 0;
 }
 
-static INT8 dv_diag_imu_sta(CHAR *des, INT32 deslen)
+static INT8 __attribute__((unused)) dv_diag_imu_sta(CHAR *des, INT32 deslen)
 {
 	return -1;
 #if 0
@@ -584,19 +582,19 @@ static DV_DIAG_INFO_T dv_diag_table[] = {
 	{"4gTemp",	10, "", DV_DIAG_OK, dv_diag_4g_tmp		},
 	{"GnsFix",	2,	"", DV_DIAG_OK, dv_diag_gns_fix		},
 	{"GnsAnt",	2,	"", DV_DIAG_OK, dv_diag_gns_ant		},
-	{"BleSta",	2,	"", DV_DIAG_OK, dv_diag_ble_sta		},
-	{"BleCom",	2,	"", DV_DIAG_OK, dv_diag_ble_com		},
+//	{"BleSta",	2,	"", DV_DIAG_OK, dv_diag_ble_sta		},
+//	{"BleCom",	2,	"", DV_DIAG_OK, dv_diag_ble_com		},
 	{"AdcLit",	2,	"", DV_DIAG_OK, dv_diag_adc_light	},
 	{"NorFlash",2,	"", DV_DIAG_OK, dv_diag_norflash_wr	},
 	{"NanFlash",2,	"", DV_DIAG_OK, dv_diag_nandflash_wr},
-	{"SeSpi",	2,	"", DV_DIAG_OK, dv_diag_se_spi		},
+//	{"SeSpi",	2,	"", DV_DIAG_OK, dv_diag_se_spi		},
 	{"Rs485",	2,	"", DV_DIAG_OK, dv_diag_rs485		},
 	{"Can1Sta",	2,	"", DV_DIAG_OK, dv_diag_can1_sta	},
 	{"Can2Sta",	2,	"", DV_DIAG_OK, dv_diag_can2_sta	},
 	{"Can1Com",	2,	"", DV_DIAG_OK, dv_diag_can1_com	},
 	{"Can2Com",	2,	"", DV_DIAG_OK, dv_diag_can2_com	},
 	{"IOChk",	2,	"", DV_DIAG_OK, dv_diag_io_state	},
-	{"IMUChk",	2,	"", DV_DIAG_OK, dv_diag_imu_sta		},
+//	{"IMUChk",	2,	"", DV_DIAG_OK, dv_diag_imu_sta		},
 	{"RtcTime",	2,	"", DV_DIAG_OK, dv_diag_rtc_time	},
 	{"MainVol",	10, "", DV_DIAG_OK, dv_diag_main_vol	},
 	{"BatVol",	10, "", DV_DIAG_OK, dv_diag_bat_vol		},
