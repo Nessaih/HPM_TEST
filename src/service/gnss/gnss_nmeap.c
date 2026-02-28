@@ -423,7 +423,7 @@ int nmeap_parse(nmeap_context_t *context,char ch)
             /* carriage return, no checksum, force a match */
             context->icks = 0;
             context->ccks = 0;
-            context->input_state = 6;
+            context->input_state = 7;
         }
         else {
             /* continue accumulating data */
