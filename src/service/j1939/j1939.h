@@ -102,6 +102,7 @@ typedef struct
     volatile uint8_t  priority;
     volatile uint8_t  dest_addr;
 	volatile uint8_t  sa_addr;
+	volatile uint8_t  channel;
     volatile int8_t   status;
 } J1939_TX_MESSAGE_T;
 
@@ -141,6 +142,7 @@ typedef struct
     volatile uint32_t identifier;
     volatile uint8_t  data[CAN_MAX_BYTE_COUNT];
     volatile uint8_t  byte_count;
+    volatile uint8_t  channel;
 } CAN_PACKET_T;
 
 typedef struct

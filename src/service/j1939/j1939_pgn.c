@@ -124,7 +124,7 @@ bool j1939_pgn_filter(uint32_t pgn)
     return false;
 }
 
-void j1939_pgn_req(uint32_t pgn, uint8_t dstaddr,uint8_t saaddr)
+void j1939_pgn_req(uint32_t channel, uint32_t pgn, uint8_t dstaddr,uint8_t saaddr)
 {
     J1939_TX_MESSAGE_T msg;
 

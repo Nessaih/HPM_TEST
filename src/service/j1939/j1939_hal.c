@@ -55,7 +55,7 @@ void j1939_hal_tx(const CAN_PACKET_T *pkt_ptr)
     else
         eid = 0;
 
-    msg.ins = 0;
+    msg.ins = pkt_ptr->channel;
     msg.id  = (uint32_t)(pkt_ptr->identifier | eid);
     msg.len = pkt_ptr->byte_count;
     memcpy((void *)msg.data, (void *)pkt_ptr->data, pkt_ptr->byte_count);

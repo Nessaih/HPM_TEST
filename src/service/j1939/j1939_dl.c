@@ -133,6 +133,7 @@ void j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr)
     CAN_PACKET_T pkt;
     uint32_t     temp_identifier;
 
+    pkt.channel     = msg_ptr->channel;
     pkt.byte_count  = (uint8_t)msg_ptr->byte_count;
     pkt.identifier  = msg_ptr->priority;
     temp_identifier = pkt.identifier << 18;
