@@ -35,4 +35,41 @@ ielftool --ihex --verbose %OUT% %HEX% >nul 2>&1
 :: generate additional output: elf
 cp %OUT% %ELF% >nul 2>&1
 
+:: generate update package
+call :MakeUpdatePackage
+
 @echo on
+
+goto :EOF
+
+:: ==============================================
+:: Function definitions
+:: ==============================================
+
+:MakeUpdatePackage
+:: Generate update package using Python script
+set "scpt=%~dp0MakeUpdatePack.py"
+
+:: Verify file existence
+if not exist "%scpt%" (
+    echo [WARNING] MakeUpdatePack.py script not found: %scpt%
+    goto :EOF
+)
+
+:: Check Python availability
+where python >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [WARNING] Python not available, skip update package generation
+    goto :EOF
+)
+
+:: Execute Python script
+echo Generating update package...
+python "%scpt%"
+if %errorlevel% equ 0 (
+    echo Update package generation completed successfully
+) else (
+    echo [WARNING] Update package generation failed
+)
+
+goto :EOF

@@ -27,7 +27,7 @@ static VOID  can_tx_exit(VOID);
 static VOID  can_tx_task(VOID *param);
 
 TBOX_MODULE_FUN(CAN_TX, can_tx_init, can_tx_stop, can_tx_start, NULL_PTR, can_tx_exit, NULL_PTR);
-TBOX_RUNLOOP_MODULE(CAN_TX, TBOX_TASK_PRIORITY_MID1 + 1, LOG_LEVEL_INFO, TBOX_TASK_MEDIUM_STACK_SIZE, can_tx_task);
+TBOX_RUNLOOP_MODULE(CAN_TX, TBOX_TASK_PRIORITY_MID2, LOG_LEVEL_INFO, TBOX_TASK_MEDIUM_STACK_SIZE, can_tx_task);
 TBOX_MODULE_LOADER(CAN_TX) {}
 
 #define CAN_MAX_CALLBACK        16	   /* 最大回调数量 */
