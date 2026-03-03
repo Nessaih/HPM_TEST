@@ -141,12 +141,12 @@ VOID tbox_message_reset(VOID)
 
 INT32 tbox_message_register(const TBOX_MSG_REGINFO *reginfo)
 {
-    if(NULL == reginfo || NULL == reginfo->name || 0 == strlen(reginfo->name))
+    if(NULL == reginfo || NULL == reginfo->name || 0U == strlen(reginfo->name))
     {
         MODULE_LOG_E(ICORE, "the reginfo is invalid");
         return (INT32)TBOX_E_INVALID_PARAM;
     }
-    if(reginfo->priority >= TBOX_MSG_PRIORITY_MAX || reginfo->type >= TBOX_MSG_TYPE_MAX)
+    if(reginfo->priority >= (UINT8)TBOX_MSG_PRIORITY_MAX || reginfo->type >= (UINT8)TBOX_MSG_TYPE_MAX)
     {
         MODULE_LOG_E(ICORE, "the priority or type is invalid");
         return (INT32)TBOX_E_INVALID_PARAM;
@@ -171,7 +171,7 @@ INT32 tbox_message_register(const TBOX_MSG_REGINFO *reginfo)
             MODULE_LOG_E(ICORE, "the hashmap is null");
             return (INT32)TBOX_E_NOINIT;
         }
-        if(TBOX_E_OK != tbox_hashmap_put(tbox_msg_hashmap, (VOID *)reginfo->name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_put(tbox_msg_hashmap, (VOID *)reginfo->name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "put the item to the hashmap failed");
@@ -186,7 +186,7 @@ INT32 tbox_message_register(const TBOX_MSG_REGINFO *reginfo)
 
 VOID tbox_message_unregister(const CHAR *name)
 {
-    if(NULL == name || 0 == strlen(name))
+    if(NULL == name || 0U == strlen(name))
     {
         MODULE_LOG_E(ICORE, "the name is invalid");
         return;
@@ -208,7 +208,7 @@ VOID tbox_message_unregister(const CHAR *name)
         }
         
         TBOX_MSG_MGR_ITEM item;
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "get the item from the hashmap failed");
@@ -230,7 +230,7 @@ VOID tbox_message_unregister(const CHAR *name)
 
 VOID tbox_message_enable(const CHAR *name, BOOL enable)
 {
-    if(NULL == name || 0 == strlen(name))
+    if(NULL == name || 0U == strlen(name))
     {
         return;
     }
@@ -250,7 +250,7 @@ VOID tbox_message_enable(const CHAR *name, BOOL enable)
         }
 
         TBOX_MSG_MGR_ITEM item;
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             return;
@@ -266,7 +266,7 @@ VOID tbox_message_enable(const CHAR *name, BOOL enable)
 BOOL tbox_message_is_enabled(const CHAR *name)
 {
     BOOL enable = FALSE;
-    if(NULL == name || 0 == strlen(name))
+    if(NULL == name || 0U == strlen(name))
     {
         return enable;
     }
@@ -286,7 +286,7 @@ BOOL tbox_message_is_enabled(const CHAR *name)
         }
 
         TBOX_MSG_MGR_ITEM item;
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             return enable;
@@ -300,7 +300,7 @@ BOOL tbox_message_is_enabled(const CHAR *name)
 
 INT32 tbox_message_add_handler(const CHAR *name, TBOX_ID dst_id, TBOX_MSG_HADNLER handler)
 {
-    if(NULL == name || 0 == strlen(name) || NULL == handler)
+    if(NULL == name || 0U == strlen(name) || NULL == handler)
     {
         MODULE_LOG_E(ICORE, "the name or handler is null");
         return (INT32)TBOX_E_INVALID_PARAM;
@@ -337,13 +337,13 @@ INT32 tbox_message_add_handler(const CHAR *name, TBOX_ID dst_id, TBOX_MSG_HADNLE
         }
 
         TBOX_MSG_MGR_ITEM item;
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "get the item from the hashmap failed, name:%s", name);
             return (INT32)TBOX_E_FAILED;
         }
-        if(TBOX_MSG_TYPE_MESSAGE != item.type)
+        if((UINT8)TBOX_MSG_TYPE_MESSAGE != item.type)
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "the type is not message, name:%s", name);
@@ -384,12 +384,16 @@ INT32 tbox_message_send(const CHAR *name,  TBOX_ID src_id, TBOX_ID dst_id, TBOX_
 {
     UINT16 size = 0U;
 
-    if(NULL == name || 0 == strlen(name))
+    if(NULL == name || 0U == strlen(name))
     {
         MODULE_LOG_E(ICORE, "the name or data is invalid");
         return (INT32)TBOX_E_INVALID_PARAM;
     }
-    if(NULL_PTR != data)
+    if(NULL_PTR == data)
+    {
+        size = 0U;
+    }
+    else
     {
         size = data->size;
         if(size > 0U && NULL_PTR == data->data)
@@ -398,6 +402,7 @@ INT32 tbox_message_send(const CHAR *name,  TBOX_ID src_id, TBOX_ID dst_id, TBOX_
             return (INT32)TBOX_E_INVALID_PARAM;            
         }
     }
+
     if(size > TBOX_MESSAGE_DATA_MAX_LEN)
     {
         MODULE_LOG_E(ICORE, "the data size is too large");
@@ -425,13 +430,13 @@ INT32 tbox_message_send(const CHAR *name,  TBOX_ID src_id, TBOX_ID dst_id, TBOX_
             MODULE_LOG_E(ICORE, "the hashmap is null");
             return (INT32)TBOX_E_NOINIT;
         }
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "get the item from the hashmap failed");
             return (INT32)TBOX_E_FAILED;
         }
-        if(TBOX_MSG_TYPE_MESSAGE != item.type)
+        if((UINT8)TBOX_MSG_TYPE_MESSAGE != item.type)
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_W(ICORE, "the type is not message");    
@@ -477,7 +482,7 @@ INT32 tbox_message_send(const CHAR *name,  TBOX_ID src_id, TBOX_ID dst_id, TBOX_
 
 INT32 tbox_message_subscribe(const CHAR *name, TBOX_ID dst_id, TBOX_MSG_HADNLER handler)
 {
-    if(NULL == name || 0 == strlen(name) || NULL == handler)
+    if(NULL == name || 0U == strlen(name) || NULL == handler)
     {
         MODULE_LOG_E(ICORE, "the name or handler is null");
         return (INT32)TBOX_E_INVALID_PARAM;
@@ -514,13 +519,13 @@ INT32 tbox_message_subscribe(const CHAR *name, TBOX_ID dst_id, TBOX_MSG_HADNLER 
         }
 
         TBOX_MSG_MGR_ITEM item;
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "get the item from the hashmap failed");
             return (INT32)TBOX_E_FAILED;
         }
-        if(TBOX_MSG_TYPE_TOPIC != item.type)
+        if((UINT8)TBOX_MSG_TYPE_TOPIC != item.type)
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "the type is not topic");
@@ -561,12 +566,16 @@ INT32 tbox_message_publish(const CHAR *name, TBOX_MSG_DATA *data)
 {
     UINT16 size = 0U;
 
-    if(NULL == name || 0 == strlen(name))
+    if(NULL == name || 0U == strlen(name))
     {
         MODULE_LOG_E(ICORE, "the name or data is invalid");
         return (INT32)TBOX_E_INVALID_PARAM;
     }
-    if(NULL_PTR != data)
+    if(NULL_PTR == data)
+    {
+        size = 0U;
+    }
+    else
     {
         size = data->size;
         if(size > 0U && NULL_PTR == data->data)
@@ -575,6 +584,7 @@ INT32 tbox_message_publish(const CHAR *name, TBOX_MSG_DATA *data)
             return (INT32)TBOX_E_INVALID_PARAM;            
         }
     }
+
     if(size > TBOX_MESSAGE_DATA_MAX_LEN)
     {
         MODULE_LOG_E(ICORE, "the data size is too large");
@@ -597,13 +607,13 @@ INT32 tbox_message_publish(const CHAR *name, TBOX_MSG_DATA *data)
             return (INT32)TBOX_E_NOINIT;
         }
 
-        if(TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
+        if((INT32)TBOX_E_OK != tbox_hashmap_get(tbox_msg_hashmap, (VOID *)name, &item))
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "get the item from the hashmap failed");
             return (INT32)TBOX_E_FAILED;
         }
-        if(TBOX_MSG_TYPE_TOPIC != item.type)
+        if((UINT8)TBOX_MSG_TYPE_TOPIC != item.type)
         {
             xSemaphoreGive(tbox_msg_mutex);
             MODULE_LOG_E(ICORE, "the type is not topic"); 

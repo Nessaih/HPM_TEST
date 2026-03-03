@@ -3,6 +3,10 @@
 
 INT32 fota_com_init(UINT8 seq);
 
+VOID fota_com_wake(VOID);
+
+VOID fota_com_sleep(VOID);
+
 VOID  fota_com_timeout_proc(VOID);
 
 VOID fota_com_info_dump(VOID);

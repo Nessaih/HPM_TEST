@@ -17,10 +17,10 @@
 #define TBOX_SUPERVISE_ABNORMAL_UNHANDLED (0U)
 #define TBOX_SUPERVISE_ABNORMAL_HANDLED   (1U)
 
-#define TBOX_SUPERVISE_EVENT_START_BIT      (1 << 0)
-#define TBOX_SUPERVISE_EVENT_STOP_BIT       (1 << 1)
-#define TBOX_SUPERVISE_EVENT_REPORT_BIT     (1 << 2)
-#define TBOX_SUPERVISE_EVENT_EXIT_BIT       (1 << 3)
+#define TBOX_SUPERVISE_EVENT_START_BIT      (1U << 0U)
+#define TBOX_SUPERVISE_EVENT_STOP_BIT       (1U << 1U)
+#define TBOX_SUPERVISE_EVENT_REPORT_BIT     (1U << 2U)
+#define TBOX_SUPERVISE_EVENT_EXIT_BIT       (1U << 3U)
 #define TBOX_SUPERVISE_EVENT_ALL_BITS       (TBOX_SUPERVISE_EVENT_START_BIT |\
                                              TBOX_SUPERVISE_EVENT_STOP_BIT |\
                                              TBOX_SUPERVISE_EVENT_REPORT_BIT |\
@@ -85,7 +85,7 @@ static UINT8 tbox_supervise_handle_memory_overflow(TBOX_MODULE_ABNORMAL_TYPE typ
 
         TBOX_MSG_DATA data;
         data.data = (UINT8 *)memory_info;
-        data.size = sizeof(TBOX_CORE_MEMORY_ABNORMAL_INFO);
+        data.size = (UINT16)sizeof(TBOX_CORE_MEMORY_ABNORMAL_INFO);
         tbox_message_publish(TBOX_CORE_MEMORY_ABNORMAL_NOTIFY, &data);
     }
     
@@ -109,7 +109,7 @@ static UINT8 tbox_supervise_handle_memory_underflow(TBOX_MODULE_ABNORMAL_TYPE ty
 
         TBOX_MSG_DATA data;
         data.data = (UINT8 *)memory_info;
-        data.size = sizeof(TBOX_CORE_MEMORY_ABNORMAL_INFO);
+        data.size = (UINT16)sizeof(TBOX_CORE_MEMORY_ABNORMAL_INFO);
         tbox_message_publish(TBOX_CORE_MEMORY_ABNORMAL_NOTIFY, &data);
     }
     
@@ -120,22 +120,20 @@ static UINT8 tbox_supervise_handle_task_blocked(TBOX_MODULE_ABNORMAL_TYPE type,
                                                 TBOX_CORE_TASK_ABNORMAL_INFO *task_info, 
                                                 TBOX_MODULE_ABNORMAL_PROCESS_TYPE process_type)
 {
-    if(MODULE_ABNORMAL_TASK_BLOCKED != type)
+    if(MODULE_ABNORMAL_TASK_BLOCKED != type || 
+       NULL_PTR == task_info)
     {
         return TBOX_SUPERVISE_ABNORMAL_UNHANDLED;
     }
     
-    if(NULL_PTR != task_info)
-    {
-        MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d, name:%s", 
-                     type, 
-                     task_info->task_id, task_info->module_id, task_info->msg_name);
+    MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d, name:%s", 
+                    type, 
+                    task_info->task_id, task_info->module_id, task_info->msg_name);
 
-        TBOX_MSG_DATA data;
-        data.data = (UINT8 *)task_info;
-        data.size = sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
-        tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
-    }
+    TBOX_MSG_DATA data;
+    data.data = (UINT8 *)task_info;
+    data.size = (UINT16)sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
+    tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
     
     switch(process_type)
     {
@@ -159,22 +157,20 @@ static UINT8 tbox_supervise_handle_task_deleted(TBOX_MODULE_ABNORMAL_TYPE type,
                                                 TBOX_CORE_TASK_ABNORMAL_INFO *task_info, 
                                                 TBOX_MODULE_ABNORMAL_PROCESS_TYPE process_type)
 {
-    if(MODULE_ABNORMAL_TASK_DELETED != type)
+    if(MODULE_ABNORMAL_TASK_DELETED != type || 
+      NULL_PTR == task_info)
     {
         return TBOX_SUPERVISE_ABNORMAL_UNHANDLED;
     }
 
-    if(NULL_PTR != task_info)
-    {
-        MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d", 
-                     type, 
-                     task_info->task_id, task_info->module_id);
+    MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d", 
+                    type, 
+                    task_info->task_id, task_info->module_id);
 
-        TBOX_MSG_DATA data;
-        data.data = (UINT8 *)task_info;
-        data.size = sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
-        tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
-    }
+    TBOX_MSG_DATA data;
+    data.data = (UINT8 *)task_info;
+    data.size = (UINT16)sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
+    tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
 
     switch(process_type)
     {
@@ -197,22 +193,20 @@ static UINT8 tbox_supervise_handle_task_stack_small(TBOX_MODULE_ABNORMAL_TYPE ty
                                                     TBOX_CORE_TASK_ABNORMAL_INFO *task_info, 
                                                     TBOX_MODULE_ABNORMAL_PROCESS_TYPE process_type)
 {
-    if(MODULE_ABNORMAL_TASKSTACK_SMALL != type)
+    if(MODULE_ABNORMAL_TASKSTACK_SMALL != type ||
+       NULL_PTR == task_info)
     {
         return TBOX_SUPERVISE_ABNORMAL_UNHANDLED;
     }
 
-    if(NULL_PTR != task_info)
-    {
-        MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d", 
-                     type, 
-                     task_info->task_id, task_info->module_id);
+    MODULE_LOG_F(ICORE, "report task abnormal type:%d, task:%d module:%d", 
+                    type, 
+                    task_info->task_id, task_info->module_id);
 
-        TBOX_MSG_DATA data;
-        data.data = (UINT8 *)task_info;
-        data.size = sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
-        tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
-    }
+    TBOX_MSG_DATA data;
+    data.data = (UINT8 *)task_info;
+    data.size = (UINT16)sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
+    tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
 
     switch(process_type)
     {
@@ -235,22 +229,20 @@ static UINT8 tbox_supervise_handle_stack_overflow(TBOX_MODULE_ABNORMAL_TYPE type
                                                   TBOX_CORE_TASK_ABNORMAL_INFO *task_info, 
                                                   TBOX_MODULE_ABNORMAL_PROCESS_TYPE process_type)
 {
-    if(MODULE_ABNORMAL_STACK_OVERFLOW != type)
+    if(MODULE_ABNORMAL_STACK_OVERFLOW != type || 
+      NULL_PTR == task_info)
     {
         return TBOX_SUPERVISE_ABNORMAL_UNHANDLED;
     }
 
-    if(NULL_PTR != task_info)
-    {
-        MODULE_LOG_I(ICORE, "report task abnormal handle:%p", 
-                     type, 
-                     task_info->task_handle);
+    MODULE_LOG_I(ICORE, "report task abnormal handle:%p", 
+                    type, 
+                    task_info->task_handle);
 
-        TBOX_MSG_DATA data;
-        data.data = (UINT8 *)task_info;
-        data.size = sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
-        tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
-    }
+    TBOX_MSG_DATA data;
+    data.data = (UINT8 *)task_info;
+    data.size = (UINT16)sizeof(TBOX_CORE_TASK_ABNORMAL_INFO);
+    tbox_message_publish(TBOX_CORE_TASK_ABNORMAL_NOTIFY, &data);
 
     TBOX_ID task_id = tbox_task_find_by_handle(task_info->task_handle);
     switch(process_type)

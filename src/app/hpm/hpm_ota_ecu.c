@@ -1,6 +1,6 @@
 #include "tbox_common.h"
 
-INT32 hpm_ota_ecu_status(VOID)
+BOOL hpm_ota_ecu_upgrading(VOID)
 {
 	return 0;
 }

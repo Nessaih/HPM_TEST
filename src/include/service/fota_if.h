@@ -33,4 +33,6 @@ typedef struct
 
 INT32 fota_do_upgrade(UINT8 *url, UINT16 url_len, INT32 id, UINT16 seq);
 
+INT32 fota_do_upgrade_with_info(UINT8 *url, UINT16 url_len, INT32 id, UINT16 seq, CHAR *ver, INT32 file_sz);
+
 #endif

@@ -111,12 +111,14 @@ static VOID fota_stop(VOID)
 {
 	tbox_module_set_state(fota_module_id, TBOX_MODULE_STATE_STOP);
 	fota_timer_stop();
+	fota_com_sleep();
 }
 
 static VOID  fota_start(VOID)
 {
 	tbox_module_set_state(fota_module_id, TBOX_MODULE_STATE_START);
 	fota_timer_start();
+	fota_com_wake();
 }
 
 static VOID  fota_exit(VOID)

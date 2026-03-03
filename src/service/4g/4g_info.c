@@ -6,6 +6,7 @@
 #include "4g_sim.h"
 #include "4g_sms.h"
 #include "4g_info.h"
+#include "4g_ftp.h"
 #include "4g_sequence_mgr.h"
 #include "4g_if.h"
 
@@ -39,13 +40,20 @@ void info_4g_doquery(void)
     info_4g_period = 0;
     info_4g_state = INFO_4G_IDLE;
 
+    /*FTP下载中，不查询4G信息*/
+    if(TRUE == ftp_4g_isdownloading())
+    {
+        MODULE_LOG_I(TBOX4G, "ftp downloading, not query 4G info");
+        return;
+    }
+
     info_4g_query_seq.state   = SEQ_4G_IDLE;
     info_4g_query_seq.timeout = (uint32)INFO_4G_SEQ_TIMEOUT/(uint32)PERIODIC_UNIT_4G;
     if(0 != seqmgr_4g_doseq(SEQ_4G_PRI_LOW, &info_4g_query_seq, SEQ_4G_CONFLICT_NOCONFICT))
     {
         return;
     }
-
+    
     info_4g_state = INFO_4G_TESTALIVE;
     info_4g_hanlde_query();
 }
@@ -491,11 +499,20 @@ static uint8 info_4g_queryseq_resp(uint8 cmd, uint8 result)
 
     MODULE_LOG_I(TBOX4G, "query sequence resp info_4g_state:%d cmd:%d result:%d", info_4g_state,
                    cmd, result);
-
+    
     if(SEQMGR_4G_CMD_EXE_TIMEOUT == result ||
        SEQMGR_4G_CMD_EXE_ABORT == result)
     {
         info_4g_handle_resptimeout();
+        return SEQ_4G_CMD_FINISH;
+    }
+
+    /*FTP下载中，终止查询4G信息*/
+    if(TRUE == ftp_4g_isdownloading())
+    {
+        info_4g_state = INFO_4G_FINISH;
+        info_4g_period = 0U;
+        MODULE_LOG_I(TBOX4G, "ftp downloading, stop query 4G info");
         return SEQ_4G_CMD_FINISH;
     }
 

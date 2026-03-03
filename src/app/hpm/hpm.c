@@ -2,6 +2,7 @@
 #include "tbox_core.h"
 #include "stimer.h"
 #include "tbox_cfg_if.h"
+#include "fota_if.h"
 
 #include "hpm_content.h"
 #include "hpm.h"
@@ -15,6 +16,7 @@
 #include "hpm_session.h"
 #include "hpm_param_fetch.h"
 #include "hpm_dev.h"
+#include "hpm_ota_tbox.h"
 #include "hpm_shell.h"
 
 static INT32 hpm_init(UINT8 seq);
@@ -25,7 +27,7 @@ static BOOL hpm_can_be_stop(VOID);
 
 // 模块定义
 TBOX_MODULE_FUN(HPM, hpm_init, hpm_stop, hpm_start, NULL_PTR, hpm_exit, hpm_can_be_stop);
-TBOX_MODULE(HPM, TBOX_TASK_PRIORITY_LOW1, LOG_LEVEL_ERROR, TBOX_TASK_MEDIUM_STACK_SIZE, FALSE, FALSE);
+TBOX_MODULE(HPM, TBOX_TASK_PRIORITY_LOW1, LOG_LEVEL_ERROR, TBOX_TASK_LARGE_STACK_SIZE, FALSE, FALSE);
 TBOX_MESSSAGE(HPM_APP_TIMEOUT_EVENT, TBOX_MSG_PRIORITY_NORMAL, TBOX_MSG_TYPE_MESSAGE);
 TBOX_MODULE_LOADER(HPM)
 {
@@ -45,11 +47,17 @@ static VOID hpm_handle_message_event(const CHAR *name, TBOX_MSG_DATA *data)
 		hpm_session_process();
 		hpm_dev_process();
 		hpm_cfg_process();
+		hpm_control_process();
 	}
 	else if (0 == strncmp(name, TBOX_CFG_EVENT_VALUE_CHANGE, strlen(TBOX_CFG_EVENT_VALUE_CHANGE)))
 	{
 		MODULE_LOG_I(HPM, "tbox cfg value change\r\n");
 		hpm_socket_handle_msg(data);
+	}
+	else if(0 == strncmp(name, FOTA_EVENT_STATE_CHANGE, strlen(FOTA_EVENT_STATE_CHANGE)))
+	{
+		MODULE_LOG_I(HPM, "fota state value change\r\n");
+		hpm_ota_tbox_handle_msg(data);
 	}
 }
 
@@ -100,6 +108,7 @@ static INT32 hpm_init(UINT8 seq)
 		GET_TBOX_MODULE_ID(HPM, hpm_module_id);
 		ret = tbox_message_add_handler(HPM_APP_TIMER_EVENT, hpm_module_id, hpm_handle_message_event);
 		ret = tbox_message_subscribe(TBOX_CFG_EVENT_VALUE_CHANGE, hpm_module_id, hpm_handle_message_event);
+		ret = tbox_message_subscribe(FOTA_EVENT_STATE_CHANGE, hpm_module_id, hpm_handle_message_event);
 		hpm_mutex = xSemaphoreCreateMutex();
 		if (NULL == hpm_mutex)
 		{
@@ -132,6 +141,7 @@ static INT32 hpm_init(UINT8 seq)
 	hpm_can_init(seq);
 	hpm_param_init(seq);
 	hpm_shell_init(seq);
+	hpm_ota_tbox_init(seq);
 	MODULE_LOG_D(HPM, "init seq:%d, ret:%d", seq, ret);
 	return ret;
 }
@@ -142,6 +152,7 @@ static VOID hpm_stop(VOID)
 	hpm_session_sleep();
 	hpm_dev_sleep();
 	hpm_timer_stop();
+	hpm_ota_tbox_sleep();
 	tbox_module_set_state(hpm_module_id, TBOX_MODULE_STATE_STOP);
 }
 
@@ -151,6 +162,7 @@ static VOID hpm_start(VOID)
 	hpm_session_wake();
 	hpm_dev_wakeup();
 	hpm_timer_start();
+	hpm_ota_tbox_wake();
 	tbox_module_set_state(hpm_module_id, TBOX_MODULE_STATE_START);
 }
 
@@ -164,3 +176,9 @@ static BOOL hpm_can_be_stop(VOID)
 	// True: 允许休眠, False: 不允许休眠
 	return hpm_mgr_allow_sleep();
 }
+
+INT32 hpm_get_moudle_id(VOID)
+{
+	return hpm_module_id;
+}
+

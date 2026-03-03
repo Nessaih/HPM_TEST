@@ -12,16 +12,16 @@
 #include "tbox_log_inner.h"
 #include "tbox_task.h"
 
-#define TBOX_MSG_MAGICNUM              (0x544F)
+#define TBOX_MSG_MAGICNUM              (0x544FU)
 #define TBOX_TASK_MAX_NUM              (TBOX_TASK_LARGER_SIZE_NUM+TBOX_TASK_MEDIUM_SIZE_NUM+TBOX_TASK_SMALL_SIZE_NUM)
 #define TBOX_TASK_ABNORMA_BLOCK_NUM    (3U)
 #define TBOX_TASK_BLOCK_COUNT          (5U)
-#define TBOX_TASK_EVENT_START_BIT      (1 << 0)
-#define TBOX_TASK_EVENT_QUIT_BIT       (1 << 1)
-#define TBOX_TASK_EVENT_STOP_BIT       (1 << 2)
-#define TBOX_TASK_EVENT_MSG_BIT        (1 << 3)
+#define TBOX_TASK_EVENT_START_BIT      (1U << 0U)
+#define TBOX_TASK_EVENT_QUIT_BIT       (1U << 1U)
+#define TBOX_TASK_EVENT_STOP_BIT       (1U << 2U)
+#define TBOX_TASK_EVENT_MSG_BIT        (1U << 3U)
 #define TBOX_TASK_EVENT_ALL_BITS       (TBOX_TASK_EVENT_START_BIT | TBOX_TASK_EVENT_QUIT_BIT | TBOX_TASK_EVENT_STOP_BIT |TBOX_TASK_EVENT_MSG_BIT)
-#define TBOX_TASK_START_RUNLOOP_BIT    (1 << 0)
+#define TBOX_TASK_START_RUNLOOP_BIT    (1U << 0U)
 
 typedef struct tag_tbox_block_info
 {
@@ -562,12 +562,8 @@ static VOID tbox_task_process(VOID *param)
     if(NULL_PTR == task_info || 
        NULL_PTR == task_info->mutex)
     {
-        xSemaphoreTake(task_info->mutex, portMAX_DELAY);
-        task_info->handle = NULL_PTR;
-        task_info->state = TBOX_TASK_ABNORMAL;
-        xSemaphoreGive(task_info->mutex);
         vTaskDelete(NULL_PTR);
-        MODULE_LOG_F(ICORE, "the task info is invalid, task_id=%d", task_info->task_id);
+        MODULE_LOG_F(ICORE, "the task[%s] info is invalid", pcTaskGetName(NULL_PTR));
         return;
     }
 
@@ -691,11 +687,8 @@ static VOID tbox_task_process(VOID *param)
     MODULE_LOG_E(ICORE, "the task is quit, task_id=%d, state=%d", 
                                  task_info->task_id, 
                                  task_info->state);
-
-    if(NULL_PTR != msg_data_buf)
-    {
-        tbox_memory_free(TBOX_MEMORY_TYPE_CORE, msg_data_buf);
-    }
+                                 
+    tbox_memory_free(TBOX_MEMORY_TYPE_CORE, msg_data_buf);
 
     xSemaphoreTake(task_info->mutex, portMAX_DELAY);
     task_info->handle = NULL_PTR;
@@ -1036,7 +1029,9 @@ TBOX_ID tbox_task_create_runloop(TBOX_ID module_id,
         }
     }
     xSemaphoreGive(tbox_task_mgr.mutex);
-    if(NULL_PTR == runloop_info)
+   
+    if(NULL_PTR == runloop_info || 
+       task_id < 0)
     {
         MODULE_LOG_E(ICORE, "no resource for create runloop task");
         return task_id;        
@@ -1061,24 +1056,24 @@ TBOX_ID tbox_task_create_runloop(TBOX_ID module_id,
         runloop_info->priority = pripority;
         runloop_info->stack_size = stack_size;
         runloop_info->runloop_func = runloop;
-        runloop_info->task_id = task_id+TBOX_TASK_MAX_NUM;
+        runloop_info->task_id = (TBOX_ID)(task_id+(INT32)TBOX_TASK_MAX_NUM);
         runloop_info->state = TBOX_TASK_RUN_IDLE;
     }
     xSemaphoreGive(tbox_task_mgr.mutex);
 
-    return (task_id+TBOX_TASK_MAX_NUM);   
+    return (TBOX_ID)(task_id+(INT32)TBOX_TASK_MAX_NUM);   
 }
 
 MODULE_HANDLE tbox_task_get_handle(TBOX_ID task_id)
 {
     MODULE_HANDLE handle = NULL_PTR;
     
-    if(task_id < 0 || task_id >= (TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM))
+    if(task_id < 0 || (UINT8)task_id >= (TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM))
     {
         return handle;
     }
 
-    if(task_id < TBOX_TASK_MAX_NUM)
+    if((UINT8)task_id < TBOX_TASK_MAX_NUM)
     {
         xSemaphoreTake(tbox_task_infos[task_id].mutex, portMAX_DELAY);
         {
@@ -1217,7 +1212,7 @@ TBOX_ID tbox_task_attach(TBOX_ID module_id, UINT8 pripority, UINT32 stack_size)
 
 INT32 tbox_task_detach(TBOX_ID task_id)
 {
-    if(task_id < 0 || task_id >= TBOX_TASK_MAX_NUM)
+    if(task_id < 0 || (UINT8)task_id >= TBOX_TASK_MAX_NUM)
     {
         return (INT32)TBOX_E_INVALID_PARAM;
     }
@@ -1241,11 +1236,11 @@ INT32 tbox_task_get_priority(TBOX_ID task_id)
 {
     UINT8 priority;
 
-    if(task_id < 0 || task_id >= (TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM))
+    if(task_id < 0 || (UINT8)task_id >= (TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM))
     {
         return (INT32)TBOX_E_INVALID_PARAM;
     }
-    if(task_id < TBOX_TASK_MAX_NUM)
+    if((UINT8)task_id < TBOX_TASK_MAX_NUM)
     {
         if(NULL_PTR == tbox_task_infos[task_id].mutex)
         {
@@ -1265,7 +1260,7 @@ INT32 tbox_task_get_priority(TBOX_ID task_id)
         xSemaphoreGive(tbox_task_mgr.mutex);
     }
 
-    return priority;   
+    return (INT32)priority;   
 }
 
 INT32 tbox_task_add_msg(TBOX_ID task_id, 
@@ -1275,7 +1270,7 @@ INT32 tbox_task_add_msg(TBOX_ID task_id,
                         UINT8 *msg_data)
 {
     if(task_id < 0 || 
-       task_id >= TBOX_TASK_MAX_NUM || 
+       (UINT8)task_id >= TBOX_TASK_MAX_NUM || 
        NULL_PTR == msg_name || 
        NULL_PTR == msg_handle)
     {
@@ -1392,12 +1387,12 @@ INT32 tbox_taskpool_add_msg(UINT32 stack_size,
 TBOX_TASK_STATE tbox_task_get_state(TBOX_ID task_id)
 {
     TBOX_TASK_STATE state = TBOX_TASK_STATE_INVALID;
-    if(task_id < 0 || task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
+    if(task_id < 0 || (UINT8)task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
     {
         return state;
     }
 
-    if(task_id < TBOX_TASK_MAX_NUM)
+    if((UINT8)task_id < TBOX_TASK_MAX_NUM)
     {
         if(NULL_PTR == tbox_task_infos[task_id].mutex)
         {
@@ -1424,15 +1419,15 @@ TBOX_TASK_STATE tbox_task_get_state(TBOX_ID task_id)
 
 VOID  tbox_reset_task(TBOX_ID task_id)
 {
-    if(task_id < 0 || task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
+    if(task_id < 0 || (UINT8)task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
     {
         return;
     }
     
     TaskHandle_t handle = NULL_PTR;
     TBOX_MSG_DATA data;
-    data.size = sizeof(TBOX_CORE_TASK_UPDATE_INFO);
-    if(task_id < TBOX_TASK_MAX_NUM)
+    data.size = (UINT16)sizeof(TBOX_CORE_TASK_UPDATE_INFO);
+    if((UINT8)task_id < TBOX_TASK_MAX_NUM)
     {
         if(NULL_PTR == tbox_task_infos[task_id].mutex)
         {
@@ -1508,6 +1503,7 @@ VOID  tbox_reset_task(TBOX_ID task_id)
     {
         UINT8 priority;
         UINT32 stack_size;
+        TBOX_ID module_id = TBOX_ID_INVALID;
         MODULE_RUNLOOP_FUN runloop_fun;
         xSemaphoreTake(tbox_task_mgr.mutex, portMAX_DELAY);
         {
@@ -1522,22 +1518,40 @@ VOID  tbox_reset_task(TBOX_ID task_id)
             priority = tbox_task_mgr.runloops[(UINT32)task_id-TBOX_TASK_MAX_NUM].priority;
             stack_size = tbox_task_mgr.runloops[(UINT32)task_id-TBOX_TASK_MAX_NUM].stack_size;
             runloop_fun = tbox_task_mgr.runloops[(UINT32)task_id-TBOX_TASK_MAX_NUM].runloop_func;
+            module_id = tbox_task_mgr.runloops[(UINT32)task_id-TBOX_TASK_MAX_NUM].module_id;
         }
         xSemaphoreGive(tbox_task_mgr.mutex);
 
         tbox_task_delete_task_by_handle(handle);
 
-        CHAR task_name[16];
-        snprintf(task_name, 16, "TBOX_RUNLOOP%d", task_id-TBOX_TASK_MAX_NUM);
-        if(pdPASS != xTaskCreate(runloop_fun, 
-                                task_name, 
-                                stack_size, 
-                                NULL_PTR, 
-                                priority, 
-                                &handle))
+        if(TBOX_ID_INVALID == module_id)
         {
-            MODULE_LOG_E(ICORE, "create task failed, task_id:%d name:%s", task_id, task_name);
-            handle = NULL_PTR;
+            CHAR task_name[16];
+            snprintf(task_name, 16, "TBOX_RUNLOOP%d", (UINT8)task_id-TBOX_TASK_MAX_NUM);
+            if(pdPASS != xTaskCreate(runloop_fun, 
+                                    task_name, 
+                                    stack_size, 
+                                    NULL_PTR, 
+                                    priority, 
+                                    &handle))
+            {
+                MODULE_LOG_E(ICORE, "create task failed, task_id:%d name:%s", task_id, task_name);
+                handle = NULL_PTR;
+            }
+        }
+        else
+        {
+            CHAR *task_name = tbox_module_get_name(module_id);
+            if(pdPASS != xTaskCreate(runloop_fun, 
+                                    task_name, 
+                                    stack_size, 
+                                    NULL_PTR, 
+                                    priority, 
+                                    &handle))
+            {
+                MODULE_LOG_E(ICORE, "create task failed, task_id:%d name:%s", task_id, task_name);
+                handle = NULL_PTR;
+            }            
         }
 
         TBOX_CORE_TASK_UPDATE_INFO updata_info;
@@ -1567,12 +1581,12 @@ VOID  tbox_reset_task(TBOX_ID task_id)
 
 VOID  tbox_forbid_task(TBOX_ID task_id)
 {
-    if(task_id < 0 || task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
+    if(task_id < 0 || (UINT8)task_id >= TBOX_TASK_MAX_NUM+TBOX_RUNLOOP_TASK_NUM)
     {
         return;
     }
 
-    if(task_id < TBOX_TASK_MAX_NUM)
+    if((UINT8)task_id < TBOX_TASK_MAX_NUM)
     {
         if(NULL_PTR == tbox_task_infos[task_id].mutex)
         {
@@ -1621,7 +1635,7 @@ VOID  tbox_forbid_task(TBOX_ID task_id)
 
 INT32 tbox_task_expend_stack(TBOX_ID task_id)
 {
-    if(task_id < 0 || task_id >= TBOX_TASK_MAX_NUM)
+    if(task_id < 0 || (UINT8)task_id >= TBOX_TASK_MAX_NUM)
     {
         return (INT32)TBOX_E_INVALID_PARAM;
     }
@@ -1631,19 +1645,20 @@ INT32 tbox_task_expend_stack(TBOX_ID task_id)
     }
 
     UINT32 stack_size;
-    if(task_id < TBOX_TASK_SMALL_SIZE_NUM && task_id >= 0)
+    if((UINT8)task_id < TBOX_TASK_SMALL_SIZE_NUM)
     {
-       stack_size = TBOX_TASK_MEDIUM_STACK_SIZE/sizeof(StackType_t);
+        stack_size = TBOX_TASK_MEDIUM_STACK_SIZE/sizeof(StackType_t);
     }
-    else if(task_id < (TBOX_TASK_SMALL_SIZE_NUM+TBOX_TASK_MEDIUM_SIZE_NUM) && 
-            task_id >= TBOX_TASK_SMALL_SIZE_NUM)
+    else if((UINT8)task_id < (TBOX_TASK_SMALL_SIZE_NUM+TBOX_TASK_MEDIUM_SIZE_NUM) && 
+            (UINT8)task_id >= TBOX_TASK_SMALL_SIZE_NUM)
     {
         stack_size = TBOX_TASK_LARGE_STACK_SIZE/sizeof(StackType_t);
     }
     else
     {
         return (INT32)TBOX_E_FAILED;
-    }
+    }  
+
     xSemaphoreTake(tbox_task_infos[task_id].mutex, portMAX_DELAY);
     {
         tbox_task_infos[task_id].stack_size = stack_size;

@@ -262,7 +262,7 @@ VOID tbox_module_show_allname(VOID)
             count = 0U;
             pos = show_buff;
             len = 128U;
-            memset(pos, 0U, len);
+            memset(pos, 0, len);
         }
     }
     if(count > 0U)
@@ -275,17 +275,17 @@ VOID tbox_module_show_allname(VOID)
 
 INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fun)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || 
-       module_id < 0 ||
+    if(module_id < 0 ||
+       (UINT32)module_id >= TBOX_MODULE_MAX_NUM || 
        runloop_fun == NULL_PTR)
     {
-        return TBOX_E_INVALID_PARAM;
+        return (INT32)TBOX_E_INVALID_PARAM;
     }
 
     if(FALSE == tbox_module_is_init)
     {
         MODULE_LOG_E(ICORE, "module is not init");       
-        return TBOX_E_NOINIT;
+        return (INT32)TBOX_E_NOINIT;
     }
 
     UBaseType_t critical;
@@ -299,7 +299,7 @@ INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fu
         {
             tbox_module_exit_critical(critical);
             MODULE_LOG_E(ICORE, "module[%d] not register or has started", module_id);
-            return TBOX_E_NOCREATE;
+            return (INT32)TBOX_E_NOCREATE;
         }
         priority = tbox_modules[module_id].module_info.priority;
         stack_size = tbox_modules[module_id].module_info.stack_size;
@@ -311,7 +311,7 @@ INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fu
     if(TBOX_ID_INVALID == task_id)
     {
         MODULE_LOG_E(ICORE, "create runloop task failed");
-        return TBOX_E_FAILED_CREATE;
+        return (INT32)TBOX_E_FAILED_CREATE;
     }
     critical = tbox_module_enter_critical();
     {
@@ -319,7 +319,7 @@ INT32 tbox_module_start_runloop(TBOX_ID module_id, MODULE_RUNLOOP_FUN runloop_fu
     }
     tbox_module_exit_critical(critical);
 
-    return TBOX_E_OK;
+    return (INT32)TBOX_E_OK;
 }
 
 VOID tbox_module_get_config(TBOX_ID module_id, TBOX_MODULE_INFO *config)
@@ -329,7 +329,7 @@ VOID tbox_module_get_config(TBOX_ID module_id, TBOX_MODULE_INFO *config)
         return;
     }
 
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return;
     }
@@ -387,7 +387,7 @@ VOID tbox_module_start(VOID)
 
 VOID tbox_module_start_specific(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         MODULE_LOG_E(ICORE, "module id:%d is invalid", (INT32)module_id);
         return;
@@ -430,7 +430,7 @@ VOID tbox_module_stop(VOID)
     
     UBaseType_t critical;
     MODULE_STOP_FUN stop_fun;
-    for(INT32 i = TBOX_MODULE_MAX_NUM-1; i >= 0; i--)
+    for(INT32 i = (INT32)(TBOX_MODULE_MAX_NUM-1U); i >= 0; i--)
     {
         critical = tbox_module_enter_critical();
         {
@@ -465,7 +465,7 @@ VOID tbox_module_stop(VOID)
 
 VOID tbox_module_stop_specific(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         MODULE_LOG_E(ICORE, "module id:%d is invalid", (INT32)module_id);
         return;
@@ -503,7 +503,7 @@ VOID tbox_module_stop_specific(TBOX_ID module_id)
 
 INT32 tbox_module_enable(TBOX_ID module_id, BOOL enable)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return (INT32)TBOX_E_INVALID_PARAM;
     }
@@ -575,7 +575,7 @@ INT32 tbox_module_enable(TBOX_ID module_id, BOOL enable)
 
 BOOL  tbox_module_is_enabled(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return FALSE;
     }
@@ -605,7 +605,7 @@ BOOL  tbox_module_is_enabled(TBOX_ID module_id)
 
 CHAR *tbox_module_get_name(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return "UNKNOWN";
     }
@@ -635,7 +635,7 @@ CHAR *tbox_module_get_name(TBOX_ID module_id)
 
 UINT8 tbox_module_get_log_level(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return 0xFFU;
     }
@@ -665,7 +665,7 @@ UINT8 tbox_module_get_log_level(TBOX_ID module_id)
 
 VOID  tbox_module_set_log_level(TBOX_ID module_id, UINT8 log_level)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return;
     }
@@ -725,7 +725,7 @@ INT32  tbox_module_set_log_level_byname(CHAR *name, UINT8 log_level)
 
 BOOL tbox_module_is_interface(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return TRUE;
     }
@@ -755,7 +755,7 @@ BOOL tbox_module_is_interface(TBOX_ID module_id)
 
 BOOL tbox_module_is_critical(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return FALSE;
     }
@@ -785,7 +785,7 @@ BOOL tbox_module_is_critical(TBOX_ID module_id)
 
 MODULE_HANDLE tbox_module_get_handle(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return NULL_PTR;
     }
@@ -820,7 +820,7 @@ INT32 tbox_module_send_message(TBOX_ID module_id,
                                UINT16 msg_len,
                                UINT8 *msg_data)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         MODULE_LOG_E(ICORE, "invalid param");
         return (INT32)TBOX_E_INVALID_PARAM;
@@ -871,7 +871,7 @@ INT32 tbox_module_send_message(TBOX_ID module_id,
 
 VOID tbox_module_set_state(TBOX_ID module_id, TBOX_MODULE_STATE state)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if( module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return;
     }
@@ -894,7 +894,7 @@ VOID tbox_module_set_state(TBOX_ID module_id, TBOX_MODULE_STATE state)
 
 TBOX_MODULE_STATE tbox_module_get_state(TBOX_ID module_id)
 {
-    if(module_id >= TBOX_MODULE_MAX_NUM || module_id < 0)
+    if(module_id < 0 || (UINT32)module_id >= TBOX_MODULE_MAX_NUM)
     {
         return TBOX_MODULE_STATE_INVALID;
     }

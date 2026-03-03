@@ -26,8 +26,8 @@ static const bat_curve_t bat_curve[7] = {
 
 int32_t analog_pwr_vtg(void)
 {
-    const float k = 8.5414789598145f;
-    const float b = 977.574513f;
+    const float k = 8.89134f;
+    const float b = 818.113f;
     float       vtg;
 
     vtg = (float)drv_adc_get(DRV_ADC_PWR_VTG);

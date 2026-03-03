@@ -31,7 +31,7 @@ INT32 tbox_core_init(VOID)
     ret = TBOX_COND_CALL(ret, (INT32)TBOX_E_OK, tbox_message_init());
     ret = TBOX_COND_CALL(ret, (INT32)TBOX_E_OK, tbox_module_init());
     ret = TBOX_COND_CALL(ret, (INT32)TBOX_E_OK, tbox_supervise_init());
-    if(TBOX_E_OK == ret)
+    if((INT32)TBOX_E_OK == ret)
     {
         LOAD_TBOX_MODULE(ICORE);
     }
@@ -56,12 +56,12 @@ VOID tbox_core_deinit(VOID)
 INT32 tbox_core_start(BOOL start_module)
 {
     INT32 ret = (INT32)TBOX_E_OK;
-    tbox_log_start();
+    (VOID)tbox_log_start();
     ret = TBOX_COND_CALL(ret, (INT32)TBOX_E_OK, tbox_task_start());   
     ret = TBOX_COND_CALL(ret, (INT32)TBOX_E_OK, tbox_supervise_start());
-    if((INT32)TBOX_E_OK == ret && 
-        FALSE == tbox_allmodule_istarted() &&
-        TRUE == start_module)
+    if(FALSE == tbox_allmodule_istarted()&&
+      (INT32)TBOX_E_OK == ret && 
+      TRUE == start_module)
     {
       tbox_module_start();
     }
@@ -75,12 +75,12 @@ INT32 tbox_core_start(BOOL start_module)
 
 VOID tbox_core_stop(BOOL stop_module)
 {
-    if(TRUE == stop_module && 
-       FALSE == tbox_allmodule_isstoped())
+    if(FALSE == tbox_allmodule_isstoped() &&
+       TRUE == stop_module)
     {
         tbox_module_stop();
     }
-    tbox_task_stop();
+    (VOID)tbox_task_stop();
     tbox_supervise_stop();
     tbox_message_reset();
     tbox_log_stop();
@@ -100,7 +100,7 @@ VOID tbox_core_main(TBOX_CORE_LOAD_FUN load_module_fun)
         return;
     }
     
-    tbox_log_start();
+    (VOID)tbox_log_start();
 
     if(NULL_PTR != load_module_fun)
     {
@@ -128,5 +128,5 @@ VOID tbox_core_main(TBOX_CORE_LOAD_FUN load_module_fun)
 static INT32 tbox_core_module_init(UINT8 seq)
 {
     MODULE_LOG_D(ICORE, "core init seq:%d", seq);
-    return TBOX_E_OK;
+    return (INT32)TBOX_E_OK;
 }

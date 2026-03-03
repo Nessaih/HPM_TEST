@@ -14,6 +14,7 @@
 #include "macros.h"
 #include "program.h"
 #include "version.h"
+#include "tbox_pm_if.h"
 
 #ifndef __BOOTLOADER__
 
@@ -466,9 +467,7 @@ int32_t program_start(uint32_t addr, uint32_t size, uint32_t crc)
         return -4;
     }
 
-    OsIf_UDelay(1000);
-
-    NVIC_SystemReset();
+    tbox_pm_reboot(TBOX_PM_REBOOT_MCU);
 
     return 0;
 }

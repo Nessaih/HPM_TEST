@@ -11,15 +11,15 @@
 #include "cqueue.h"
 #include "tbox_log_inner.h"
 
-#define TBOX_LOG_MAGIC_NO             (0x5F4C)
+#define TBOX_LOG_MAGIC_NO             (0x5F4CU)
 #define TBOX_LOG_SEQ_NOINIT           (0U)
 #define TBOX_LOG_SEQ_STOP             (1U)
 #define TBOX_LOG_SEQ_START            (2U)
 #define TBOX_LOG_TEMP_BUFF_COUNT      (3U)
-#define TBOX_LOG_EVENT_START_BIT      (1 << 0)
-#define TBOX_LOG_EVENT_STOP_BIT       (1 << 1)
-#define TBOX_LOG_EVENT_OUTPUT_BIT     (1 << 2)
-#define TBOX_LOG_EVENT_EXIT_BIT       (1 << 3)
+#define TBOX_LOG_EVENT_START_BIT      (1U << 0U)
+#define TBOX_LOG_EVENT_STOP_BIT       (1U << 1U)
+#define TBOX_LOG_EVENT_OUTPUT_BIT     (1U << 2U)
+#define TBOX_LOG_EVENT_EXIT_BIT       (1U << 3U)
 #define TBOX_LOG_EVENT_ALL_BITS       (TBOX_LOG_EVENT_START_BIT | TBOX_LOG_EVENT_STOP_BIT | TBOX_LOG_EVENT_OUTPUT_BIT | TBOX_LOG_EVENT_EXIT_BIT)
 
 typedef struct tag_tbox_log_header
@@ -44,7 +44,7 @@ static const CHAR *level_str[] = {"DEBUG", "INFO", "WARN", "ERROR", "FATAL", "NO
 static inline UINT32 tbox_log_copydata_to_linebuffer(UINT16 cur_len, CHAR *dst, const CHAR *src)
 {
    const CHAR *src_old = src;
-   while (*src != 0) 
+   while (*src != (CHAR)0) 
    {
         if (cur_len++ < TBOX_LOG_LINEBUFF_SIZE)
         {
@@ -407,12 +407,12 @@ VOID tbox_log_print(const CHAR *format, ...)
 
     memset(temp_ptr, 0, TBOX_LOG_LINEBUFF_SIZE);
     va_start(args, format);
-    vsnprintf(temp_ptr, TBOX_LOG_LINEBUFF_SIZE-1, format, args);
+    vsnprintf(temp_ptr, TBOX_LOG_LINEBUFF_SIZE-1U, format, args);
     va_end(args);
 
     TBOX_LOG_HEADER header;
     header.magic = TBOX_LOG_MAGIC_NO;
-    header.size = strlen(temp_ptr);
+    header.size = (UINT16)strlen(temp_ptr);
     if(TRUE == direct_output)
     {
          tbox_log_raw_output(temp_ptr, header.size);
@@ -451,7 +451,7 @@ VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, c
     tbox_module_get_config(modlue_id, &config);
     if(NULL_PTR == config.name ||
        level >= LOG_LEVEL_NONE ||
-       level < config.log_level)
+       (UINT8)level < config.log_level)
     {
         return;
     }
@@ -493,16 +493,16 @@ VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, c
     TBOX_LOG_HEADER header;
     header.magic = TBOX_LOG_MAGIC_NO;
     memset(temp_ptr, 0, TBOX_LOG_LINEBUFF_SIZE);
-    snprintf(temp_ptr, TBOX_LOG_LINEBUFF_SIZE-1, "[%s %s:%d][%s]", config.name, fun, line, level_str[(UINT8)level]);
-    header.size = strlen(temp_ptr);
-    if(header.size < TBOX_LOG_LINEBUFF_SIZE-1)
+    snprintf(temp_ptr, TBOX_LOG_LINEBUFF_SIZE-1U, "[%s %s:%d][%s]", config.name, fun, line, level_str[(UINT8)level]);
+    header.size = (UINT16)strlen(temp_ptr);
+    if(header.size < TBOX_LOG_LINEBUFF_SIZE-1U)
     {
         va_start(args, fmt);
-        vsnprintf(temp_ptr+header.size, TBOX_LOG_LINEBUFF_SIZE-1-header.size, fmt, args);
+        vsnprintf(temp_ptr+header.size, (UINT32)(TBOX_LOG_LINEBUFF_SIZE-1U-header.size), fmt, args);
         va_end(args);
     }
-    header.size = strlen(temp_ptr);
-    if(header.size <= TBOX_LOG_LINEBUFF_SIZE-3)
+    header.size = (UINT16)strlen(temp_ptr);
+    if(header.size <= TBOX_LOG_LINEBUFF_SIZE-3U)
     {
         temp_ptr[header.size++] = '\r';
         temp_ptr[header.size++] = '\n';
@@ -543,7 +543,7 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
     TBOX_MODULE_INFO config = {.name = NULL_PTR, .log_level = LOG_LEVEL_NONE};
     tbox_module_get_config(modlue_id, &config);
     if(NULL_PTR == config.name ||
-       config.log_level >= LOG_LEVEL_WARN)
+       config.log_level >= (UINT8)LOG_LEVEL_WARN)
     {
         return;
     }
@@ -576,10 +576,10 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
     UINT8 *pos = (UINT8 *)data;
     snprintf(temp_ptr, TBOX_LOG_LINEBUFF_SIZE-1U,
              "\r\n[%s]dump info:%s, len %u\r\n", config.name, tag, len);
-    header.size = strlen(temp_ptr);
+    header.size = (UINT16)strlen(temp_ptr);
 
-    frame_num = (len/16) * 16;
-    remainder = (len%16);
+    frame_num = (len/16U) * 16U;
+    remainder = (len%16U);
     UINT16 i, j;
     for (i = 0; i < frame_num; i += 16U)
     {
@@ -611,7 +611,7 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
                 xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
             }
 		}
-		header.size += tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
+		header.size += (UINT16)tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
     }
 	if(0U != remainder)
 	{
@@ -647,7 +647,7 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
                 xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
             }
 		}
-		header.size += tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
+		header.size += (UINT16)tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
 	}
     if(header.size > 0U)
     {

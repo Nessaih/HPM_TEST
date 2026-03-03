@@ -16,12 +16,6 @@
 #define HPM_CTROL_RES_LEN	(512)
 #define HPM_CTROL_RES_POS	(5)
 
-typedef enum
-{
-	HPM_CTRL_RES_NG	= 0x00,
-	HPM_CTRL_RES_OK	= 0x01,
-}HPM_CONTROL_RESULT_E;
-
 typedef struct
 {
 	UINT8  time[6];
@@ -40,48 +34,52 @@ typedef struct
 	UINT16 body_len;
 }HPM_CONTROL_RES_T;
 
-static HPM_CTRL_FOTA_INFO_T hpm_ctrl_fota_info;
-
-VOID hpm_control_get_fota_info(HPM_CTRL_FOTA_INFO_T *fota_info)
-{
-	memcpy(fota_info, &hpm_ctrl_fota_info, sizeof(HPM_CTRL_FOTA_INFO_T));
-}
-
-VOID hpm_control_reset_fota_info(VOID)
-{
-	memcpy(&hpm_ctrl_fota_info, 0, sizeof(HPM_CTRL_FOTA_INFO_T));
-}
-
-static INT32 hpm_control_upgrade(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, UINT16 *out_len, HPM_CONTROL_INFO_T info)
+static INT32 hpm_control_upgrade(UINT8 *in_data, UINT16 in_len, UINT8 *out_data, UINT16 *out_len, HPM_CONTROL_INFO_T info)
 {
 	INT32  ret = 0;
 	UINT16 pos = 0;
-	//UINT8  url[128] = {0};
-	if(hpm_ota_tbox_status() || hpm_ota_ecu_status())	//tbox在升级||ecu在升级
+	static HPM_CTRL_FOTA_INFO_T fota_info;
+	
+	if(hpm_ota_tbox_upgrading() || hpm_ota_ecu_upgrading())	//tbox在升级||ecu在升级
 	{
 		return -1;
 	}
 
-	hpm_ctrl_fota_info.seq  = info.seq;
-	hpm_ctrl_fota_info.cmd  = info.cmd;
-	hpm_ctrl_fota_info.cmd_sub  = info.cmd_sub;
-	hpm_ctrl_fota_info.type = in_data[pos++];
-	snprintf((char *)(hpm_ctrl_fota_info.fota_url), sizeof(hpm_ctrl_fota_info.fota_url), "%.*s", 
-		(int)(sizeof(hpm_ctrl_fota_info.fota_url)-1), (char *)(in_data+pos));
-	pos += strlen((char *)(hpm_ctrl_fota_info.fota_url));
-	pos += 1;
-	snprintf((char *)(hpm_ctrl_fota_info.fota_ver), sizeof(hpm_ctrl_fota_info.fota_ver), "%.*s", 
-		(int)(sizeof(hpm_ctrl_fota_info.fota_ver)-1), (char *)(in_data+pos));
-	pos += strlen((char *)(hpm_ctrl_fota_info.fota_ver));
-	pos += 1;
+	memset(&fota_info, 0, sizeof(fota_info));
 
-	memcpy(hpm_ctrl_fota_info.fota_md5, in_data+pos, HPM_FOTA_MD5_MAX_LEN);
+	fota_info.seq  = info.seq;
+	fota_info.cmd  = info.cmd;
+	fota_info.cmd_sub  = info.cmd_sub;
+	fota_info.type = in_data[pos++];
 	
+	// 解析FTP URL（找到第一个0x00结束符）
+	UINT16 url_len = 0;
+	while (pos < in_len && in_data[pos] != 0x00) {
+		if (url_len < sizeof(fota_info.fota_url) - 1) {
+			fota_info.fota_url[url_len++] = in_data[pos];
+		}
+		pos++;
+	}
+	fota_info.fota_url[url_len] = '\0';
+	if (pos < in_len) pos++; // 跳过结束符（如果还有数据）
 	
-	switch (hpm_ctrl_fota_info.type)
+	// 解析版本号（找到下一个0x00结束符）
+	UINT16 ver_len = 0;
+	while (pos < in_len && in_data[pos] != 0x00) {
+		if (ver_len < sizeof(fota_info.fota_ver) - 1) {
+			fota_info.fota_ver[ver_len++] = in_data[pos];
+		}
+		pos++;
+	}
+	fota_info.fota_ver[ver_len] = '\0';
+	if (pos < in_len) pos++; // 跳过结束符（如果还有数据）
+
+	memcpy(fota_info.fota_md5, in_data+pos, HPM_FOTA_MD5_MAX_LEN);
+	
+	switch (fota_info.type)
 	{
 		case HPM_CTRL_FOTA_TBOX:
-			hpm_ota_tbox_handle();
+			ret = hpm_ota_tbox_handle(fota_info);
 			break;
 		case HPM_CTRL_FOTA_ECU:
 			//TODO: OTA ECU
@@ -94,7 +92,6 @@ static INT32 hpm_control_upgrade(UINT8 *in_data, UINT16 in_len,UINT8 *out_data, 
 	
 	return ret;
 }
-
 
 static VOID hpm_control_send_resp(UINT8 *res, UINT16 res_len)
 {
@@ -209,15 +206,11 @@ VOID hpm_control_cmd_handle(UINT16 cmd, UINT8 *data, UINT16 len)
 			}
 			break;
 		case HPM_CTRL_UPGRADE:
-			ctrl_res.need_res = TRUE;
+			ctrl_res.need_res = FALSE;
 			ret = hpm_control_upgrade(data+pos, ctrl_info.len, ctrl_res.data+HPM_CTROL_RES_POS, &ctrl_res.body_len, ctrl_info);
-			if(0 == ret)
+			if(0 != ret)
 			{	
-				ctrl_res.result = HPM_CTRL_RES_OK;
-			}
-			else
-			{
-				ctrl_res.result = HPM_CTRL_RES_NG;
+				MODULE_LOG_E(HPM, "hpm handle upgrade failed, ret: %d", ret);
 			}
 			break;
 		case HPM_CTRL_TRANSMIS:
@@ -240,4 +233,8 @@ VOID hpm_control_cmd_handle(UINT16 cmd, UINT8 *data, UINT16 len)
 	}
 }
 
+VOID hpm_control_process(VOID)
+{
+	hpm_ota_tbox_process();
+}
 

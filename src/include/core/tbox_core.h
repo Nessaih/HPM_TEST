@@ -48,27 +48,29 @@ extern "C" {
 #endif
 
 #define TBOX_MODULE_FUN(module, init, stop, start, enable, exit, canbe_stop)\
-    MODULE_INIT_FUN tbox_##module##_init = init;\
-    MODULE_STOP_FUN tbox_##module##_stop = stop;\
-    MODULE_START_FUN tbox_##module##_start = start;\
-    MODULE_ENABLE_FUN tbox_##module##_enable = enable;\
-    MODULE_EXIT_FUN tbox_##module##_exit = exit;\
-    MODULE_CANBE_STOP_FUN tbox_##module##_can_be_stop = canbe_stop;
+    static MODULE_INIT_FUN tbox_##module##_init = (init);\
+    static MODULE_STOP_FUN tbox_##module##_stop = (stop);\
+    static MODULE_START_FUN tbox_##module##_start = (start);\
+    static MODULE_ENABLE_FUN tbox_##module##_enable = (enable);\
+    static MODULE_EXIT_FUN tbox_##module##_exit = (exit);\
+    static MODULE_CANBE_STOP_FUN tbox_##module##_can_be_stop = (canbe_stop);
 
 #define TBOX_MODULE(module, pri, level, size, interface, critical)\
+    extern TBOX_ID tbox_##module##_id;\
     TBOX_ID tbox_##module##_id = TBOX_ID_INVALID;\
+    extern MODULE_HANDLE tbox_##module##_handle;\
     MODULE_HANDLE tbox_##module##_handle = NULL_PTR;\
-    VOID tbox_##module##_load_other(VOID);\
-    VOID tbox_##module##_load(VOID);\
+    static VOID tbox_##module##_load_other(VOID);\
+    extern VOID tbox_##module##_load(VOID);\
     VOID tbox_##module##_load(VOID)\
     {\
         TBOX_MODULE_INFO info = {\
             .name = #module,\
-            .priority = pri,\
-            .log_level = level,\
-            .stack_size = size,\
-            .is_interface = interface,\
-            .is_critical = critical,\
+            .priority = (pri),\
+            .log_level = (level),\
+            .stack_size = (size),\
+            .is_interface = (interface),\
+            .is_critical = (critical),\
             .is_runloop = FALSE,\
             .init_fun = tbox_##module##_init,\
             .stop_fun = tbox_##module##_stop,\
@@ -83,17 +85,19 @@ extern "C" {
     }
 
 #define TBOX_RUNLOOP_MODULE(module, pri, level, size, runloop)\
+    extern TBOX_ID tbox_##module##_id;\
     TBOX_ID tbox_##module##_id = TBOX_ID_INVALID;\
+    extern MODULE_HANDLE tbox_##module##_handle;\
     MODULE_HANDLE tbox_##module##_handle = NULL_PTR;\
-    VOID tbox_##module##_load_other(VOID);\
-    VOID tbox_##module##_load(VOID);\
+    static VOID tbox_##module##_load_other(VOID);\
+    extern VOID tbox_##module##_load(VOID);\
     VOID tbox_##module##_load(VOID)\
     {\
         TBOX_MODULE_INFO info = {\
             .name = #module,\
-            .priority = pri,\
-            .log_level = level,\
-            .stack_size = size,\
+            .priority = (pri),\
+            .log_level = (level),\
+            .stack_size = (size),\
             .is_interface = FALSE,\
             .is_critical = FALSE,\
             .is_runloop = TRUE,\
@@ -106,14 +110,14 @@ extern "C" {
         };\
         tbox_##module##_load_other();\
         tbox_##module##_id = tbox_module_register(&info);\
-        if(TBOX_E_OK == tbox_module_start_runloop(tbox_##module##_id, runloop))\
+        if(TBOX_E_OK == tbox_module_start_runloop(tbox_##module##_id, (runloop)))\
         {\
             tbox_##module##_handle = tbox_module_get_handle(tbox_##module##_id);\
         }\
     }
 
 #define TBOX_MODULE_LOADER(module)\
-    VOID tbox_##module##_load_other(VOID)
+    static VOID tbox_##module##_load_other(VOID)
 
 #define GET_TBOX_MODULE_ID(module, id) {extern TBOX_ID tbox_##module##_id; id = tbox_##module##_id;}
 
@@ -124,8 +128,8 @@ extern "C" {
      tbox_##module##_load();}
 
 #define TBOX_MESSSAGE(message, msg_pri, msg_type)\
-    VOID tbox_##message##_register(VOID);\
-    VOID tbox_##message##_register(VOID)\
+    extern VOID tbox_##message##_register(VOID);\
+    extern VOID tbox_##message##_register(VOID)\
     {\
         TBOX_MSG_REGINFO reginfo = {\
             .name = #message,\
@@ -133,7 +137,7 @@ extern "C" {
             .type = msg_type,\
             .enable = TRUE\
         };\
-        tbox_message_register(&reginfo);\
+        (VOID)tbox_message_register(&reginfo);\
     }\
 
 #define REGISTRY_TBOX_MESSAGE(message)\

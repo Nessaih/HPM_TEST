@@ -85,12 +85,6 @@ static BOOL hpm_mgr_allowed_start(VOID)
     }
     else
     {
-        /*fota 结果上报*/
-        if (TRUE == hpm_ota_tbox_upgrading())
-        {
-            allowed = TRUE;
-        }
-
         UINT32 wake_source = tbox_pm_io_get_wakesrc();
 
         /*RTC唤醒*/
@@ -138,11 +132,6 @@ static VOID hpm_mgr_in_running(VOID)
     else
     {
         hpm_mgr_acc_off_count++;
-    }
-
-    if (TRUE == hpm_ota_tbox_upgrading())
-    {
-        return;
     }
 
     MODULE_LOG_I(HPM, "acc off count %d", hpm_mgr_acc_off_count);

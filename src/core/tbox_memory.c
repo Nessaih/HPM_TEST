@@ -22,38 +22,28 @@ static UINT8 tbox_app_memory[TBOX_MEMORY_APP_SIZE];
 
 INT32 tbox_memory_init(VOID)
 {
-    MP_HANDLE mp = MP_INVALID_HANDLE;
-    
-    for(UINT8 i = 0; i < TBOX_MEMORY_TYPE_MAX; i++)
-    {
-        mps[i] = MP_INVALID_HANDLE;
-    }
-    
     #if defined(TBOX_MEMORY_CORE_SIZE)
-    mp = mp_create(tbox_core_memory, TBOX_MEMORY_CORE_SIZE);
-    if(MP_INVALID_HANDLE == mp)
+    mps[TBOX_MEMORY_TYPE_CORE] = mp_create(tbox_core_memory, TBOX_MEMORY_CORE_SIZE);
+    if(MP_INVALID_HANDLE == mps[TBOX_MEMORY_TYPE_CORE])
     {
         return (INT32)TBOX_E_FAILED_CREATE;
     }
-    mps[TBOX_MEMORY_TYPE_CORE] = mp;
     #endif
 
     #if defined(TBOX_MEMORY_SERVICE_SIZE)
-    mp = mp_create(tbox_service_memory, TBOX_MEMORY_SERVICE_SIZE);
-    if(MP_INVALID_HANDLE == mp)
+    mps[TBOX_MEMORY_TYPE_SERVICE] = mp_create(tbox_service_memory, TBOX_MEMORY_SERVICE_SIZE);
+    if(MP_INVALID_HANDLE == mps[TBOX_MEMORY_TYPE_SERVICE])
     {
         return (INT32)TBOX_E_FAILED_CREATE;
     }
-    mps[TBOX_MEMORY_TYPE_SERVICE] = mp;
     #endif
 
     #if defined(TBOX_MEMORY_APP_SIZE)
-    mp = mp_create(tbox_app_memory, TBOX_MEMORY_APP_SIZE);
-    if(MP_INVALID_HANDLE == mp)
+    mps[TBOX_MEMORY_TYPE_APP] = mp_create(tbox_app_memory, TBOX_MEMORY_APP_SIZE);
+    if(MP_INVALID_HANDLE == mps[TBOX_MEMORY_TYPE_APP])
     {
         return (INT32)TBOX_E_FAILED_CREATE;
     }
-    mps[TBOX_MEMORY_TYPE_APP] = mp;
     #endif
     
     return (INT32)TBOX_E_OK;

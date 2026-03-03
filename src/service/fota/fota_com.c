@@ -89,15 +89,13 @@ static UINT8 fota_com_ftp_callback(UINT8 notify_code, UINT8 *data, UINT16 len)
 
     if (IF_FTP_4G_NOTIFY_FINISH == notify_code)
     {
-		MODULE_LOG_I(FOTA , "download finish");
-		fota_context.reslut.rst = FOTA_RST_OK;
-		fota_context.reslut.err_code = FOTA_STA_DWL_OK;
-		fota_com_notify_result(&fota_context.reslut);
-		fota_context.state = FOTA_COM_CHECKSUM;    	
+		MODULE_LOG_I(FOTA , "download finish");		
+		fota_context.timeout = 0;
+		fota_context.state = FOTA_COM_DOWNLOAD_FINISH;    	
     }
     else if (IF_FTP_4G_NOTIFY_ERROR == notify_code)
     {
-        MODULE_LOG_I(FOTA , "error notify_code:%d error_code:%d" , notify_code , len);
+        MODULE_LOG_I(FOTA , "error notify_code:%d len:%d" , notify_code , len);
         fota_context.reslut.rst = FOTA_RST_NG;
 		fota_context.reslut.err_code = FOTA_STA_DWL_NG;
 		fota_com_notify_result(&fota_context.reslut);
@@ -182,8 +180,23 @@ static VOID fota_com_proc_downliading(VOID)
 		fota_context.reslut.rst = FOTA_RST_NG;
 		fota_context.reslut.err_code = FOTA_STA_DWL_NG;
 		fota_com_notify_result(&fota_context.reslut);
+		fota_context.timeout = 0;
 		fota_com_reset();
 	}
+}
+
+static VOID fota_com_proc_downliad_finish(VOID)
+{	
+	fota_context.timeout++;
+	if(fota_context.timeout >= FOTA_DOWNL_FINISH)
+	{
+		fota_context.reslut.rst = FOTA_RST_OK;
+		fota_context.reslut.err_code = FOTA_STA_DWL_OK;
+		fota_com_notify_result(&fota_context.reslut);
+		fota_context.state = FOTA_COM_CHECKSUM;
+		fota_context.timeout = 0;
+	}
+	
 }
 
 static VOID fota_com_proc_checksum(VOID)
@@ -215,15 +228,13 @@ static VOID fota_com_proc_handle_reset(VOID)
 	fota_context.timeout++;
 	if(fota_context.timeout >= FOTA_RESET_DELAY)
 	{
-		fota_context.state = FOTA_COM_HANDLE_RESULT;
+		fota_context.state = FOTA_COM_HANDLE_RESULT;		
+		fota_context.timeout = 0;
 		fota_com_write_context();
 		ret = program_start(FLASH_MCU_ADDR_FOTA_DATA, fota_context.file_size-4, fota_context.crc);
 		if(0 != ret)
 		{
-			MODULE_LOG_E(FOTA , "progream check crc32 failed, ret: %d" , ret);
-		}
-		else
-		{
+			MODULE_LOG_E(FOTA , "progream failed, ret: %d" , ret);
 			fota_context.reslut.rst = FOTA_RST_NG;
 			fota_context.reslut.err_code = FOTA_STA_OTA_NG;
 			fota_com_notify_result(&fota_context.reslut);
@@ -233,11 +244,16 @@ static VOID fota_com_proc_handle_reset(VOID)
 }
 
 static VOID fota_com_proc_handle_result(VOID)
-{
-	fota_context.reslut.rst = FOTA_RST_OK;
-	fota_context.reslut.err_code = FOTA_STA_OTA_OK;
-	fota_com_notify_result(&fota_context.reslut);
-	fota_com_reset();
+{	
+	fota_context.timeout++;
+	if(fota_context.timeout >= FOTA_RESULT_DELAY)
+	{
+		fota_context.reslut.rst = FOTA_RST_OK;
+		fota_context.reslut.err_code = FOTA_STA_OTA_OK;
+		fota_com_notify_result(&fota_context.reslut);
+		fota_context.timeout = 0;
+		fota_com_reset();
+	}
 }
 
 static fota_com_process_func fota_com_process[] =
@@ -245,6 +261,7 @@ static fota_com_process_func fota_com_process[] =
 	fota_com_proc_idle,
 	fota_com_proc_download,
 	fota_com_proc_downliading,
+	fota_com_proc_downliad_finish,
 	fota_com_proc_checksum,
 	fota_com_proc_handle_reset,
 	fota_com_proc_handle_result,
@@ -260,7 +277,7 @@ static VOID fota_com_write_context(VOID)
 {
 	INT32 ret = 0;
 	
-	ret = tbox_cfg_setkv(FOTA_CONTEXT_MANE, &fota_context, sizeof(fota_context));
+	ret = tbox_cfg_setkv(FOTA_CONTEXT_NAME, &fota_context, sizeof(fota_context));
 	if(0 != ret)
 	{
 		MODULE_LOG_E(FOTA, "fota write context info failed, ret: %d", ret);
@@ -270,7 +287,7 @@ static VOID fota_com_write_context(VOID)
 static VOID fota_com_read_context(VOID)
 {
 	INT32 ret = 0;
-	ret = tbox_cfg_getkv(FOTA_CONTEXT_MANE, &fota_context, sizeof(fota_context));
+	ret = tbox_cfg_getkv(FOTA_CONTEXT_NAME, &fota_context, sizeof(fota_context));
 	if(0 != ret)
 	{
 		fota_context.magic = FOTA_MAGIC_NO;
@@ -309,6 +326,15 @@ INT32 fota_com_init(UINT8 seq)
     }
 	
 	return 0;
+}
+
+VOID fota_com_wake(VOID)
+{
+	fota_com_reset();
+}
+
+VOID fota_com_sleep(VOID)
+{
 }
 
 static INT32 fota_com_ftp_info_parse(const CHAR *url, CHAR *ver, INT32 ver_size, INT32 *file_sz)
@@ -449,12 +475,68 @@ INT32 fota_do_upgrade(UINT8 *url, UINT16 url_len, INT32 id, UINT16 seq)
 	fota_context.reslut.id  = id;
 	fota_context.reslut.seq = seq;
 	
-	fota_com_write_context();
 	fota_com_crc = CRC_INITIAL_VALUE32;
 	fota_first_crc_call = TRUE;
 		
     return 0;
 }
+
+INT32 fota_do_upgrade_with_info(UINT8 *url, UINT16 url_len, INT32 id, UINT16 seq, CHAR *ver, INT32 file_sz)
+{
+	FOTA_RESULT_INFO_T fota_result_info;
+
+	if((NULL == url) || (url_len <= 0) || (NULL == ver) || (file_sz <= 0))
+	{
+		MODULE_LOG_E(FOTA, "fota param err");		
+		fota_result_info.id = id;
+		fota_result_info.seq = seq;
+	    fota_result_info.rst = FOTA_RST_NG;
+	    fota_result_info.err_code = FOTA_STA_CMD_NG;
+	    fota_com_notify_result(&fota_result_info);
+	}
+	
+	if(FOTA_COM_IDLE != fota_context.state)
+	{
+		MODULE_LOG_E(FOTA, "fota is in the upgrading, state: %d", fota_context.state);		
+	    fota_result_info.id = id;
+		fota_result_info.seq = seq;
+	    fota_result_info.rst = FOTA_RST_NG;
+	    fota_result_info.err_code = FOTA_STA_CMD_NG;
+	    fota_com_notify_result(&fota_result_info);
+		return -1;
+	}
+
+	if(FALSE == fota_com_check_version(ver))
+	{
+		MODULE_LOG_E(FOTA, "version check is same, ver: %s", ver);
+	    fota_result_info.id = id;
+		fota_result_info.seq = seq;
+	    fota_result_info.rst = FOTA_RST_OK;
+	    fota_result_info.err_code = FOTA_STA_OTA_OK;
+	    fota_com_notify_result(&fota_result_info);
+		return -1;
+	}
+
+	memset(&fota_context, 0, sizeof(fota_context));
+	fota_context.magic = FOTA_MAGIC_NO;
+	fota_context.state = FOTA_COM_DOWNLOAD;
+	fota_context.timeout = 0;
+	fota_context.file_size = file_sz;
+	fota_context.url_len = url_len;
+	memcpy(fota_context.url, url, url_len);	
+	fota_context.tick = time_if_get_systick_s();	
+	fota_context.reslut.id  = id;
+	fota_context.reslut.seq = seq;
+	fota_context.reslut.rst = FOTA_RST_OK;
+	fota_context.reslut.err_code = FOTA_STA_CMD_OK;	
+	fota_com_notify_result(&fota_context.reslut);
+	
+	fota_com_crc = CRC_INITIAL_VALUE32;
+	fota_first_crc_call = TRUE;
+		
+    return 0;
+}
+
 
 VOID fota_com_info_dump(VOID)
 {

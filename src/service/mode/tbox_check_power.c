@@ -68,7 +68,7 @@ VOID tbox_check_period(VOID)
                     break;
                 }
                 /*检查电池电压是否高于3.5V*/
-                if(analog_pwr_vtg() > TBOX_CHECK_POWER_BATMIN_VOLTAGE)
+                if(analog_bat_vtg() > TBOX_CHECK_POWER_BATMIN_VOLTAGE)
                 {
                     if(TBOX_CHECK_POWER_IS_UNDERVOLTAGE == tbox_check_power_flag)
                     {
@@ -108,7 +108,7 @@ VOID tbox_check_period(VOID)
                     tbox_check_power_flag = TBOX_CHECK_POWER_IS_UNDERVOLTAGE;
                     tbox_check_power_count = 0U;                    
                 }
-                if(analog_pwr_vtg() > TBOX_CHECK_POWER_BATMIN_VOLTAGE)
+                if(analog_bat_vtg() > TBOX_CHECK_POWER_BATMIN_VOLTAGE)
                 {
                     if(++tbox_check_power_count >= TBOX_CHECK_POWER_RECOVERY_TIME)
                     {

@@ -128,6 +128,12 @@ uint8 socket_4g_connect(uint8 context_id,
     uint8 index;
     INT8  state;
 
+	if(TRUE == ftp_4g_isdownloading())
+    {
+        MODULE_LOG_E(TBOX4G, "the ftp is downloading");
+        return 1;
+    }
+	
     state = dial_4g_get_callstate(context_id);
     if(DIAL_4G_STATE_CONNECTED != state)
     {

@@ -5,12 +5,15 @@
 #include "hpm_shell.h"
 #include "hpm_param_fetch.h"
 #include "hpm_cfg.h"
+#include "hpm_control.h"
+#include "hpm_ota_tbox.h"
 
 static VOID hpm_shell_tips(VOID)
 {
     tbox_log_print("hpmcmd -h: help\r\n");
     tbox_log_print("hpmcmd param \r\n");
     tbox_log_print("hpmcmd odometer \r\n");
+    tbox_log_print("hpmcmd otainfo \r\n");
     tbox_log_print("Usage: hpmcmd <command> [parameters]\r\n");
 }
 
@@ -40,6 +43,10 @@ static BaseType_t hpm_shell_cmd(char *buf, size_t bufsz, const char *cmd)
         hpm_cfg_show_odomter();
         return pdFALSE;
     }
+    else if (0 == strncmp(param1_ptr, "otainfo", param1_len))
+	{
+		hpm_ota_tbox_info_dump();
+	}
     else
     {
         hpm_shell_tips();		
