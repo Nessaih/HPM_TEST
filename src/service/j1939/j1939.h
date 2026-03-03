@@ -30,8 +30,8 @@
 #ifndef _J1939_H_
 #define _J1939_H_
 
-//#include "j1939_includes.h"
-#define J1939STACK_VERSION          130
+// #include "j1939_includes.h"
+#define J1939STACK_VERSION          131
 
 // TODO - Command Request/Ack Parameter Group Numbers
 #define REQUEST_PGN                 0x00EA00
@@ -62,6 +62,13 @@
 #define SEND_EOM                    10
 #define SEND_CTS                    11
 #define FILL_USER_MESSAGE           12
+
+// Hardware Abstraction Layer
+#define HA_CHANNEL_SIZE             2
+
+// Data Link Layer
+#define DL_SA_MASK                  0xFF
+#define DL_PGN_MASK                 0x3FFFF
 
 // Transport Protocol Layer
 #define TP_CM                       0x00EC00
@@ -101,8 +108,8 @@ typedef struct
     volatile uint16_t byte_count;
     volatile uint8_t  priority;
     volatile uint8_t  dest_addr;
-	volatile uint8_t  sa_addr;
-	volatile uint8_t  channel;
+    volatile uint8_t  sa_addr;
+    volatile uint8_t  channel;
     volatile int8_t   status;
 } J1939_TX_MESSAGE_T;
 
@@ -127,6 +134,7 @@ typedef struct
 typedef struct
 {
     volatile uint32_t PGN;
+    volatile uint8_t  channel;
     volatile uint8_t  status;
     volatile uint8_t  packet_number;
     volatile uint8_t  total_packet_number;
@@ -153,14 +161,12 @@ typedef struct
     volatile uint16_t buffer_size;
 } RING_T;
 
-
-typedef struct 
+typedef struct
 {
-	uint8_t dtc_len;
-	uint8_t dtc_cnt;
-	uint8_t dtc[128];
-}J1939_DM1_DTC;
-
+    uint8_t dtc_len;
+    uint8_t dtc_cnt;
+    uint8_t dtc[128];
+} J1939_DM1_DTC;
 
 //========================================================================================
 // J1939 protocol stack Interface Functions

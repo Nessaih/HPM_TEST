@@ -35,15 +35,15 @@
 
 
 
-typedef void (*J1939_PGN_CALLBACK_T)(uint8_t *msg, uint16_t len, uint32_t *pgn);
+typedef void (*J1939_PGN_CALLBACK_T)(uint8_t *msg, uint16_t len, uint8_t src_addr, uint32_t pgn);
 
 //========================================================================================
 // Application Layer Interface Functions
 //========================================================================================
-
+ 
 void j1939_al_init(void);
 void j1939_al_process(J1939_RX_MESSAGE_T *msg_ptr);
 void j1939_al_periodic(void);
-bool j1939_al_subscribe(uint32_t pgn, J1939_PGN_CALLBACK_T recv_cb);
+bool j1939_al_subscribe(uint8_t target_addr, uint32_t target_pgn, J1939_PGN_CALLBACK_T recv_cb);
 
 #endif

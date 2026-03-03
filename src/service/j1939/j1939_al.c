@@ -33,7 +33,8 @@
 
 typedef struct
 {
-    volatile uint32_t    pgn;
+    volatile uint32_t    sa  : 8;
+    volatile uint32_t    pgn : 24;
     J1939_PGN_CALLBACK_T cb;
 } AL_PGN_SUBSCRIBE_T;
 
@@ -64,11 +65,15 @@ void j1939_al_periodic(void)
 
     for (size_t i = 0; i < al_table.cnt; i++)
     {
-        uint32_t volatile_pgn = al_table.sub[i].pgn;
-        if (msg.PGN == volatile_pgn && al_table.sub[i].cb)
-        {
-            al_table.sub[i].cb((uint8_t *)msg.data, msg.byte_count, (uint32_t *)&msg.PGN);
-        }
+        uint8_t  subscribed_sa  = al_table.sub[i].sa;
+        uint32_t subscribed_pgn = al_table.sub[i].pgn;
+
+        if (subscribed_pgn != msg.PGN)
+            continue;
+        if (subscribed_sa && subscribed_sa != msg.source_addr)
+            continue;
+        if (al_table.sub[i].cb)
+            al_table.sub[i].cb((uint8_t *)msg.data, msg.byte_count, subscribed_sa, subscribed_pgn);
     }
 }
 
@@ -79,21 +84,34 @@ void j1939_al_process(J1939_RX_MESSAGE_T *msg_ptr)
     list_put(&rx_list, *msg_ptr);
 }
 
-bool j1939_al_subscribe(uint32_t pgn, J1939_PGN_CALLBACK_T recv_cb)
+bool j1939_al_subscribe(uint8_t target_addr, uint32_t target_pgn, J1939_PGN_CALLBACK_T recv_cb)
 {
-    if (false == j1939_pgn_filter(pgn))
+
+    if (j1939_pgn_filter(target_addr, target_pgn))
     {
-        return false;
+        goto __al_subscribe;
     }
 
-    if (al_table.cnt >= AL_SUBSCRIBE_CNT_MAX)
+    if (j1939_pgn_add(target_addr, target_pgn))
     {
-        return false;
+        goto __al_subscribe;
+    }
+    else
+    {
+        goto __al_subscribe_failed;
     }
 
-    al_table.sub[al_table.cnt].pgn = pgn;
-    al_table.sub[al_table.cnt].cb  = recv_cb;
-    al_table.cnt++;
+__al_subscribe:
 
-    return true;
+    if (al_table.cnt < AL_SUBSCRIBE_CNT_MAX)
+    {
+        al_table.sub[al_table.cnt].sa  = target_addr;
+        al_table.sub[al_table.cnt].pgn = target_pgn;
+        al_table.sub[al_table.cnt].cb  = recv_cb;
+        al_table.cnt++;
+        return true;
+    }
+    
+__al_subscribe_failed:
+    return false;
 }

@@ -55,11 +55,13 @@ void j1939_dl_init(void)
 // #pragma CODE_SEG NON_BANKED
 void j1939_dl_process(const CAN_PACKET_T *pkt)
 {
+    uint8_t  addr;
     uint32_t pgn;
 
-    pgn = (pkt->identifier >> 8) & 0x3FFFFU;
+    addr = (uint8_t)pkt->identifier & DL_SA_MASK;
+    pgn  = (pkt->identifier >> 8) & DL_PGN_MASK;
 
-    if (!j1939_pgn_filter(pgn))
+    if (!j1939_pgn_filter(addr, pgn))
         return;
 
     if (list_is_full(&rx_list))
@@ -71,7 +73,7 @@ void j1939_dl_process(const CAN_PACKET_T *pkt)
 // #pragma CODE_SEG NON_BANKED
 void j1939_dl_periodic(void)
 {
-    uint8_t        m_PF, m_PS, m_DA, m_SA;
+    uint8_t        m_PF, m_PS, m_DA, m_SA, m_CH;
     uint32_t       m_ID, m_PGN;
     CAN_PACKET_T   rpkt;
     CAN_PACKET_T   tpkt;
@@ -95,8 +97,9 @@ void j1939_dl_periodic(void)
 
     list_get(&rx_list, &rpkt);
 
+    m_CH  = rpkt.channel;
     m_ID  = rpkt.identifier;
-    m_PGN = (uint32_t)((m_ID >> 8) & 0x3FFFF);
+    m_PGN = (uint32_t)((m_ID >> 8) & DL_PGN_MASK);
     m_PF  = (uint8_t)(m_ID >> 16);
     m_PS  = (uint8_t)(m_ID >> 8);
     m_DA  = m_PS;
@@ -125,7 +128,7 @@ void j1939_dl_periodic(void)
         memcpy((void *)pdu.data, (void *)rpkt.data, pdu.byte_count);
     }
     // send PDU up the stack to the Transport Layer
-    j1939_tl_process(&pdu);
+    j1939_tl_process(m_CH, &pdu);
 }
 
 void j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr)

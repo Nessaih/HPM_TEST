@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "tbox_log.h"
-#include "j1939_includes.h"
+#include "j1939_if.h"
 
 
 struct j1939_dm1_led
@@ -12,7 +12,7 @@ struct j1939_dm1_led
     uint8_t led_fault   : 2;
 };
 
-static void test_j1939_dm1_cb(uint8_t *msg, uint16_t len, uint32_t *pgn)
+static void test_j1939_dm1_cb(uint8_t *msg, uint16_t len, uint8_t sa, uint32_t pgn)
 {
     // trace_dumphex(test_task_handle, "DM1:", msg, len);
 
@@ -43,7 +43,7 @@ static void test_j1939_dm1_cb(uint8_t *msg, uint16_t len, uint32_t *pgn)
     }
 }
 
-static void test_j1939_vin_cb(uint8_t *msg, uint16_t len, uint32_t *pgn)
+static void test_j1939_vin_cb(uint8_t *msg, uint16_t len, uint8_t sa, uint32_t pgn)
 {
     uint8_t vin_buf[18] = {0};
 
@@ -55,9 +55,9 @@ static void test_j1939_vin_cb(uint8_t *msg, uint16_t len, uint32_t *pgn)
 
 void test_j1939_init(void)
 {
-    j1939_al_subscribe(J1939_PGN_DM1, test_j1939_dm1_cb);
-    j1939_al_subscribe(J1939_PGN_VIN, test_j1939_vin_cb);
-    //dm_shell_reg("testj1939pgn", "j1939 req/add/show  pgn test", test_j1939_pgn_shell);
+    j1939_subscribe(0x00, J1939_PGN_DM1, test_j1939_dm1_cb);
+    j1939_subscribe(0x00, J1939_PGN_VIN, test_j1939_vin_cb);
+    // dm_shell_reg("testj1939pgn", "j1939 req/add/show  pgn test", test_j1939_pgn_shell);
 }
 
 void test_j1939_loop(void)

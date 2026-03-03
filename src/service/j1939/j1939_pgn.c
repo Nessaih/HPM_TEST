@@ -3,125 +3,143 @@
 #include "tbox_log.h"
 #include "j1939_includes.h"
 
+#define PGN_TABLE_SIZE 64
 
-#define PGN_TABLE_CNT 64
+union PGN_INFO
+{
+    struct
+    {
+        uint32_t addr : 8;
+        uint32_t pgn  : 24;
+    };
+    uint32_t value;
+};
 
 struct PGN_TABLE
 {
-    uint32_t count;
-    uint32_t pgn[PGN_TABLE_CNT];
+    uint32_t       table_count;
+    union PGN_INFO table[PGN_TABLE_SIZE];
 };
 
 // clang-format off
-struct PGN_TABLE pgn_table =
-    {
-        .count = 18,
-        .pgn = {
-            J1939_PGN_ACK_1,
-            J1939_PGN_ACK_2,
-            J1939_PGN_ACK_3,
-            J1939_PGN_REQ_1,
-            J1939_PGN_REQ_2,
-            J1939_PGN_REQ_3,
-            J1939_PGN_CM_1,
-            J1939_PGN_CM_2,
-            J1939_PGN_CM_3,
-            J1939_PGN_DT_1,
-            J1939_PGN_DT_2,
-            J1939_PGN_DT_3,
-            J1939_PGN_ENGINE_CONSTRUCTION,
-            J1939_PGN_ENGINE_RUN_TIME,
-            J1939_PGN_FUEL_CONSUMPTION,
-            J1939_PGN_INGREDIENT_IDENTIFICATION,
-            J1939_PGN_VIN,
-            J1939_PGN_DM1}
-    };
+struct PGN_TABLE pgn_table = {
+    .table_count = 18,
+    .table       = {
+        {.pgn = J1939_PGN_ACK_1                         },
+        {.pgn = J1939_PGN_ACK_2                         },
+        {.pgn = J1939_PGN_ACK_3                         },
+        {.pgn = J1939_PGN_REQ_1                         },
+        {.pgn = J1939_PGN_REQ_2                         },
+        {.pgn = J1939_PGN_REQ_3                         },
+        {.pgn = J1939_PGN_CM_1                          },
+        {.pgn = J1939_PGN_CM_2                          },
+        {.pgn = J1939_PGN_CM_3                          },
+        {.pgn = J1939_PGN_DT_1                          },
+        {.pgn = J1939_PGN_DT_2                          },
+        {.pgn = J1939_PGN_DT_3                          },
+        {.pgn = J1939_PGN_ENGINE_CONSTRUCTION           },
+        {.pgn = J1939_PGN_ENGINE_RUN_TIME               },
+        {.pgn = J1939_PGN_FUEL_CONSUMPTION              },
+        {.pgn = J1939_PGN_INGREDIENT_IDENTIFICATION     },
+        {.pgn = J1939_PGN_VIN                           },
+        {.pgn = J1939_PGN_DM1                           },
+    },
+};
 // clang-format on
 
-static void PGN_sort(uint32_t array[], uint32_t count)
+
+void j1939_pgn_init(void)
 {
-    uint32_t i, j, m, t;
+    uint32_t i, j, m;
+    uint32_t temp_value;
+    uint32_t count = pgn_table.table_count;
 
     for (i = 0; i < count - 1; i++)
     {
         m = i;
         for (j = i + 1; j < count; j++)
         {
-            if (array[j] < array[m])
+            if (pgn_table.table[j].pgn < pgn_table.table[m].pgn)
                 m = j;
         }
 
         if (m != i)
         {
-            t        = array[i];
-            array[i] = array[m];
-            array[m] = t;
+            temp_value               = pgn_table.table[i].value;
+            pgn_table.table[i].value = pgn_table.table[m].value;
+            pgn_table.table[m].value = temp_value;
         }
     }
-}
-
-void j1939_pgn_init(void)
-{
-    PGN_sort(pgn_table.pgn, pgn_table.count);
 }
 
 void j1939_pgn_show(void)
 {
     uint32_t i;
 
-    for (i = 0; i < pgn_table.count; i++)
+    for (i = 0; i < pgn_table.table_count; i++)
     {
-        LOG_PRINT("%2u  PGN = %u\n", (unsigned int)i, (unsigned int)pgn_table.pgn[i]);
+        LOG_PRINT("%2u addr: %2X    pgn: %u\n", (unsigned int)i, (unsigned int)pgn_table.table[i].addr, (unsigned int)pgn_table.table[i].pgn);
     }
 }
 
-bool j1939_pgn_add(uint32_t pgn)
+bool j1939_pgn_add(uint8_t addr, uint32_t pgn)
 {
     uint32_t i, j;
 
-    if (pgn > 0x7FFFF)
+    if (pgn > DL_PGN_MASK)
     {
         return false;
     }
 
-    if (pgn_table.count >= PGN_TABLE_CNT)
+    if (pgn_table.table_count >= PGN_TABLE_SIZE)
     {
         return false;
     }
 
-    for (i = 0; i < pgn_table.count; i++)
+    for (i = 0; i < pgn_table.table_count; i++)
     {
-        if (pgn < pgn_table.pgn[i])
+        if (pgn < pgn_table.table[i].pgn)
             break;
     }
 
-    for (j = pgn_table.count; j > i; j--)
+    for (j = pgn_table.table_count; j > i; j--)
     {
-        pgn_table.pgn[j] = pgn_table.pgn[j - 1];
+        pgn_table.table[j].value = pgn_table.table[j - 1].value;
     }
 
-    pgn_table.pgn[i] = pgn;
-    pgn_table.count++;
+    pgn_table.table[i].addr = addr;
+    pgn_table.table[i].pgn  = pgn;
+    pgn_table.table_count++;
 
     return true;
 }
 
-bool j1939_pgn_filter(uint32_t pgn)
+bool j1939_pgn_filter(uint8_t addr, uint32_t pgn)
 {
     int32_t l = 0;
     int32_t m = 0;
-    int32_t r = pgn_table.count - 1;
+    int32_t r = pgn_table.table_count - 1;
 
     while (l <= r)
     {
         m = (l + r) >> 1;
-        if (pgn > pgn_table.pgn[m])
+        if (pgn > pgn_table.table[m].pgn)
+        {
             l = m + 1;
-        else if (pgn < pgn_table.pgn[m])
+        }
+        else if (pgn < pgn_table.table[m].pgn)
+        {
             r = m - 1;
+        }
         else
-            return true;
+        {
+            if (pgn_table.table[m].addr == 0x00 || pgn_table.table[m].addr == addr)
+                return true;
+            else
+                return false;
+        }
     }
+
     return false;
 }
 

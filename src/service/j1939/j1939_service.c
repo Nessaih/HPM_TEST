@@ -2,7 +2,7 @@
 #include "tbox_core.h"
 #include "can_if.h"
 #include "api_rtos.h"
-#include "j1939_includes.h"
+#include "j1939_if.h"
 
 #define J1939_SVR_TASK_EVENT_TASK_START   0x01U
 #define J1939_SVR_TASK_EVENT_TASK_STOP    0x02U
@@ -40,7 +40,7 @@ static INT32 j1939_svr_init(UINT8 seq)
     case MODULE_INIT_SEQ_STORAGE:
         break;
     case MODULE_INIT_SEQ_MODULE:
-        j1939_stk_init();
+        j1939_init();
         can_if_reg_cb(j1939_svr_can_handler);
         break;
     default:
@@ -104,7 +104,7 @@ static VOID j1939_svr_task(VOID *param)
 
         if (is_active)
         {
-            j1939_stk_periodic();
+            j1939_process();
         }
     }
 }
@@ -134,7 +134,7 @@ static INT32 j1939_svr_can_handler(CAN_EVENT event, UINT32 arg1, UINT32 arg2)
 
         for (UINT32 i = 0; i < count; i++)
         {
-            j1939_hal_rx(msg[i].ins, &msg[i]);
+            j1939_receive(msg[i].ins, &msg[i]);
         }
         break;
     }

@@ -65,23 +65,12 @@ void j1939_hal_rx(unsigned char instance, can_msg_t *msg)
 {
     CAN_PACKET_T rev_can_packet;
 
-    (void)instance;
+    if (instance >= HA_CHANNEL_SIZE)
+        return;
 
+    rev_can_packet.channel    = instance;
     rev_can_packet.identifier = msg->id & (~DRV_CAN_EXTEND_ID_MASK);
     rev_can_packet.byte_count = msg->len;
     memcpy((void *)rev_can_packet.data, (void *)msg->data, msg->len);
-#if 0
-    printf("ID:0x%08X %u %02X %02X %02X %02X %02X %02X %02X %02X\n", \
-            rev_can_packet.identifier, \
-            rev_can_packet.byte_count, \
-            rev_can_packet.data[0], \
-            rev_can_packet.data[1], \
-            rev_can_packet.data[2], \
-            rev_can_packet.data[3], \
-            rev_can_packet.data[4], \
-            rev_can_packet.data[5], \
-            rev_can_packet.data[6], \
-            rev_can_packet.data[7]);
-#endif
     j1939_dl_process(&rev_can_packet);
 }

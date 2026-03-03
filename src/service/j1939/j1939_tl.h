@@ -35,7 +35,7 @@
 //==========================================================================================
 
 void    j1939_tl_init(void);
-void    j1939_tl_process(J1939_RX_PDU_T *msg_ptr);
+void    j1939_tl_process(uint8_t channel, J1939_RX_PDU_T *msg_ptr);
 void    j1939_tl_periodic(void);
 uint8_t j1939_tl_send(J1939_TX_MESSAGE_T *msg_ptr);
 
