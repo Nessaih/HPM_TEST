@@ -11,13 +11,15 @@
 
 typedef enum
 {
-    HPM_MGR_STATUS_IDLE = 0,
-    HPM_MGR_STATUS_RUNNING = 1,
-    HPM_MGR_STATUS_WAIT_STOP = 2,
-    HPM_MGR_STATUS_STOPPED = 3,
+    HPM_MGR_STATUS_INIT = 0,
+    HPM_MGR_STATUS_IDLE = 1,
+    HPM_MGR_STATUS_RUNNING = 2,
+    HPM_MGR_STATUS_WAIT_STOP = 3,
+    HPM_MGR_STATUS_STOPPED = 4,
     HPM_MGR_STATUS_MAX
 } hpm_mgr_status_e;
 
+static VOID hpm_mgr_in_init(VOID);
 static VOID hpm_mgr_in_idle(VOID);
 static VOID hpm_mgr_in_running(VOID);
 static VOID hpm_mgr_in_wait_stop(VOID);
@@ -27,6 +29,7 @@ static hpm_mgr_status_e hpm_mgr_status;
 static UINT32 hpm_mgr_acc_off_count;
 
 static VOID (*hpm_mgr_handle[HPM_MGR_STATUS_MAX])() = {
+    hpm_mgr_in_init,
     hpm_mgr_in_idle,
     hpm_mgr_in_running,
     hpm_mgr_in_wait_stop,
@@ -38,7 +41,7 @@ INT32 hpm_mgr_init(UINT8 seq)
     switch (seq)
     {
     case MODULE_INIT_SEQ_OS:
-        hpm_mgr_status = HPM_MGR_STATUS_IDLE;
+        hpm_mgr_status = HPM_MGR_STATUS_INIT;
         hpm_mgr_acc_off_count = 0;
         break;
 
@@ -72,7 +75,7 @@ VOID hpm_mgr_process(VOID)
 
 VOID hpm_mgr_wakeup(VOID)
 {
-    hpm_mgr_status = HPM_MGR_STATUS_IDLE;
+    hpm_mgr_status = HPM_MGR_STATUS_INIT;
     hpm_mgr_acc_off_count = 0;
 }
 
@@ -86,6 +89,8 @@ static BOOL hpm_mgr_allowed_start(VOID)
     else
     {
         UINT32 wake_source = tbox_pm_io_get_wakesrc();
+
+        MODULE_LOG_E(HPM, "wake src = 0X%08X", wake_source);
 
         /*RTC唤醒*/
         if (0 != (wake_source & (1U << PM_WAKE_SOURCE_RTC)))
@@ -106,6 +111,21 @@ static BOOL hpm_mgr_allowed_start(VOID)
         }
     }
     return allowed;
+}
+
+static VOID hpm_mgr_in_init(VOID)
+{
+    if (TRUE == hpm_mgr_allowed_start())
+    {
+        MODULE_LOG_I(HPM, "allowed start");
+        hpm_socket_start();
+        hpm_mgr_status = HPM_MGR_STATUS_RUNNING;
+        hpm_mgr_acc_off_count = 0;
+    }
+    else
+    {
+        hpm_mgr_status = HPM_MGR_STATUS_IDLE;
+    }
 }
 
 static VOID hpm_mgr_in_idle(VOID)
@@ -132,9 +152,8 @@ static VOID hpm_mgr_in_running(VOID)
     else
     {
         hpm_mgr_acc_off_count++;
+        MODULE_LOG_I(HPM, "acc off count %d", hpm_mgr_acc_off_count);
     }
-
-    MODULE_LOG_I(HPM, "acc off count %d", hpm_mgr_acc_off_count);
 
     if (hpm_mgr_acc_off_count >= HPM_MGR_ACC_OFF_STOP_COUNT)
     {

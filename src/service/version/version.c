@@ -11,7 +11,7 @@
 #else
 #define CURRENT_VERSION_TYPE VERSION_TYPE_APP
 #define MOUDLE_TYPE          "VPU"
-#define PROJECT_CODE         "HPM30SDKM001"
+#define PROJECT_CODE         "HPM30HAIW001"
 #endif
 
 // clang-format off

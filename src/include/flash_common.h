@@ -13,6 +13,8 @@
 /*────────────────────────────────────────DEFINE BLOCK7────────────────────────────────────────*/
 #define FLASH_MCU_ADD_HPM_CFG       (FLASH_USER_ADDR)
 #define FLASH_MCU_SIZE_HPM_CFG      (0x00008000) //32K
+#define FLASH_MCU_ADDR_HPM_NODE     (FLASH_MCU_ADD_HPM_CFG + FLASH_MCU_SIZE_HPM_CFG)
+#define FLASH_MCU_SIZE_HPM_NODE     (0x00002000) // 8K
 /*────────────────────────────────────────ENDDEF BLOCK7────────────────────────────────────────*/
 
 /*===================================  MCU Flash Memory Map ===================================*/

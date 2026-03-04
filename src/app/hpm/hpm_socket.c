@@ -347,6 +347,7 @@ static VOID hpm_socket_handle_connecting(VOID)
             MODULE_LOG_I(HPM, "connecting timeout");
             if_4g_socket_close(IF_4G_HPM_CONN_ID);
             hpm_socket_info.status = HPM_SOCKET_STATUS_CLOSING;
+            hpm_socket_info.type = (HPM_SOCKET_ADDR_TYPE_E)((hpm_socket_info.type + 1) % HPM_SOCKET_ADDR_MAX);
         }
     }
 }

@@ -3,13 +3,13 @@
 
 typedef enum
 {
-    FCT_PM_ACTION_LISTEN = 0,
-    FCT_PM_ACTION_SLEEP,
-    FCT_PM_ACTION_CAN2,
-    FCT_PM_ACTION_INVALID = 0xFF,
-} FCT_PM_ACTION;
+    FCT_PM_ACTION_IDLE		= 0x00,
+    FCT_PM_ACTION_LISTEN	= 0x01,
+    FCT_PM_ACTION_SLEEP		= 0x02,
+    FCT_PM_ACTION_CAN2		= 0x03,
+} FCT_PM_ACTION_E;
 
-VOID fct_cmd_init(VOID);
+INT32 fct_cmd_init(UINT8 seq);
 
 VOID fct_cmd_timeout(VOID);
 

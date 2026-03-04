@@ -203,7 +203,7 @@ static inline BOOL tbox_string_get_num(UINT8 *data, UINT8 end_char, UINT32 *valu
     return TRUE;
 }
 
-static inline BOOL tbox_tbox_string_get_num_bylen(UINT8 *data, UINT16 len, UINT32 *value)
+static inline BOOL tbox_string_get_num_bylen(UINT8 *data, UINT16 len, UINT32 *value)
 {
     UINT16 index;
 
@@ -249,7 +249,7 @@ static inline BOOL tbox_string_extract_num(UINT8 *data, UINT16 len, UINT32 *valu
         }
     }
 
-    return tbox_tbox_string_get_num_bylen(data+begin_index, index-begin_index, value);
+    return tbox_string_get_num_bylen(data+begin_index, index-begin_index, value);
 }
 
 #ifdef __cplusplus

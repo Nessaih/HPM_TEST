@@ -357,6 +357,7 @@ INT32 gnss_parse_init(UINT8 seq)
     {
         case MODULE_INIT_SEQ_OS:
 			gnss_parse_nmea_log = FALSE;
+			memset(&gnss_parse_time, 0, sizeof(gnss_parse_time));
 			memset(&gnss_parse_info_backup, 0, sizeof(gnss_info_backup_t));
             break;
 
@@ -546,7 +547,8 @@ VOID gnss_parse_show_info(VOID)
     INT8     lat_back[20];
 	UINT8	 is_east_back;
 	UINT8	 is_north_back;
-	
+
+	memset(&time, 0, sizeof(time));
 	gnss_get_time(&time);
 	
 	GNSS_MUTEX_LOCK();

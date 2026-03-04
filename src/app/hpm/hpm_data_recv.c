@@ -185,7 +185,10 @@ VOID hpm_data_recv_process(VOID)
         hpm_data_recv_pop(parselen);
     }
 
-    MODULE_LOG_DUMP(HPM, "hpm receive info", data, parselen);
+    if (parselen > 0)
+    {
+        MODULE_LOG_DUMP(HPM, "hpm receive info", data, parselen);
+    }
 
     if (TRUE == hpm_data_recv_is_server_req(recv->cmd))
     {

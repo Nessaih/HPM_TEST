@@ -181,7 +181,7 @@ VOID hpm_control_cmd_handle(UINT16 cmd, UINT8 *data, UINT16 len)
 			break;
 		case HPM_CTRL_CAN_FILE:
 			ctrl_res.need_res = TRUE;
-			ret = hpm_param_download_req(data+pos, ctrl_info.len, ctrl_res.data+HPM_CTROL_RES_POS, &ctrl_res.body_len);
+			ret = hpm_param_fetch_ftp_start(data + pos, ctrl_info.len);
 			if(0 == ret)
 			{
 				ctrl_res.result = HPM_CTRL_RES_OK;

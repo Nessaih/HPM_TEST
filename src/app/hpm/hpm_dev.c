@@ -8,13 +8,12 @@
 #include "hpm_dev.h"
 #include "hpm_pack.h"
 #include "hpm_data.h"
-#include "hpm_can.h"
 #include "hpm_session.h"
 #include "hpm_param_fetch.h"
 #include "tbox_cfg_if.h"
 #include "hpm_cfg.h"
 
-#define HPM_DEV_WAIT_FIX (50) // 50s
+#define HPM_DEV_WAIT_FIX (50U) // 50s
 
 typedef enum
 {
@@ -120,9 +119,22 @@ static UINT32 hpm_get_devinfo(void)
 
     for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++)
     {
-        if (CAN_INSTANCE_BUSY == can_if_state_get(i))
+        uint8_t can_status = can_if_state_get(i);
+        switch (can_status)
         {
-            devinfo |= (1U << (12 + i));
+        case CAN_INSTANCE_BUSY:
+            devinfo |= (1U << (12 + 2 * i));
+            break;
+
+        case CAN_INSTANCE_ERROR:
+            devinfo |= (2U << (12 + 2 * i));
+            break;
+
+        case CAN_INSTANCE_OFF:
+            devinfo |= (3U << (12 + 2 * i));
+            break;
+        default:
+            break;
         }
     }
 
@@ -211,7 +223,7 @@ static INT32 hpm_get_position_data(UINT8 *buf)
     return len;
 }
 
-static INT32 hpm_get_can_data(UINT8 *buf)
+static INT32 hpm_get_can_data(UINT8 *buf, INT32 remain_size)
 {
     INT32 len = 0;
     buf[len++] = HPM_DATA_CFG_FACTH;
@@ -223,11 +235,23 @@ static INT32 hpm_get_can_data(UINT8 *buf)
     buf[len++] = (UINT8)(time.hour);
     buf[len++] = (UINT8)(time.min);
     buf[len++] = (UINT8)(time.sec);
-    len += hpm_can_report(buf + len);
+
+    remain_size -= len;
+
+    INT32 ret = hpm_param_fetch_report(buf + len, remain_size);
+
+    if (ret < 0)
+    {
+        MODULE_LOG_E(HPM, "can data overflow");
+        return -1;
+    }
+
+    len += ret;
+
     return len;
 }
 
-static INT32 hpm_get_real_data(UINT8 *buf, UINT8 *subcmd)
+static INT32 hpm_get_location_data(UINT8 *buf)
 {
     INT32 len = 0;
     buf[len++] = HPM_DATA_LOCATION;
@@ -239,13 +263,9 @@ static INT32 hpm_get_real_data(UINT8 *buf, UINT8 *subcmd)
     buf[len++] = (UINT8)(time.hour);
     buf[len++] = (UINT8)(time.min);
     buf[len++] = (UINT8)(time.sec);
-    (*subcmd)++;
+
     len += hpm_get_position_data(buf + len);
-    if (0 != hpm_param_get_id())
-    {
-        (*subcmd)++;
-        len += hpm_get_can_data(buf + len);
-    }
+
     return len;
 }
 
@@ -255,7 +275,21 @@ static INT32 hpm_make_report_pack(UINT8 *data)
     UINT16 len = 0;
     len += hpm_sesion_get_data_seq(data + len);
     data[len++] = 0x00;
-    len += hpm_get_real_data(data + len, &count);
+    len += hpm_get_location_data(data + len);
+    count++;
+
+    INT32 remain_size = HPM_PACK_BUFF_LEN - len;
+    INT32 ret = hpm_get_can_data(data + len, remain_size);
+    if (ret < 0)
+    {
+        MODULE_LOG_E(HPM, "get can data failed.");
+    }
+    else
+    {
+        count++;
+        len += ret;
+    }
+
     data[2] = count;
     return len;
 }
@@ -371,7 +405,7 @@ static VOID hpm_dev_handle_accon(VOID)
         return;
     }
 
-    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (HPM_DEV_WAIT_FIX * 1000))
+    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (UINT32)(HPM_DEV_WAIT_FIX * 1000))
     {
         hpm_dev_handle_event(HPM_DEV_EVENT_ACCON);
         hpm_dev_status_set(HPM_DEV_STATUS_IDLE);
@@ -386,10 +420,10 @@ static VOID hpm_dev_handle_accoff(VOID)
         return;
     }
 
-    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (HPM_DEV_WAIT_FIX * 1000))
+    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (UINT32)(HPM_DEV_WAIT_FIX * 1000))
     {
         hpm_dev_handle_event(HPM_DEV_EVENT_ACCOFF);
-        hpm_dev_status_set(HPM_DEV_STATUS_IDLE);
+        hpm_dev_status_set(HPM_DEV_STATUS_INIT);
     }
 }
 
@@ -404,7 +438,7 @@ static VOID hpm_dev_handle_idle(VOID)
 
     UINT32 interval = 60;
     hpm_cfg_get_report_intv(&interval, sizeof(interval));
-    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (interval * 1000))
+    if ((time_if_get_systick_ms() - hpm_dev_tick + 50) >= (UINT32)(interval * 1000))
     {
         hpm_dev_handle_event(HPM_DEV_EVENT_CYCLE);
     }
@@ -418,7 +452,7 @@ static VOID hpm_dev_handle_wakeup(VOID)
         return;
     }
 
-    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (HPM_DEV_WAIT_FIX * 1000))
+    if ((time_if_get_systick_ms() - hpm_dev_tick) >= (UINT32)(HPM_DEV_WAIT_FIX * 1000))
     {
         hpm_dev_handle_event(HPM_DEV_EVENT_WAKEUP);
         hpm_dev_status_set(HPM_DEV_STATUS_INIT);

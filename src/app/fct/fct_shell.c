@@ -56,8 +56,23 @@ FCT_SHELL_ERR:
 
 static const CLI_Command_Definition_t xFctCmd	= {"dbg.bin",   "fct eol cmd", fct_shell_proc, 1};
 
-VOID fct_shell_init(VOID)
+INT32 fct_shell_init(UINT8 seq)
 {
-   FreeRTOS_CLIRegisterCommand(&xFctCmd);
+	switch (seq)
+    {
+        case MODULE_INIT_SEQ_OS:
+            break;
+
+        case MODULE_INIT_SEQ_STORAGE:
+            break;
+
+        case MODULE_INIT_SEQ_MODULE:
+			FreeRTOS_CLIRegisterCommand(&xFctCmd);
+            break;
+            
+        default:
+            break;
+    }
+    return 0;
 }
 

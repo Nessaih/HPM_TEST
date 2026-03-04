@@ -1,4 +1,5 @@
 #include "tbox_common.h"
+#include "tbox_core.h"
 #include "tbox_cfg_if.h"
 #include "tbox_log.h"
 #include "analog_if.h"
@@ -6,7 +7,11 @@
 #include "version.h"
 #include "gnss_if.h"
 #include "4g_if.h"
+#include "can_if.h"
+#include "tbox_pm_io.h"
+#include "tbox_pm_if.h"
 
+#include "fct.h"
 #include "fct_cmd.h"
 
 typedef INT8 (*FCT_CMD_CMD_PROC)(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len);
@@ -17,11 +22,30 @@ typedef struct
     FCT_CMD_CMD_PROC proc;
 } FCT_CMD_CMD;
 
-static FCT_PM_ACTION fct_pm_action = FCT_PM_ACTION_INVALID;
+static FCT_PM_ACTION_E fct_pm_action;
 
 static INT8  fct_cmd_startup_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-    return -1;
+	/*
+	 * START: IO 控制: 
+	 *	PD11[DOL, 35U]->↑
+	 *  PC05[DOH, 84U]->↑
+	 * IOGET:
+	 *  PE12[ACC, 19U]->↓
+	 *  PB04[DIL, 28U]->↑
+	 * IORESET:
+	 *  PD11[DOL, 35U]->↓
+	 *  PC05[DOH, 84U]->↓
+	 */
+
+	fct_pm_action = FCT_PM_ACTION_IDLE;
+
+	fct_timer_start();
+	
+	drv_pin_set_level(PIN_ENABLE_DOH, 1U);
+	drv_pin_set_level(PIN_ENABLE_DOL, 1U);
+	
+    return 0;
 }
 
 static INT8  fct_cmd_4gsignal_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
@@ -202,33 +226,86 @@ static INT8  fct_cmd_gnssfix_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UI
 
 static INT8  fct_cmd_rtc_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-	//TODO: get rtc time
-    return -1;
+	INT32 ret = 0;
+	DEV_TIME time;
+	ret = time_if_rtc_get(&time);
+	if(0 != ret)
+	{
+		return -1;
+	}
+
+    return 0;
 }
 
 static INT8  fct_cmd_setcan_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-    return -1;
+	INT32 i = 0;
+	INT32 port = 0;
+	if(-1 == sscanf((char *)msg, "fctsetcan:port=%d\r\n", &port))
+	{
+		return -1;
+	}
+
+	if(port < 1 || port > 3)
+	{
+		return -1;
+	}
+
+	if(2 == port)
+	{
+		fct_pm_action = FCT_PM_ACTION_CAN2;
+	}
+	
+	for(i = 0; i < port; i++)
+	{
+		can_if_setbaud(i, 250, 1);
+	}
+	
+    return 0;
 }
 
 static INT8  fct_cmd_can_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+	fct_pm_action = FCT_PM_ACTION_IDLE;
+	fct_timer_stop();
+	if(can_if_get_recv_count(0) + can_if_get_recv_count(1) > 0)
+	{
+		return 0;
+	}
     return -1;
 }
 
 static INT8  fct_cmd_can0_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+	if(can_if_get_recv_count(0) > 0)
+	{
+		return 0;
+	}
     return -1;
 }
 
 static INT8  fct_cmd_can1_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+	if(can_if_get_recv_count(1) > 0)
+	{
+		return 0;
+	}
     return -1;
 }
 
 static INT8  fct_cmd_can2_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+	if(can_if_get_recv_count(2) > 0)
+	{
+		return 0;
+	}
     return -1;
+}
+
+static INT8 fct_ring_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+	//检测4g_sim信息
+	return -1;
 }
 
 static INT8  fct_cmd_mainpm_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
@@ -254,7 +331,13 @@ static INT8  fct_cmd_battmp_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UIN
 
 static INT8  fct_cmd_sleep_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+	if(tbox_pm_io_acc_is_active())
+	{
+		return -1;
+	}
+	
     fct_pm_action = FCT_PM_ACTION_SLEEP;
+	fct_timer_start();
     return 0;
 }
 
@@ -301,8 +384,27 @@ static INT8  fct_cmd_getsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
 
 static INT8  fct_cmd_io_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-	//TODO
-    return -1;
+	INT32 pe12 = 0;
+	INT32 pb04 = 0;
+	/*IOGET
+	 *  PE12[ACC, 19U]->↓
+	 *  PB04[DIL, 28U]->↑
+	 */
+	pe12 = drv_pin_get_level(PIN_WAKE_ACC);
+	pb04 = drv_pin_get_level(PIN_MCU_DIL);
+
+	if(0 == pe12 && 1 == pb04)
+	{
+		//IORESET
+		drv_pin_set_level(PIN_ENABLE_DOH, 0U);
+		drv_pin_set_level(PIN_ENABLE_DOL, 0U);
+		return 0;
+	}
+
+	//IORESET
+	drv_pin_set_level(PIN_ENABLE_DOH, 0U);
+	drv_pin_set_level(PIN_ENABLE_DOL, 0U);
+	return -1;
 }
 
 static INT8  fct_cmd_set_trace_code_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
@@ -345,6 +447,82 @@ static INT8  fct_cmd_get_trace_code_proc(const CHAR *msg, CHAR *res, UINT16 res_
     return 0;
 }
 
+static INT8  fct_cmd_nand_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+#define EXFLASH_NAND_ADDR_FCT_TEST 0x00000000
+	
+	UINT8 ret = 0;
+	UINT8 test_data[10] = {0x12, 0x34, 0x67, 0xAC, 0x71, 0xC7, 0x89, 0xDA, 0x65, 0x46};
+	UINT8 rcv_data[10]	= {0};
+
+	ret = drv_flash_nand_erase(EXFLASH_NAND_ADDR_FCT_TEST, 1);
+	if (ret != 0)
+	{
+		tbox_log_print("fct erase nand flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	ret = drv_flash_nand_write(EXFLASH_NAND_ADDR_FCT_TEST, test_data, sizeof(test_data));
+	if (ret != 0)
+	{
+		tbox_log_print("fct write nand flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	ret = drv_flash_nand_read(EXFLASH_NAND_ADDR_FCT_TEST, rcv_data, sizeof(test_data));
+	if (ret != 0)
+	{
+		tbox_log_print("fct read nand flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	if(0 != memcmp(test_data, rcv_data, sizeof(rcv_data)))
+	{
+		tbox_log_print("fct cmp nand flash data failed\r\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static INT8  fct_cmd_nor_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+#define EXFLASH_NOR_ADDR_FCT_TEST 0x00000000
+	
+	UINT8 ret = 0;
+	UINT8 test_data[10] = {0x12, 0x34, 0x67, 0xAC, 0x71, 0xC7, 0x89, 0xDA, 0x65, 0x46};
+	UINT8 rcv_data[10]	= {0};
+
+	ret = drv_flash_nor_erase(EXFLASH_NOR_ADDR_FCT_TEST, 1);
+	if(0 != ret)
+	{
+		tbox_log_print("fct erase nor flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	ret = drv_flash_nor_write(EXFLASH_NOR_ADDR_FCT_TEST, test_data, sizeof(test_data));
+	if(0 != ret)
+	{
+		tbox_log_print("fct write nor flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	ret = drv_flash_nor_read(EXFLASH_NOR_ADDR_FCT_TEST, rcv_data, sizeof(rcv_data));
+	if(0 != ret)
+	{
+		tbox_log_print("fct read nor flash data failed, ret: %d\r\n", ret);
+		return -1;
+	}
+
+	if(0 != memcmp(test_data, rcv_data, sizeof(rcv_data)))
+	{
+		tbox_log_print("fct cmp nor flash data failed\r\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 static INT8  fct_cmd_setdefault_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
 	if(0 != tbox_cfg_reset())
@@ -355,57 +533,13 @@ static INT8  fct_cmd_setdefault_proc(const CHAR *msg, CHAR *res, UINT16 res_len,
     return 0;
 }
 
-
-static INT8  fct_cmd_flash_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
-{
-	//TODO: 服务层暂不支持
-	return -1;
-}
-
-static INT8  fct_cmd_eeprom_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
-{
-	//TODO: 不支持
-	
-    return -1;
-}
-
-static INT8  fct_cmd_efs_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
-{
-#if 0
-    UINT8 ret = 0;
-	UINT8 test_data[10] = {0xAB, 0xFA, 0xAF, 0xAC, 0x71, 0xC7, 0x89, 0xDA, 0x65, 0x46};
-    UINT8 rcv_data[10]  = {0};
-
-	ret = drv_flash_nor_write(EXFLASH_ADDR_FCT_TEST, test_data, sizeof(test_data));
-	if(0 != ret)
-	{
-		return -1;
-	}
-
-	ret = drv_flash_nor_read(EXFLASH_ADDR_FCT_TEST, rcv_data, sizeof(rcv_data));
-	if(0 != ret)
-	{
-		return -1;
-	}
-
-	if(0 != memcmp(test_data, rcv_data, sizeof(rcv_data)))
-	{
-		return -1;
-	}
-	
-    return 0;
-#else
-	return -1;
-#endif
-}
-
 static FCT_CMD_CMD fct_cmd_table[] = {
     {"fctstartup",     fct_cmd_startup_proc       },
     {"fct4gsignal",    fct_cmd_4gsignal_proc      },
     {"fcticcid",       fct_cmd_iccid_proc         },
     {"fctimei",        fct_cmd_imei_proc          },
-    {"fctsettelno",    fct_cmd_set_telno_proc      },
-    {"fctgettelno",    fct_cmd_get_telno_proc      },
+    {"fctsettelno",    fct_cmd_set_telno_proc     },
+    {"fctgettelno",    fct_cmd_get_telno_proc     },
     {"fct4gant",       fct_cmd_4gant_proc         },    
     {"fct4gnet",       fct_cmd_4gnet_proc         },
     {"fctgnssant",     fct_cmd_gnssant_proc       },
@@ -416,20 +550,20 @@ static FCT_CMD_CMD fct_cmd_table[] = {
     {"fctcan0",        fct_cmd_can0_proc          },
     {"fctcan1",        fct_cmd_can1_proc          },
     {"fctcan2",        fct_cmd_can2_proc          },
+	{"fctring",	  	   fct_ring_proc 	   		  },
     {"fctrmainpm",     fct_cmd_mainpm_proc        },
     {"fctbatpm",	   fct_cmd_batpm_proc         },
     {"fctbattmp",      fct_cmd_battmp_proc        },
-    {"fctsleep",       fct_cmd_sleep_proc         },
     {"fctsetsn",       fct_cmd_setsn_proc         },
     {"fctgetsn",       fct_cmd_getsn_proc         },
     {"fctsettcode",    fct_cmd_set_trace_code_proc},
     {"fctgettcode",    fct_cmd_get_trace_code_proc},
     {"fctio",          fct_cmd_io_proc            },
-    {"fctflash",       fct_cmd_flash_proc         },
-    {"fctefs",         fct_cmd_efs_proc           }, 
-    {"fcteeprom",      fct_cmd_eeprom_proc        },
+    {"fctnor",         fct_cmd_nor_proc           }, 
+    {"fctnand",        fct_cmd_nand_proc          },
     
     {"fctsetdefault",  fct_cmd_setdefault_proc    },
+    {"fctsleep",       fct_cmd_sleep_proc         },
 };
 
 static INT8 fct_eol_btlver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
@@ -448,7 +582,7 @@ static INT8 fct_eol_btlver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
     return 0;
 }
 
-static INT8 fct_eol_appver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+static INT8 fct_eol_mcuver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
     const CHAR *ver = NULL;
 	UNUSED(msg);
@@ -461,6 +595,50 @@ static INT8 fct_eol_appver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
 	}
 
 	*out_len = snprintf(res, res_len, "+mcuappver:%.*s\r\n", (int)strlen(ver), ver);
+    return 0;
+}
+
+static INT8 fct_eol_mpuver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+	INT32 ret = 0;
+    CHAR  ver[32] = {0};
+	
+	UNUSED(msg);
+	
+	ret = if_4g_get_chipid((UINT8 *)ver, sizeof(ver));
+	if(0 != ret)
+	{
+		return -1;
+	}
+
+	if(0 == strlen(ver))
+	{
+		return -1;
+	}
+
+	*out_len = snprintf(res, res_len, "+mpuappver:%.*s\r\n", (int)strlen(ver), ver);
+    return 0;
+}
+
+static INT8 fct_eol_fwver_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+	INT32 ret = 0;
+    CHAR  ver[32] = {0};
+	
+	UNUSED(msg);
+	
+	ret = if_4g_get_fwversion((UINT8 *)ver, sizeof(ver));
+	if(0 != ret)
+	{
+		return -1;
+	}
+
+	if(0 == strlen(ver))
+	{
+		return -1;
+	}
+
+	*out_len = snprintf(res, res_len, "+mpufwver:%.*s\r\n", (int)strlen(ver), ver);
     return 0;
 }
 
@@ -639,11 +817,15 @@ static INT8 fct_eol_set_can1baud_proc(const CHAR *msg, CHAR *res, UINT16 res_len
 	{
 		return -1;
 	}
-	
+
+	if((0 != baud) && (250 != baud) && (500 != baud) && (1000 != baud))
+	{
+		return -1;
+	}
+
 	TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);	
 	if(0 != tbox_cfg_write(cfg_id, &baud))
 	{
-		//TODO: 重新初始化波特率
 		return -1;
 	}
 	
@@ -659,11 +841,15 @@ static INT8 fct_eol_set_can2baud_proc(const CHAR *msg, CHAR *res, UINT16 res_len
 	{
 		return -1;
 	}
+
+	if((0 != baud) && (250 != baud) && (500 != baud) && (1000 != baud))
+	{
+		return -1;
+	}
 	
 	TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);	
 	if(0 != tbox_cfg_write(cfg_id, &baud))
 	{
-		//TODO: 重新初始化波特率
 		return -1;
 	}
 	
@@ -679,11 +865,15 @@ static INT8 fct_eol_set_can3baud_proc(const CHAR *msg, CHAR *res, UINT16 res_len
 	{
 		return -1;
 	}
+
+	if((0 != baud) && (250 != baud) && (500 != baud) && (1000 != baud))
+	{
+		return -1;
+	}
 	
 	TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);	
 	if(0 != tbox_cfg_write(cfg_id, &baud))
 	{
-		//TODO: 重新初始化波特率
 		return -1;
 	}
 	
@@ -790,6 +980,41 @@ static INT8 fct_eol_get_trace_code_proc(const CHAR *msg, CHAR *res, UINT16 res_l
 	*out_len = snprintf(res, res_len, "+code:%s\r\n", trace_code);
     return 0;
 }
+
+static INT8 fct_eol_set_time_zone_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+    TBOX_CFG_ID cfg_id;
+	UINT8 zone = 0;
+
+	if(-1 == sscanf((char *)msg, "eolsettimezone:zone=%hhu\r\n", &zone))
+	{
+		return -1;
+	}
+	
+	TBOX_CFG_ID_GET(TIMEZONE, cfg_id);	
+	if(0 != tbox_cfg_write(cfg_id, &zone))
+	{
+		return -1;
+	}
+	
+    return 0;
+}
+
+static INT8 fct_eol_get_time_zone_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+{
+    TBOX_CFG_ID cfg_id;
+	UINT8 zone = 0;
+	
+	TBOX_CFG_ID_GET(TIMEZONE, cfg_id);
+	if(0 != tbox_cfg_read(cfg_id, &zone))
+	{
+		return -1;
+	}
+
+	*out_len = snprintf(res, res_len, "+timezone:%d\r\n", zone);
+    return 0;
+}
+
 
 static INT8 fct_eol_setdefault_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
@@ -1262,16 +1487,50 @@ static INT8 fct_eol_get_imei_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UI
 
 static INT8 fct_eol_get_battype_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-    return -1;
+	TBOX_CFG_ID cfg_id;
+    UINT8 type = 0;
+
+	TBOX_CFG_ID_GET(BATTYPE, cfg_id);
+	if(0 != tbox_cfg_read(cfg_id, &type))
+	{
+		return -1;
+	}
+
+	if(type > 1)
+	{
+		return -1;
+	}
+
+	*out_len = snprintf(res, res_len, "+battype:%d\r\n", type);
+	return 0;	
 }
 
 static INT8 fct_eol_set_battype_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-    return -1;
+	TBOX_CFG_ID cfg_id;
+	UINT8 type = 0;
+
+	if(-1 == sscanf((char *)msg, "eolsetbattype:type=%hhu\r\n", &type))
+	{
+		return -1;
+	}
+
+	if(type > 1)
+	{
+		return -1;
+	}
+	
+	TBOX_CFG_ID_GET(BATTYPE, cfg_id);	
+	if(0 != tbox_cfg_write(cfg_id, &type))
+	{
+		return -1;
+	}
+	
+    return 0;
 }
 
 static INT8 fct_eol_get_pm_mode_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
-{
+{	
     return -1;
 }
 
@@ -1282,7 +1541,9 @@ static INT8 fct_eol_set_pm_mode_proc(const CHAR *msg, CHAR *res, UINT16 res_len,
 
 static FCT_CMD_CMD eol_cmd_table[] = {
     {"eolmcubtlver",   		fct_eol_btlver_proc        		},
-    {"eolmcuappver",   		fct_eol_appver_proc        		},
+    {"eolmcuappver",   		fct_eol_mcuver_proc        		},
+    {"eolmpuappver",   		fct_eol_mpuver_proc        		},
+    {"eolfwver",   			fct_eol_fwver_proc        		},
     {"eolgetbattype",		fct_eol_get_battype_proc		},
     {"eolsetbattype",       fct_eol_set_battype_proc        },
     {"eolgetpmmode",		fct_eol_get_pm_mode_proc		},
@@ -1302,7 +1563,9 @@ static FCT_CMD_CMD eol_cmd_table[] = {
     {"eolsetsn",       		fct_eol_setsn_proc         		},
     {"eolgetsn",       		fct_eol_getsn_proc         		},
     {"eolsettcode",    		fct_eol_set_trace_code_proc		},
-    {"eolgettcode",         fct_eol_get_trace_code_proc		},    
+    {"eolgettcode",         fct_eol_get_trace_code_proc		},     
+    {"eolsettimezone",      fct_eol_set_time_zone_proc		},    
+    {"eolgettimezone",      fct_eol_get_time_zone_proc		},    
     {"eolsetdefault",  		fct_eol_setdefault_proc    		},
     
     {"eolgetgbfip",      	fct_eol_get_gbf_ip_proc     	},
@@ -1330,15 +1593,77 @@ static FCT_CMD_CMD eol_cmd_table[] = {
 };
 
 
-VOID fct_cmd_init(VOID)
+INT32 fct_cmd_init(UINT8 seq)
 {
-	//TODO
+	switch (seq)
+    {
+        case MODULE_INIT_SEQ_OS:
+			fct_pm_action = FCT_PM_ACTION_IDLE;
+            break;
+
+        case MODULE_INIT_SEQ_STORAGE:
+            break;
+
+        case MODULE_INIT_SEQ_MODULE:
+            break;
+            
+        default:
+            break;
+    }
+	return 0;
+}
+
+static VOID fct_cmd_sleep(VOID)
+{	
+	fct_pm_action = FCT_PM_ACTION_IDLE;
+	tbox_pm_fctsleep();
+}
+
+static VOID fct_cmd_send_test_can(VOID)
+{
+	INT32 ret = 0;
+	can_msg_t  msg;
+	static UINT32 i = 0;
+
+	memset(&msg, 0x00, sizeof(can_msg_t));
+
+	msg.ins = 0;
+    msg.id  = 0x33;
+	msg.data[0] = i&0xFF;
+	msg.data[1] = (i>>8)&0xFF;
+	msg.data[2] = (i>>16)&0xFF;
+	msg.data[3] = (i>>24)&0xFF;
+	msg.data[4] = 0;
+	msg.data[5] = 0;
+	msg.data[6] = 0;
+	msg.data[7] = 0;
+
+	i++;
+	ret = can_if_send(&msg);
+	if(0 != ret)
+	{
+		tbox_log_print("fct send can data failed, ret: %d\r\n", ret);
+	}
 }
 
 VOID fct_cmd_timeout(VOID)
 {
-	//TODO
 	MODULE_LOG_I(FCT, "fct cmd timeout.");
+	switch (fct_pm_action)
+	{
+		case FCT_PM_ACTION_IDLE:
+			break;
+		case FCT_PM_ACTION_LISTEN:
+			break;
+		case FCT_PM_ACTION_SLEEP:
+			fct_cmd_sleep();
+			break;
+		case FCT_PM_ACTION_CAN2:
+			fct_cmd_send_test_can();
+			break;
+		default:
+			break;
+	}
 }
 
 VOID fct_fctcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize)

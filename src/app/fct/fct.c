@@ -51,7 +51,7 @@ static VOID fct_timer_creat(VOID)
 	}
 }
 
-static VOID fct_timer_start(VOID)
+VOID fct_timer_start(VOID)
 {
 	INT32 ret = 0;
 	ret = stimer_start(fct_timer, FCT_APP_CYCLE_INTV);
@@ -61,7 +61,7 @@ static VOID fct_timer_start(VOID)
 	}
 }
 
-static VOID fct_timer_stop(VOID)
+VOID fct_timer_stop(VOID)
 {
 	INT32 ret = 0;
 	ret = stimer_stop(fct_timer);
@@ -84,11 +84,8 @@ static INT32 fct_init(UINT8 seq)
         case MODULE_INIT_SEQ_STORAGE:
             break;
 
-        case MODULE_INIT_SEQ_MODULE:
-            fct_cmd_init();
-			fct_shell_init();
+        case MODULE_INIT_SEQ_MODULE:            
 			fct_timer_creat();
-			fct_timer_start();
             tbox_module_set_state(fct_module_id, TBOX_MODULE_STATE_START);
             break;
             
@@ -96,6 +93,9 @@ static INT32 fct_init(UINT8 seq)
             break;
     }
 
+	fct_cmd_init(seq);
+	fct_shell_init(seq);
+	
     MODULE_LOG_D(FCT, "init seq:%d, ret:%d", seq, ret);
     return ret;
 }
@@ -108,7 +108,6 @@ static VOID fct_stop(VOID)
 
 static VOID  fct_start(VOID)
 {
-	fct_timer_start();
 	tbox_module_set_state(fct_module_id, TBOX_MODULE_STATE_START);
 }
 

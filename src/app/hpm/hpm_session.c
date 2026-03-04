@@ -4,6 +4,7 @@
 #include "flash_common.h"
 #include "time_if.h"
 #include "tbox_cfg_if.h"
+#include "4g_if.h"
 #include "tbox_pm_io.h"
 
 #include "hpm_content.h"
@@ -192,6 +193,12 @@ INT32 hpm_sesion_get_data_seq(UINT8 *buf)
     return 2;
 }
 
+static VOID hpm_session_step_set(HPM_SESSION_STEP_E status)
+{
+    hpm_session_step = status;
+    MODULE_LOG_E(HPM, "hpm session status: %d", status);
+}
+
 UINT32 hpm_session_init(UINT8 seq)
 {
     switch (seq)
@@ -219,7 +226,7 @@ UINT32 hpm_session_init(UINT8 seq)
 
 VOID hpm_session_wake(VOID)
 {
-    hpm_session_step = HPM_SESSION_STEP_INIT;
+    hpm_session_step_set(HPM_SESSION_STEP_INIT);
     hpm_data_flush_trans_list();
     hpm_data_flush_realtm_data();
 }
@@ -250,7 +257,7 @@ static INT32 hpm_session_com_login(VOID)
         return -1;
     }
 
-    MODULE_LOG_DUMP(HPM, "hpm login:", buf, len);
+    MODULE_LOG_DUMP(HPM, "hpm login", buf, len);
 
     if (0 != hpm_net_send(buf, len))
     {
@@ -282,7 +289,7 @@ static INT32 hpm_session_com_logout(VOID)
         return -1;
     }
 
-    MODULE_LOG_DUMP(HPM, "hpm login:", buf, len);
+    MODULE_LOG_DUMP(HPM, "hpm logout", buf, len);
     if (0 != hpm_net_send(buf, len))
     {
         MODULE_LOG_E(HPM, "send failed, len: %d", len);
@@ -312,7 +319,7 @@ static INT32 hpm_session_com_heartbeat(VOID)
         return -1;
     }
 
-    MODULE_LOG_DUMP(HPM, "hpm heartbeat:", buf, len);
+    MODULE_LOG_DUMP(HPM, "hpm heartbeat", buf, len);
     if (0 != hpm_net_send(buf, len))
     {
         hpm_session_force_stop();
@@ -346,6 +353,7 @@ static INT32 hpm_session_send_login(UINT8 resp)
             {
                 sender->state = HPM_SESSION_SEND_WAIT;
                 sender->wait_time = current_tick;
+                hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT].wait_time = current_tick;
             }
         }
         break;
@@ -371,7 +379,7 @@ static INT32 hpm_session_send_login(UINT8 resp)
             {
                 MODULE_LOG_E(HPM, "login timeout");
                 sender->state = HPM_SESSION_SEND_SUCCESS;
-                hpm_session_step = HPM_SESSION_STEP_INIT;
+                hpm_session_step_set(HPM_SESSION_STEP_INIT);
                 break;
             }
 
@@ -382,6 +390,7 @@ static INT32 hpm_session_send_login(UINT8 resp)
                 {
                     sender->state = HPM_SESSION_SEND_WAIT;
                     sender->wait_time = current_tick;
+                    hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT].wait_time = current_tick;
                     sender->retry_count = 0;
                 }
             }
@@ -415,6 +424,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->retry_count = 0;
             sender->wait_time = current_tick;
         }
+        break;
     }
 
     case HPM_SESSION_SEND_WAIT:
@@ -424,7 +434,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->state = HPM_SESSION_SEND_SUCCESS;
             sender->retry_count = 0;
             sender->wait_time = 0;
-            hpm_session_step = HPM_SESSION_STEP_INIT;
+            hpm_session_step_set(HPM_SESSION_STEP_INIT);
             break;
         }
 
@@ -448,7 +458,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             sender->state = HPM_SESSION_SEND_SUCCESS;
             sender->retry_count = 0;
             sender->wait_time = 0;
-            hpm_session_step = HPM_SESSION_STEP_INIT;
+            hpm_session_step_set(HPM_SESSION_STEP_INIT);
             break;
         }
 
@@ -458,7 +468,7 @@ static INT32 hpm_session_send_logout(UINT8 resp)
             {
                 sender->retry_count = 0;
                 sender->state = HPM_SESSION_SEND_SUCCESS;
-                hpm_session_step = HPM_SESSION_STEP_INIT;
+                hpm_session_step_set(HPM_SESSION_STEP_INIT);
             }
             else
             {
@@ -602,7 +612,7 @@ static VOID hpm_session_proc_init(VOID)
 
     if (0 == hpm_session_send_info[HPM_SESSION_EVENT_LOGIN].handle(0))
     {
-        hpm_session_step = HPM_SESSION_STEP_LOGIN;
+        hpm_session_step_set(HPM_SESSION_STEP_LOGIN);
     }
 }
 
@@ -610,7 +620,7 @@ static VOID hpm_session_proc_login(VOID)
 {
     if (HPM_SESSION_STOP == hpm_session_run_status)
     {
-        hpm_session_step = HPM_SESSION_STEP_INIT;
+        hpm_session_step_set(HPM_SESSION_STEP_INIT);
         return;
     }
 
@@ -623,7 +633,7 @@ static VOID hpm_session_proc_login(VOID)
         if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {
             resp = HPM_SESSION_LOGIN_ACK;
-            hpm_session_step = HPM_SESSION_STEP_SESSION;
+            hpm_session_step_set(HPM_SESSION_STEP_SESSION);
 
             MODULE_LOG_I(HPM, "login success");
             hpm_data_flush_trans_list();
@@ -642,7 +652,7 @@ static VOID hpm_session_proc_session(VOID)
 {
     if (HPM_SESSION_STOP == hpm_session_run_status)
     {
-        hpm_session_step = HPM_SESSION_STEP_LOGOUT;
+        hpm_session_step_set(HPM_SESSION_STEP_LOGOUT);
         return;
     }
 
@@ -678,7 +688,7 @@ static VOID hpm_session_proc_logout(VOID)
         if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {
             resp = HPM_SESSION_LOGOUT_ACK;
-            hpm_session_step = HPM_SESSION_STEP_INIT;
+            hpm_session_step_set(HPM_SESSION_STEP_INIT);
         }
         else
         {
@@ -691,7 +701,7 @@ static VOID hpm_session_proc_logout(VOID)
 VOID hpm_session_process(VOID)
 {
     hpm_data_recv_process();
-    switch (hpm_session_step)
+    switch (hpm_session_get_step())
     {
     case HPM_SESSION_STEP_INIT:
         hpm_session_proc_init();
@@ -708,7 +718,6 @@ VOID hpm_session_process(VOID)
     default:
         break;
     }
-    MODULE_LOG_I(HPM, "hpm session step: %d", hpm_session_step);
 }
 
 HPM_SESSION_STEP_E hpm_session_get_step(VOID)
@@ -738,7 +747,7 @@ VOID hpm_session_stop(VOID)
 
 VOID hpm_session_force_stop(VOID)
 {
-    hpm_session_step = HPM_SESSION_STEP_INIT;
+    hpm_session_step_set(HPM_SESSION_STEP_INIT);
     for (INT32 i = 0; i < HPM_SESSION_EVENT_MAX; i++)
     {
         hpm_session_send_info[i].state = HPM_SESSION_SEND_INIT;

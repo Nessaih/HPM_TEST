@@ -1,1172 +1,1161 @@
 #include "tbox_common.h"
-#include "tbox_string.h"
 #include "tbox_core.h"
 #include "time_if.h"
+#include "4g_if.h"
 #include "tbox_cfg_if.h"
 #include "flash_common.h"
 #include "drv_flash_mcu.h"
-#include "4g_if.h"
+#include "hpm_param_parse.h"
 #include "hpm_param_fetch.h"
+#include "tbox_config.h"
 #include "hpm_can.h"
+#include "j1939_if.h"
+#include "md5.h"
 
 #define HPM_PARAM_FETCH_NAME "HPM_PARAM_FETCH_CONFIG"
-#define HPM_PARAM_MAGIC_NUM (0x4346) // "CF"
+#define HPM_PARAM_MAGIC_NUM (0x43464546)
+#define HPM_FECTCH_DOWNLOAD_TIMEOUT (60U) // 60s
+#define HPM_FECTCH_DOWNLOAD_DELAY (3U)    // 3s
+#define HPM_FETCH_FLASH_READ_SIZE (256UL)
+#define HPM_FETCH_FLASH_PARSE_SIZE (512UL)
 
 #define HPM_PARAM_LOCK() xSemaphoreTake(hpm_param_task_mutex, portMAX_DELAY)
 #define HPM_PARAM_UNLOCK() xSemaphoreGive(hpm_param_task_mutex)
 
-#ifndef HPM_PARAM_J1939
-typedef void (*J1939_PGN_CALLBACK_T)(uint8_t *msg, uint16_t len, uint32_t *pgn);
-#endif
-
-#define HPM_PARAM_DOWNLOAD_TIMEOUT (300U) // 300s
-#define HPM_PARAM_READ_SIZE (64U)
-#define HPM_PARAM_BUFFER_SIZE (256U)
+#define HPM_PARAM_FTP_MIN_SIZE (22UL)
+#define HPM_PARAM_FTP_SIZE_MAX (128UL)
 
 typedef enum
 {
-    HPM_PARAM_INIT = 0,
-    HPM_PARAM_START_DOWNLOAD = 1,
-    HPM_PARAM_DOWNLOADING = 2,
-    HPM_PARAM_READ_CFG = 3,
-} HPM_PARAM_STATE;
+    HPM_FETCH_FTP_INIT = 0,
+    HPM_FETCH_FTP_START = 1,
+    HPM_FETCH_FTP_DOWNLOAD = 2,
+    HPM_FETCH_FTP_FINISH = 3
+} hpm_fetch_ftp_e;
 
 typedef struct
 {
-    uint32_t param_id;
-    uint32_t file_size;
-    uint8_t url[128];
-    uint8_t md5[16];
-} HPM_FTP_DOWNLOAD_INFO;
+    UINT32 file_size : 16;
+    UINT32 download_size : 16;
+    UINT32 state : 4;
+    UINT32 timeout : 12;
+    UINT32 url_len : 16;
+    UINT32 sequence;
+    UINT8 md5[16];
+    UINT8 *url;
+} hpm_fetch_ftp_t;
 
 typedef struct
 {
-    uint8_t can_channel;
-    uint32_t canID;
-} HPM_PARAM_CFG_TYPE1_SINGLE;
+    hpm_fetch_node_t *node;
+    UINT8 data[HPM_FECTCH_SINGLE_DATA_LEN];
+} hpm_fetch_can_single_t;
 
 typedef struct
 {
-    uint8_t can_channel;
-    uint8_t frame_num;
-    uint8_t index;
-    uint32_t canID;
-} HPM_PARAM_CFG_TYPE2_COMPLEX;
-
-typedef struct
-{
-    uint8_t can_channel;
-    uint16_t sa;
-    uint16_t pgn;
-    J1939_PGN_CALLBACK_T fun_cb;
-} HPM_PARAM_CAN_TYPE3_PGN_BC;
-
-typedef struct
-{
-    uint8_t can_channel;
-    uint16_t sa;
-    uint16_t ta;
-    uint16_t pgn;
-    J1939_PGN_CALLBACK_T fun_cb;
-} HPM_PARAM_CAN_TYPE4_PGN_REQ;
-
-typedef struct
-{
-    uint8_t can_channel;
-    uint32_t req_id;
-    uint32_t resp_id;
-    uint32_t did;
-} HPM_PARAM_CAN_TYPE5_UDS;
-
-typedef struct
-{
-    uint32_t id;
-    uint16_t intv;
-    uint16_t baud1;
-    uint16_t baud2;
-    uint8_t obd;
-    uint8_t can1_num;
-    uint8_t can2_num;
-    uint8_t can3_num;
-    uint8_t can4_num;
-    uint8_t can5_num;
-    HPM_PARAM_CFG_TYPE1_SINGLE can1_single[HPM_PARAM_MAX_CAN_TYPE1_SINGLE];
-    HPM_PARAM_CFG_TYPE2_COMPLEX can2_complex[HPM_PARAM_MAX_CAN_TYPE2_COMPLEX];
-    HPM_PARAM_CAN_TYPE3_PGN_BC can3_pgn_bc[HPM_PARAM_MAX_CAN_TYPE3_PGN_BC];
-    HPM_PARAM_CAN_TYPE4_PGN_REQ can4_pgn_req[HPM_PARAM_MAX_CAN_TYPE4_PGN_REQ];
-    HPM_PARAM_CAN_TYPE5_UDS can5_uds[HPM_PARAM_MAX_CAN_TYPE5_UDS];
-} HPM_PARAM_CFG_INFO;
-
-typedef struct
-{
-    uint8_t flag;
-    uint32_t param_id;
-    uint32_t file_size;
-    uint16_t magic_num;
-} HPM_PARAM_RECORD_INFO;
+    hpm_fetch_node_t *node;
+    UINT8 data[HPM_FECTCH_MULTI_DATA_LEN];
+} hpm_fetch_can_multi_t;
 
 static SemaphoreHandle_t hpm_param_task_mutex;
-static HPM_PARAM_RECORD_INFO hpm_param_record_info;
-static uint8_t hpm_param_state;
-static time_t hpm_param_req_time;
+static hpm_fetch_ftp_t hpm_fetch_ftp;
+static hpm_fetch_config_t hpm_fetch_config;
 
-static HPM_FTP_DOWNLOAD_INFO hpm_download_info;
-static uint32_t hpm_param_write_addr;
-static HPM_PARAM_CFG_INFO hpm_param_cfg_info;
-static HPM_PARAM_CFG_INFO hpm_param_info_tmp;
-static int8_t hpm_uds_handle;
-static int8_t hpm_pgn_req_index;
-static int8_t hpm_did_req_index;
-static uint8_t hpm_param_buffer[HPM_PARAM_BUFFER_SIZE];
+static hpm_fetch_can_single_t hpm_fetch_can_single[HPM_FETCH_SINGLE_COUNT];
+static hpm_fetch_can_multi_t hpm_fetch_can_multi[HPM_FETCH_MULTI_COUNT];
 
-static uint8_t hpm_param_read_download_cfg(uint32_t file_size);
-static uint8_t hpm_param_read_cfg_failed(void);
-static uint8_t hpm_param_read_cfg_success(void);
-static void hpm_param_cfg_info_record_success(void);
-static void hpm_param_cfg_info_record_failed(void);
+static BOOL hpm_fetch_register_node(VOID);
+static VOID hpm_fetch_unregister_all(VOID);
+static INT32 hpm_fetch_save_config(VOID);
+static INT32 hpm_fetch_load_config(VOID);
+static VOID hpm_fetch_set_param(hpm_fetch_config_t *config);
 
-int hpm_param_init(UINT8 seq)
+static INT32 hpm_ftech_parse_file(const UINT8 *data, UINT16 len, hpm_fetch_parse_t *parse, hpm_fetch_config_t *config)
 {
-    switch (seq)
+    if ((NULL_PTR == data) || (0 == len) || (NULL_PTR == parse) || (NULL_PTR == config))
     {
-    case MODULE_INIT_SEQ_OS:
-        hpm_param_task_mutex = xSemaphoreCreateMutex();
-        if (NULL_PTR == hpm_param_task_mutex)
-        {
-            MODULE_LOG_E(HPM, "param fetch mutex create failed");
-            return -1;
-        }
-        break;
-    case MODULE_INIT_SEQ_MODULE:
+        MODULE_LOG_E(HPM, "invalid parameter");
+        return -1;
+    }
+
+    if (parse->pos + len >= HPM_FETCH_FLASH_PARSE_SIZE)
     {
-        memset(&hpm_param_record_info, 0, sizeof(hpm_param_record_info));
-        tbox_cfg_getkv(HPM_PARAM_FETCH_NAME, &hpm_param_record_info, sizeof(hpm_param_record_info));
-        if (HPM_PARAM_MAGIC_NUM != hpm_param_record_info.magic_num)
+        MODULE_LOG_E(HPM, "parse buffer overflow");
+        return -1;
+    }
+
+    char line[64] = {0};
+
+    memcpy(parse->data + parse->pos, data, len);
+    parse->len += len;
+
+    const char *base = (const char *)parse->data; /* start of buffer */
+    const char *p = base + parse->pos;
+    const char *end = base + parse->len;
+    while (p < end)
+    {
+        if (NULL == strstr(p, "\n"))
         {
-            MODULE_LOG_E(HPM, "do not find param cfg !!!!!!!");
-            memset(&hpm_param_record_info, 0, sizeof(hpm_param_record_info));
-            hpm_param_record_info.magic_num = HPM_PARAM_MAGIC_NUM;
-            tbox_cfg_setkv(HPM_PARAM_FETCH_NAME, &hpm_param_record_info, sizeof(hpm_param_record_info));
+            break;
         }
 
-        MODULE_LOG_I(HPM, "read cfg flag:%d", hpm_param_record_info.flag);
+        hpm_param_skip_blank_line(&p);
 
-        hpm_param_state = HPM_PARAM_INIT;
-        hpm_param_req_time = 0;
-        memset(&hpm_download_info, 0, sizeof(hpm_download_info));
-        hpm_param_write_addr = 0;
-        hpm_uds_handle = -1;
-        hpm_pgn_req_index = -1;
-        hpm_did_req_index = -1;
-        memset(&hpm_param_cfg_info, 0, sizeof(hpm_param_cfg_info));
-        memset(&hpm_param_info_tmp, 0, sizeof(hpm_param_info_tmp));
-        if (1 == hpm_param_record_info.flag)
+        hpm_param_get_line(&p, line, sizeof(line));
+
+        hpm_fetch_line_type_e type = hpm_param_get_line_type(line);
+
+        switch (parse->status)
         {
-            if (0 == hpm_param_read_download_cfg(hpm_param_record_info.file_size))
+        case HPM_FETCH_PARSE_STATUS_INIT:
+            if (HPM_FETCH_LINE_INVALID != type)
             {
-                hpm_param_read_cfg_success();
+                parse->status = HPM_FETCH_PARSE_STATUS_LINE;
+                parse->type = type;
+            }
+            break;
+        case HPM_FETCH_PARSE_STATUS_LINE:
+            if (HPM_FETCH_LINE_INVALID == type)
+            {
+                hpm_param_parse_config(config, line, parse->type);
             }
             else
             {
-                hpm_param_read_cfg_failed();
-                hpm_param_cfg_info_record_failed();
+                parse->type = type;
             }
-            MODULE_LOG_I(HPM, "cfg flag:%d", hpm_param_record_info.flag);
+            break;
+        default:
+            break;
         }
-        memset(hpm_param_buffer, 0, sizeof(hpm_param_buffer));
     }
-    default:
-        break;
+
+    UINT32 consumed = (UINT32)(p - base);
+    if (consumed > parse->len)
+    {
+        consumed = parse->len; /* should not happen, but be safe */
     }
+
+    UINT32 remain = parse->len - consumed;
+    if (remain > 0)
+    {
+        memmove(parse->data, parse->data + consumed, remain);
+    }
+
+    parse->pos = remain;
+    parse->len = remain;
 
     return 0;
 }
 
-static uint8_t hpm_param_get_state(void)
+static INT32 hpm_fetch_ftp_check_file(VOID)
 {
-    uint8_t state = 0;
+    INT32 ret = 0;
 
+    UINT8 *data = mempool_alloc(HPM_FETCH_FLASH_READ_SIZE);
+    if (NULL_PTR == data)
+    {
+        MODULE_LOG_E(HPM, "alloc memory failed");
+        return -1;
+    }
+
+    UINT8 *parse_buf = mempool_alloc(HPM_FETCH_FLASH_PARSE_SIZE);
+    if (NULL_PTR == parse_buf)
+    {
+        MODULE_LOG_E(HPM, "alloc memory failed");
+        mempool_free(data);
+        return -1;
+    }
+
+    MD5_CTX ctx;
+    MD5Init(&ctx);
+
+    hpm_fetch_parse_t hpm_fetch_parse;
+    memset(&hpm_fetch_parse, 0, sizeof(hpm_fetch_parse));
+    hpm_fetch_parse.data = parse_buf;
+
+    UINT32 addr = FLASH_MCU_ADD_HPM_CFG;
+    UINT16 read_len = 0;
+    while (read_len < hpm_fetch_ftp.file_size)
+    {
+        UINT16 len = hpm_fetch_ftp.file_size - read_len;
+        if (len > HPM_FETCH_FLASH_READ_SIZE)
+        {
+            len = HPM_FETCH_FLASH_READ_SIZE;
+        }
+        drv_flash_mcu_read(addr, data, len);
+
+        if (0 != hpm_ftech_parse_file(data, len, &hpm_fetch_parse, &hpm_fetch_config))
+        {
+            break;
+        }
+
+        MD5Update(&ctx, data, len);
+        read_len += len;
+        addr += len;
+        drv_wdg_feed();
+    }
+
+    if (read_len == hpm_fetch_ftp.file_size)
+    {
+        UINT8 md5[16] = {0};
+        MD5Final(&ctx, md5);
+
+        if (0 != memcmp(md5, hpm_fetch_ftp.md5, sizeof(hpm_fetch_ftp.md5)))
+        {
+            MODULE_LOG_DUMP(HPM, "file md5", md5, sizeof(md5));
+            MODULE_LOG_DUMP(HPM, "expected md5", hpm_fetch_ftp.md5, sizeof(hpm_fetch_ftp.md5));
+            ret = 0;
+        }
+    }
+    else
+    {
+        MODULE_LOG_E(HPM, "parse file error, read len %d, file size %d.", read_len, hpm_fetch_ftp.file_size);
+        ret = -1;
+    }
+
+    mempool_free(data);
+    mempool_free(parse_buf);
+
+    return ret;
+}
+
+static VOID hpm_fetch_ftp_init(VOID)
+{
+    memset(&hpm_fetch_ftp, 0, sizeof(hpm_fetch_ftp));
+    hpm_fetch_ftp.url = NULL_PTR;
+}
+
+static VOID hpm_fetch_ftp_state_set(hpm_fetch_ftp_e state)
+{
     HPM_PARAM_LOCK();
-    state = hpm_param_state;
+    hpm_fetch_ftp.state = state;
     HPM_PARAM_UNLOCK();
+}
 
+static UINT32 hpm_fetch_ftp_state_get(VOID)
+{
+    UINT32 state = HPM_FETCH_FTP_INIT;
+    HPM_PARAM_LOCK();
+    state = hpm_fetch_ftp.state;
+    HPM_PARAM_UNLOCK();
     return state;
 }
 
-static void hpm_param_set_state(uint8_t state)
+static VOID hpm_fetch_erase_flash(VOID)
 {
-    HPM_PARAM_LOCK();
-    hpm_param_state = state;
-    HPM_PARAM_UNLOCK();
-}
-
-static uint16_t hpm_param_calc_diff_secs(void)
-{
-    DEV_TIME local_time;
-    time_t local_secs = time_if_get(&local_time);
-
-    if (hpm_param_req_time > local_secs)
+    UINT32 addr = FLASH_MCU_ADD_HPM_CFG;
+    while (addr < FLASH_MCU_ADD_HPM_CFG + FLASH_MCU_SIZE_HPM_CFG)
     {
-        return 0;
-    }
-    return (local_secs - hpm_param_req_time);
-}
-
-static uint8_t hpm_param_write_flash(uint8_t *buff, uint16_t len)
-{
-    uint8_t *temp_addr;
-    uint16_t temp_len, write_len;
-
-    if ((hpm_param_write_addr + len) >= (FLASH_MCU_ADD_HPM_CFG + FLASH_MCU_SIZE_HPM_CFG))
-    {
-        MODULE_LOG_E(HPM, "the data is too long1 len:%d", (int)len);
-        return 1;
-    }
-
-    temp_len = len;
-    temp_addr = buff;
-
-    MODULE_LOG_DUMP(HPM, "cfg data:", buff, len);
-    while (temp_len > 0)
-    {
-        write_len = 256 - (hpm_param_write_addr % 256);
-        if (temp_len <= write_len)
-        {
-            write_len = temp_len;
-        }
-
-        if (0 != drv_flash_mcu_write(hpm_param_write_addr, temp_addr, write_len))
-        {
-            return 1;
-        }
-
-        temp_addr += write_len;
-        hpm_param_write_addr += write_len;
-        temp_len -= write_len;
-
-        MODULE_LOG_E(HPM, "hpm write param cfg addr:%02x", hpm_param_write_addr);
-    }
-
-    return 0;
-}
-
-static void hpm_param_cfg_info_record_success(void)
-{
-    memset(&hpm_param_record_info, 0, sizeof(hpm_param_record_info));
-    hpm_param_record_info.flag = 1;
-    hpm_param_record_info.file_size = hpm_download_info.file_size;
-    hpm_param_record_info.param_id = hpm_download_info.param_id;
-    hpm_param_record_info.magic_num = HPM_PARAM_MAGIC_NUM;
-    if (tbox_cfg_setkv(HPM_PARAM_FETCH_NAME, &hpm_param_record_info, sizeof(hpm_param_record_info)) < 0)
-    {
-        MODULE_LOG_E(HPM, "write param info failed!!!");
-    }
-    else
-    {
-        MODULE_LOG_I(HPM, "write cfg flag:%d", hpm_param_record_info.flag);
+        drv_flash_mcu_erase(addr, FLASH_MCU_SIZE_FOTA_PAGE);
+        addr += FLASH_MCU_SIZE_FOTA_PAGE;
+        drv_wdg_feed();
     }
 }
 
-static void hpm_param_cfg_info_record_failed(void)
+static INT32 hpm_fetch_ftp_write_flash(UINT32 addr, UINT8 *data, UINT16 len)
 {
-    memset(&hpm_param_record_info, 0, sizeof(hpm_param_record_info));
-    hpm_param_record_info.flag = 0;
-    hpm_param_record_info.file_size = 0;
-    hpm_param_record_info.param_id = 0;
-    hpm_param_record_info.magic_num = HPM_PARAM_MAGIC_NUM;
-    if (tbox_cfg_setkv(HPM_PARAM_FETCH_NAME, &hpm_param_record_info, sizeof(hpm_param_record_info)) < 0)
+    if ((addr - FLASH_MCU_ADD_HPM_CFG + len) > (UINT32)FLASH_MCU_SIZE_HPM_CFG)
     {
-        MODULE_LOG_E(HPM, "write param info failed!!!");
+        MODULE_LOG_E(HPM, "addr %x, len %d, overflow", addr, len);
+        return -1;
     }
-    else
+
+    for (UINT8 i = 0; i < 3; i++)
     {
-        MODULE_LOG_I(HPM, "write cfg flag:%d", hpm_param_record_info.flag);
+        if (0 == drv_flash_mcu_write(addr, data, len))
+        {
+            return 0;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100U));
     }
+
+    return -1;
 }
 
-static void hpm_param_bubble_sort(void)
+static UINT8 hpm_fetch_ftp_callback(UINT8 notify, UINT8 *data, UINT16 len)
 {
-    int i, j;
-    HPM_PARAM_CFG_TYPE1_SINGLE tmp1;
-    HPM_PARAM_CFG_TYPE2_COMPLEX tmp2;
-
-    for (i = 0; i < HPM_PARAM_MAX_CAN_TYPE1_SINGLE; i++)
+    if (HPM_FETCH_FTP_DOWNLOAD != hpm_fetch_ftp_state_get())
     {
-        for (j = i + 1; j < hpm_param_cfg_info.can1_num; j++)
+        MODULE_LOG_E(HPM, "download error, state %d.", hpm_fetch_ftp_state_get());
+        return IF_FTP_4G_CALLBACK_RET_ABORT;
+    }
+
+    switch (notify)
+    {
+    case IF_FTP_4G_NOTIFY_PROCESS:
+        if (time_if_get_systick_s() - hpm_fetch_ftp.timeout > HPM_FECTCH_DOWNLOAD_TIMEOUT)
         {
-            if (hpm_param_cfg_info.can1_single[j].canID < hpm_param_cfg_info.can1_single[i].canID)
-            {
-                tmp1 = hpm_param_cfg_info.can1_single[i];
-                hpm_param_cfg_info.can1_single[i] = hpm_param_cfg_info.can1_single[j];
-                hpm_param_cfg_info.can1_single[j] = tmp1;
-            }
+            MODULE_LOG_E(HPM, "download timeout");
+            return IF_FTP_4G_CALLBACK_RET_ABORT;
         }
-    }
 
-    for (i = 0; i < HPM_PARAM_MAX_CAN_TYPE2_COMPLEX; i++)
-    {
-        for (j = i + 1; j < hpm_param_cfg_info.can2_num; j++)
+        if (0 != hpm_fetch_ftp_write_flash(hpm_fetch_ftp.download_size + FLASH_MCU_ADD_HPM_CFG, data, len))
         {
-            if (hpm_param_cfg_info.can2_complex[j].canID < hpm_param_cfg_info.can2_complex[i].canID)
-            {
-                tmp2 = hpm_param_cfg_info.can2_complex[i];
-                hpm_param_cfg_info.can2_complex[i] = hpm_param_cfg_info.can2_complex[j];
-                hpm_param_cfg_info.can2_complex[j] = tmp2;
-            }
+            MODULE_LOG_E(HPM, "write flash failed");
+            return IF_FTP_4G_CALLBACK_RET_ABORT;
         }
-    }
-}
+        hpm_fetch_ftp.download_size += len;
 
-static void hpm_param_uds_open(uint8_t index)
-{
-#if 0
-    UDS_CLIENT uds;
-    int16_t ret;
-
-    uds.instance = hpm_param_cfg_info.can5_uds[index].can_channel - 1;
-    uds.send_id = hpm_param_cfg_info.can5_uds[index].req_id;
-    uds.recv_id = hpm_param_cfg_info.can5_uds[index].resp_id;
-    uds.state_ind = hpm_can_uds_state_cb;
-
-    ret = uds_client_open(&uds);
-    if (ret < 0)
-    {
-        MODULE_LOG_E(HPM, "uds open err:%d", ret);
-        return;
-    }
-    hpm_uds_handle = ret;
-    // MODULE_LOG_I(HPM, "uds open OK,handle:%d channel:%d req id:0x%x  resp id:0x%x", ret,uds.instance,uds.send_id,uds.recv_id);
-#endif
-}
-
-static void hpm_param_uds_close(void)
-{
-#if 0
-    if (hpm_did_req_index >= 0)
-    {
-        if (-1 != hpm_uds_handle)
+        if (hpm_fetch_ftp.download_size > hpm_fetch_ftp.file_size)
         {
-            uds_client_close(hpm_uds_handle);
-            hpm_uds_handle = -1;
+            MODULE_LOG_E(HPM, "download error, data overflow.");
+            return IF_FTP_4G_CALLBACK_RET_ABORT;
         }
-    }
-#endif
-}
-
-static uint8_t hpm_param_read_cfg_success(void)
-{
-    uint8_t i = 0;
-    MODULE_LOG_I(HPM, "hpm_param_read_cfg_success !!!!!!!");
-    HPM_PARAM_LOCK();
-    memcpy(&hpm_param_cfg_info, &hpm_param_info_tmp, sizeof(hpm_param_cfg_info));
-    hpm_param_bubble_sort();
-    if (hpm_param_info_tmp.can4_num > 0)
-    {
-        hpm_pgn_req_index = 0;
-    }
-    if (hpm_param_info_tmp.can5_num > 0)
-    {
-        hpm_did_req_index = 0;
-    }
-    for (i = 0; i < hpm_param_info_tmp.can3_num; i++)
-    {
-        MODULE_LOG_I(HPM, "add pgn:0x%x", hpm_param_info_tmp.can3_pgn_bc[i].pgn);
-        // j1939_pgn_add(hpm_param_info_tmp.can3_pgn_bc[i].pgn);
-        // j1939_al_subscribe(hpm_param_info_tmp.can3_pgn_bc[i].pgn, hpm_can_j1939_can3_cb);
-    }
-    for (i = 0; i < hpm_param_info_tmp.can4_num; i++)
-    {
-        MODULE_LOG_I(HPM, "add pgn:0x%x", hpm_param_info_tmp.can4_pgn_req[i].pgn);
-        // j1939_pgn_add(hpm_param_info_tmp.can4_pgn_req[i].pgn);
-        // j1939_al_subscribe(hpm_param_info_tmp.can4_pgn_req[i].pgn, hpm_can_j1939_can4_cb);
-    }
-
-    HPM_PARAM_UNLOCK();
-
-    return 0;
-}
-
-static uint8_t hpm_param_read_cfg_failed(void)
-{
-    MODULE_LOG_E(HPM, "hpm_param_read_cfg_failed !!!!!!!");
-
-    HPM_PARAM_LOCK();
-    memset(&hpm_param_cfg_info, 0, sizeof(hpm_param_cfg_info));
-    hpm_pgn_req_index = -1;
-    hpm_did_req_index = -1;
-
-    HPM_PARAM_UNLOCK();
-
-    return 0;
-}
-
-static uint8_t hpm_param_set_common_cfg(void)
-{
-    TBOX_CFG_ID cfg_id = CFG_ID_INVALID;
-    if (0 != hpm_param_cfg_info.baud1 && 0xFFFF != hpm_param_cfg_info.baud1)
-    {
-        TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
-        if (CFG_ID_INVALID != cfg_id)
+        break;
+    case IF_FTP_4G_NOTIFY_ERROR:
+        MODULE_LOG_E(HPM, "download error, code %hu.", len);
+        return IF_FTP_4G_CALLBACK_RET_ABORT;
+        break;
+    case IF_FTP_4G_NOTIFY_FINISH:
+        if (hpm_fetch_ftp.download_size != hpm_fetch_ftp.file_size)
         {
-            tbox_cfg_write(cfg_id, (uint8_t *)&hpm_param_cfg_info.baud1);
-        }
-    }
-    if (0 != hpm_param_cfg_info.baud2 && 0xFFFF != hpm_param_cfg_info.baud2)
-    {
-        TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
-        if (CFG_ID_INVALID != cfg_id)
-        {
-            tbox_cfg_write(cfg_id, (uint8_t *)&hpm_param_cfg_info.baud2);
-        }
-    }
-
-#if 0
-    if (0 != hpm_param_cfg_info.intv && 0xFFFF != hpm_param_cfg_info.intv)
-    {
-        TBOX_CFG_ID_GET(DATAPERIODACCON, cfg_id);
-        if (CFG_ID_INVALID != cfg_id)
-        {
-            tbox_cfg_write(cfg_id, (uint8_t *)&hpm_param_cfg_info.intv);
-        }
-    }
-    if (0 != hpm_param_cfg_info.obd && 0xFF != hpm_param_cfg_info.obd)
-    {
-        TBOX_CFG_ID_GET(HPMOBDTYPE, cfg_id);
-        if (CFG_ID_INVALID != cfg_id)
-        {
-            tbox_cfg_write(cfg_id, (uint8_t *)&hpm_param_cfg_info.obd);
-        }
-    }
-#endif
-    return 0;
-}
-
-static uint8_t hpm_param_read_download_cfg(uint32_t file_size)
-{
-    MODULE_LOG_I(HPM, "start param read cfg file size:%d", (int)file_size);
-    uint32_t read_addr = FLASH_MCU_ADD_HPM_CFG;
-    uint32_t read_file_len_total = 0; // total read file len
-    uint32_t read_file_len_once = (HPM_PARAM_READ_SIZE <= file_size) ? HPM_PARAM_READ_SIZE : file_size;
-    uint32_t read_data_len_total = 0; // read data len total
-    uint32_t read_data_len_once = 0;  // read data len once
-    uint8_t *start_line = NULL;
-    uint8_t *end_line = NULL;
-    uint32_t line_len;
-    unsigned short fetch_type;
-    uint16_t index;
-    uint8_t end_len = 2;
-    uint8_t tmp_buffer[16] = {0};
-    uint8_t tmp_len = 0;
-    uint8_t tmp_idx = 0;
-    // read [CO]
-    memset(&hpm_param_info_tmp, 0, sizeof(hpm_param_info_tmp));
-    memset(hpm_param_buffer, 0, sizeof(hpm_param_buffer));
-
-    if (0 != drv_flash_mcu_read(read_addr, hpm_param_buffer, read_file_len_once))
-    {
-        MODULE_LOG_E(HPM, "hpm param cfg read buffer failed");
-        return 1;
-    }
-
-    MODULE_LOG_DUMP(HPM, "cfg read:", hpm_param_buffer, read_file_len_once);
-
-    read_file_len_total += read_file_len_once;
-    read_data_len_once = 0;
-    read_data_len_total = 0;
-
-    MODULE_LOG_I(HPM, "read file total size:%u,read file once size:%u", (unsigned int)read_file_len_total, (unsigned int)read_file_len_once);
-    start_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "[CO]");
-    if (NULL == start_line)
-    {
-        MODULE_LOG_E(HPM, "hpm param cfg read [CO] failed");
-        return 1;
-    }
-
-    end_len = 2;
-    end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\r\n");
-    if (NULL == end_line)
-    {
-        end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\n");
-        if (NULL == end_line)
-        {
-            MODULE_LOG_E(HPM, "hpm param cfg read [CO] end line failed");
-            return 1;
-        }
-        end_len = 1;
-    }
-
-    line_len = end_line - start_line + end_len;
-    read_data_len_once += line_len;
-    read_data_len_total += line_len;
-
-    // read CO info
-    start_line = hpm_param_buffer + read_data_len_once;
-    end_len = 2;
-    end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\r\n");
-    if (NULL == end_line)
-    {
-        end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\n");
-        if (NULL == end_line)
-        {
-            MODULE_LOG_E(HPM, "hpm param cfg read [CO] info end line failed");
-            return 1;
-        }
-        end_len = 1;
-    }
-    line_len = end_line - start_line + end_len;
-    read_data_len_once += line_len;
-    read_data_len_total += line_len;
-
-    sscanf((char *)start_line, "%u,%hu,[%[^]]],%hu", (unsigned int *)&hpm_param_info_tmp.id, (unsigned short *)&hpm_param_info_tmp.intv,
-           tmp_buffer, (unsigned short *)&hpm_param_info_tmp.obd);
-
-    tmp_len = strlen((char *)tmp_buffer);
-    if (tmp_len > 0)
-    {
-        if (NULL == tbox_string_get_substring(tmp_buffer, tmp_len, ":"))
-        {
-            sscanf((char *)tmp_buffer, "%d", (int *)&hpm_param_info_tmp.baud1);
+            MODULE_LOG_E(HPM, "download error, data not match.");
+            return IF_FTP_4G_CALLBACK_RET_ABORT;
         }
         else
         {
-            sscanf((char *)tmp_buffer, "%d:%d", (int *)&hpm_param_info_tmp.baud1, (int *)&hpm_param_info_tmp.baud2);
+            MODULE_LOG_E(HPM, "download finish");
+            hpm_fetch_ftp_state_set(HPM_FETCH_FTP_FINISH);
         }
-    }
-
-    MODULE_LOG_I(HPM, "id:0x%x intv:%d baud1:%d baud2:%d obd:%d", (unsigned int)hpm_param_info_tmp.id, hpm_param_info_tmp.intv, hpm_param_info_tmp.baud1,
-                 hpm_param_info_tmp.baud2, hpm_param_info_tmp.obd);
-
-    // read [ES]
-    start_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "[ES]");
-    if (NULL == start_line)
-    {
-        MODULE_LOG_E(HPM, "hpm param cfg read [ES] failed");
-        return 1;
-    }
-
-    end_len = 2;
-    end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\r\n");
-    if (NULL == end_line)
-    {
-        end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\n");
-        if (NULL == end_line)
-        {
-            MODULE_LOG_E(HPM, "hpm param cfg read [ES] end line failed");
-            return 1;
-        }
-        end_len = 1;
-    }
-    line_len = end_line - start_line + end_len;
-    read_data_len_once += line_len;
-    read_data_len_total += line_len;
-
-    // read ES info
-    for (index = 0; read_data_len_total < file_size; index++)
-    {
-        start_line = hpm_param_buffer + read_data_len_once;
-        end_len = 2;
-        end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\r\n");
-        if (NULL == end_line)
-        {
-            end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\n");
-            if (NULL == end_line)
-            {
-                if (read_file_len_total < file_size && read_data_len_total < file_size)
-                {
-                    read_file_len_total = read_data_len_total;
-                    read_file_len_once = (HPM_PARAM_READ_SIZE <= file_size - read_file_len_total) ? HPM_PARAM_READ_SIZE : file_size - read_file_len_total;
-                    read_addr = FLASH_MCU_ADD_HPM_CFG + read_file_len_total;
-                    drv_flash_mcu_read(read_addr, hpm_param_buffer, read_file_len_once);
-                    read_file_len_total += read_file_len_once;
-                    read_data_len_once = 0;
-
-                    // trace_i(hpm_task_handle, "read file total size:%u,read file once size:%u\r\n",(unsigned int)read_file_len_total,(unsigned int)read_file_len_once);
-                    // trace_dumphex(hpm_task_handle, "cfg read:", hpm_param_buffer, read_file_len_once);
-
-                    start_line = hpm_param_buffer + read_data_len_once;
-                    end_len = 2;
-                    end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\r\n");
-                    if (NULL == end_line)
-                    {
-                        end_line = tbox_string_get_substring(hpm_param_buffer + read_data_len_once, read_file_len_once - read_data_len_once, "\n");
-                        if (NULL == end_line)
-                        {
-                            MODULE_LOG_E(HPM, "hpm param cfg read [ES] info end line failed1,line:%hu", index);
-                            return 1;
-                        }
-                        end_len = 1;
-                    }
-                }
-                else
-                {
-                    MODULE_LOG_E(HPM, "hpm param cfg read [ES] info end line failed2,line:%hu", index);
-                    return 1;
-                }
-            }
-            end_len = 1;
-        }
-
-        line_len = end_line - start_line + end_len;
-        read_data_len_once += line_len;
-        read_data_len_total += line_len;
-
-        sscanf((char *)start_line, "%hu,", &fetch_type);
-        switch (fetch_type)
-        {
-        case 1:
-        {
-            if (hpm_param_info_tmp.can1_num >= HPM_PARAM_MAX_CAN_TYPE1_SINGLE)
-            {
-                MODULE_LOG_E(HPM, "can type1 num over flow");
-                break;
-            }
-            if (2 != sscanf((char *)start_line + 2, "%hu,%08x", (unsigned short *)&(hpm_param_info_tmp.can1_single[hpm_param_info_tmp.can1_num].can_channel),
-                            (unsigned int *)&(hpm_param_info_tmp.can1_single[hpm_param_info_tmp.can1_num].canID)))
-            {
-                MODULE_LOG_E(HPM, "get can type1 failed channel:%d	canid:0x%x",
-                             hpm_param_info_tmp.can1_single[hpm_param_info_tmp.can1_num].can_channel,
-                             (unsigned int)hpm_param_info_tmp.can1_single[hpm_param_info_tmp.can1_num].canID);
-                break;
-            }
-
-            hpm_param_info_tmp.can1_num++;
-            break;
-        }
-        case 2:
-        {
-            if (hpm_param_info_tmp.can2_num >= HPM_PARAM_MAX_CAN_TYPE2_COMPLEX)
-            {
-                MODULE_LOG_E(HPM, "can type2 num over flow");
-                break;
-            }
-            if (3 != sscanf((char *)start_line + 2, "%hu,%*x,%hu,%hu",
-                            (unsigned short *)&hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].can_channel,
-                            (unsigned short *)&hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].frame_num,
-                            (unsigned short *)&hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].index))
-            {
-                MODULE_LOG_E(HPM, "get can type2 failed,channel:%d	canid:0x%x fram:%d index:%d",
-                             (int)hpm_param_info_tmp.can1_single[hpm_param_info_tmp.can1_num].can_channel,
-                             (unsigned int)hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].canID,
-                             (int)hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].frame_num,
-                             (int)hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].index);
-
-                break;
-            }
-
-            tmp_len = 0;
-            memset(tmp_buffer, 0, sizeof(tmp_buffer));
-            for (tmp_idx = 0; tmp_idx < 9; tmp_idx++)
-            {
-                if (*(start_line + 4 + tmp_idx) == ',')
-                {
-                    break;
-                }
-
-                tmp_len++;
-            }
-
-            strncpy((char *)tmp_buffer, (char *)start_line + 4, tmp_len);
-            hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].canID = strtoul((char *)tmp_buffer, NULL, 16);
-
-            if (hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].index >= 8)
-            {
-                MODULE_LOG_E(HPM, "get can type2 failed,index:%d", hpm_param_info_tmp.can2_complex[hpm_param_info_tmp.can2_num].index);
-                break;
-            }
-
-            hpm_param_info_tmp.can2_num++;
-            break;
-        }
-        case 3:
-        {
-            if (hpm_param_info_tmp.can3_num >= HPM_PARAM_MAX_CAN_TYPE3_PGN_BC)
-            {
-                MODULE_LOG_E(HPM, "can type3 num over flow");
-                break;
-            }
-            if (3 != sscanf((char *)start_line + 2, "%hu,%x,%x", (unsigned short *)&hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].can_channel,
-                            (unsigned int *)&hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].sa,
-                            (unsigned int *)&hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].pgn))
-            {
-                MODULE_LOG_E(HPM, "get can type3 failed,channel:%d sa:0x%x,pgn:0x%x",
-                             (int)hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].can_channel,
-                             (unsigned int)hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].sa,
-                             (unsigned int)hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].pgn);
-                break;
-            }
-            // hpm_param_info_tmp.can3_pgn_bc[hpm_param_info_tmp.can3_num].fun_cb = hpm_can_j1939_can3_cb;
-            hpm_param_info_tmp.can3_num++;
-            break;
-        }
-        case 4:
-        {
-            if (hpm_param_info_tmp.can4_num >= HPM_PARAM_MAX_CAN_TYPE4_PGN_REQ)
-            {
-                MODULE_LOG_E(HPM, "can type4 num over flow");
-                break;
-            }
-            if (4 != sscanf((char *)start_line + 2, "%hu,%x,%x,%x", (unsigned short *)&hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].can_channel,
-                            (unsigned int *)&hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].sa,
-                            (unsigned int *)&hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].ta,
-                            (unsigned int *)&hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].pgn))
-            {
-                MODULE_LOG_E(HPM, "get can type4 failed,chanel:%d sa:0x%x ta:0x%x pgn:0x%x",
-                             (int)hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].can_channel,
-                             (unsigned int)hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].sa,
-                             (unsigned int)hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].ta,
-                             (unsigned int)hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].pgn);
-                break;
-            }
-            // hpm_param_info_tmp.can4_pgn_req[hpm_param_info_tmp.can4_num].fun_cb = hpm_can_j1939_can4_cb;
-            hpm_param_info_tmp.can4_num++;
-            break;
-        }
-
-        case 5:
-        {
-            if (hpm_param_info_tmp.can5_num >= HPM_PARAM_MAX_CAN_TYPE5_UDS)
-            {
-                MODULE_LOG_E(HPM, "can type5 num over flowd");
-                break;
-            }
-            if (4 != sscanf((char *)start_line + 2, "%hu,%x,%x,%x", (unsigned short *)&hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].can_channel,
-                            (unsigned int *)&hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].req_id,
-                            (unsigned int *)&hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].resp_id,
-                            (unsigned int *)&hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].did))
-            {
-                MODULE_LOG_E(HPM, "get can type5 failed,chanel:%d reqid:0x%x respid:0x%x did:0x%x",
-                             (int)hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].can_channel,
-                             (unsigned int)hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].req_id,
-                             (unsigned int)hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].resp_id,
-                             (unsigned int)hpm_param_info_tmp.can5_uds[hpm_param_info_tmp.can5_num].did);
-                break;
-            }
-            hpm_param_info_tmp.can5_num++;
-            break;
-        }
-        default:
-        {
-            MODULE_LOG_E(HPM, "can type error type:%d", fetch_type);
-            break;
-        }
-        }
-        // printf("\r\n index:%u read data len:%d read file len:%d file\r\n",index,(int)read_data_len_total,(int)read_file_len_total);
-    }
-
-    return 0;
-}
-
-static uint8_t hpm_param_ftp_download_call_back(uint8 notify_code, uint8 *data, uint16 len)
-{
-    if (hpm_param_get_state() != HPM_PARAM_DOWNLOADING)
-    {
-        MODULE_LOG_E(HPM, "download callback faild,state:%d", hpm_param_get_state());
-        return IF_FTP_4G_CALLBACK_RET_OK;
-    }
-    if (IF_FTP_4G_NOTIFY_FINISH == notify_code)
-    {
-        hpm_param_set_state(HPM_PARAM_READ_CFG);
-        MODULE_LOG_E(HPM, "hpm param cfg download finish");
-    }
-    else if (IF_FTP_4G_NOTIFY_ERROR == notify_code)
-    {
-        MODULE_LOG_E(HPM, "download timeout");
-        hpm_param_set_state(HPM_PARAM_INIT);
-        return IF_FTP_4G_CALLBACK_RET_ABORT;
-    }
-    else
-    {
-        if (hpm_param_calc_diff_secs() >= HPM_PARAM_DOWNLOAD_TIMEOUT)
-        {
-            MODULE_LOG_E(HPM, "download timeout 1");
-            return IF_FTP_4G_CALLBACK_RET_ABORT;
-        }
-        if (0 != hpm_param_write_flash(data, len))
-        {
-            MODULE_LOG_E(HPM, "failed to write flash");
-            return IF_FTP_4G_CALLBACK_RET_ABORT;
-        }
+        break;
+    default:
+        break;
     }
     return IF_FTP_4G_CALLBACK_RET_OK;
 }
 
-int hpm_param_download_req(UINT8* in_data, UINT16 in_len, UINT8* res, UINT16* res_len)
+static VOID hpm_fetch_ftp_handle_init(VOID)
 {
-    unsigned short r_len = 0;
-    uint8_t *url;
-    DEV_TIME time;
-    uint32_t param_id;
-    uint16_t pos = 0;
+    /*do nothing*/
+}
 
-    UNUSED(in_len);
-
-    res[pos++] = 0x00; // 应答长度
-    res[pos++] = 0x00;
-    *res_len = pos;
-
-    if (HPM_PARAM_INIT != hpm_param_get_state())
+static VOID hpm_fetch_ftp_handle_start(VOID)
+{
+    if ((NULL_PTR == hpm_fetch_ftp.url) || (0 == hpm_fetch_ftp.url_len))
     {
-        MODULE_LOG_E(HPM, "param donload faild,state:%u", (unsigned int)hpm_param_get_state());
+        hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
+        return;
+    }
+
+    if (time_if_get_systick_s() - hpm_fetch_ftp.timeout < HPM_FECTCH_DOWNLOAD_DELAY)
+    {
+        return;
+    }
+
+    MODULE_LOG_E(HPM, "can config start.");
+
+    hpm_fetch_erase_flash();
+    if_ftp_4g_download(hpm_fetch_ftp.url, hpm_fetch_ftp.url_len, IF_4G_PUBLIC_APN, hpm_fetch_ftp_callback);
+    hpm_fetch_ftp_state_set(HPM_FETCH_FTP_DOWNLOAD);
+    hpm_fetch_ftp.timeout = time_if_get_systick_s();
+    if (NULL_PTR != hpm_fetch_ftp.url)
+    {
+        mempool_free(hpm_fetch_ftp.url);
+        hpm_fetch_ftp.url = NULL_PTR;
+    }
+}
+
+static VOID hpm_fetch_ftp_handle_download(VOID)
+{
+    if (time_if_get_systick_s() - hpm_fetch_ftp.timeout >= HPM_FECTCH_DOWNLOAD_TIMEOUT)
+    {
+        MODULE_LOG_E(HPM, "download timeout");
+        hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
+        return;
+    }
+}
+
+static VOID hpm_fetch_ftp_handle_finish(VOID)
+{
+    if (0 != hpm_fetch_ftp_check_file())
+    {
+        MODULE_LOG_E(HPM, "file parse error.");
+        hpm_fetch_unregister_all();
+        hpm_fetch_load_config();
+        hpm_fetch_register_node();
+    }
+    else
+    {
+        hpm_fetch_save_config();
+        hpm_fetch_unregister_all();
+        hpm_fetch_load_config();
+        hpm_fetch_register_node();
+        hpm_fetch_set_param(&hpm_fetch_config);
+    }
+    hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
+}
+
+INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len)
+{
+    if (HPM_FETCH_FTP_INIT != hpm_fetch_ftp_state_get())
+    {
+        MODULE_LOG_E(HPM, "ftp state error, state %d.", hpm_fetch_ftp_state_get());
         return -1;
     }
-    param_id = (in_data[0] << 24) + (in_data[1] << 16) + (in_data[2] << 8) + in_data[3];
-    if (param_id == hpm_param_record_info.param_id)
+
+    if ((len < HPM_PARAM_FTP_MIN_SIZE) ||
+        (len > HPM_PARAM_FTP_MIN_SIZE + HPM_PARAM_FTP_SIZE_MAX))
     {
-        MODULE_LOG_E(HPM, "param id not change,id:%u", (unsigned int)param_id);
+        MODULE_LOG_E(HPM, "data len error, len %d.", len);
         return -1;
     }
-    memset(&hpm_download_info, 0, sizeof(hpm_download_info));
-    hpm_download_info.param_id = param_id;
-    r_len += 4;
-    url = in_data + r_len;
-    r_len += strlen((char *)url);
-    r_len++; //\0
-    hpm_download_info.file_size = (in_data[r_len] << 8) + in_data[r_len + 1];
-    r_len += 2;
-    memcpy(hpm_download_info.md5, in_data + r_len, 16);
-    memcpy(hpm_download_info.url, url, strlen((char *)url));
-    MODULE_LOG_E(HPM, "param id:0x%x,url:%s,cfg_size:%d", (unsigned int)hpm_download_info.param_id, url, (int)hpm_download_info.file_size);
 
-    time_t current_time = time_if_get(&time);
+    UINT16 pos = 0;
+    memcpy((UINT8 *)&hpm_fetch_ftp.sequence, data + pos, sizeof(hpm_fetch_ftp.sequence));
+    pos += sizeof(hpm_fetch_ftp.sequence);
 
-    HPM_PARAM_LOCK();
-    hpm_param_req_time = current_time;
-    HPM_PARAM_UNLOCK();
+    hpm_fetch_ftp.url = mempool_alloc(HPM_PARAM_FTP_SIZE_MAX);
+    if (NULL_PTR == hpm_fetch_ftp.url)
+    {
+        MODULE_LOG_E(HPM, "alloc memory failed for url");
+        return -1;
+    }
 
-    hpm_param_set_state(HPM_PARAM_START_DOWNLOAD);
+    for (UINT16 i = 0; (i < HPM_PARAM_FTP_SIZE_MAX) && (pos < len); i++)
+    {
+        hpm_fetch_ftp.url[i] = data[pos++];
+        hpm_fetch_ftp.url_len++;
+        if ('\0' == hpm_fetch_ftp.url[i])
+        {
+            break;
+        }
+    }
+
+    if (pos + sizeof(UINT16) > len)
+    {
+        MODULE_LOG_E(HPM, "file size len error, len %d.", len);
+        mempool_free(hpm_fetch_ftp.url);
+        hpm_fetch_ftp.url = NULL_PTR;
+        return -1;
+    }
+    else
+    {
+        hpm_fetch_ftp.file_size = (UINT32)(data[pos++] << 8) & 0xFF00;
+        hpm_fetch_ftp.file_size |= (UINT32)(data[pos++] & 0x00FF);
+    }
+
+    if (pos + sizeof(hpm_fetch_ftp.md5) != len)
+    {
+        MODULE_LOG_E(HPM, "md5 len error, len %d.", pos);
+        mempool_free(hpm_fetch_ftp.url);
+        hpm_fetch_ftp.url = NULL_PTR;
+        return -1;
+    }
+
+    memcpy(hpm_fetch_ftp.md5, data + pos, sizeof(hpm_fetch_ftp.md5));
+
+    MODULE_LOG_E(HPM, "ftp start, url %s, file size %d.", hpm_fetch_ftp.url, hpm_fetch_ftp.file_size);
+
+    hpm_fetch_ftp_state_set(HPM_FETCH_FTP_START);
+
+    hpm_fetch_ftp.timeout = time_if_get_systick_s();
 
     return 0;
 }
 
-void hpm_param_timeout(void)
+static VOID hpm_fetch_ftp_handle_process(VOID)
 {
-    uint8_t param_state = hpm_param_get_state();
-    switch (param_state)
+    hpm_fetch_ftp_e state = (hpm_fetch_ftp_e)hpm_fetch_ftp_state_get();
+    switch (state)
     {
-    case HPM_PARAM_START_DOWNLOAD:
-    {
-        uint32_t tmp_addr;
-        tmp_addr = hpm_param_write_addr = FLASH_MCU_ADD_HPM_CFG;
-        while (1)
-        {
-            drv_flash_mcu_erase(tmp_addr, 1);
-            tmp_addr += 0x00001000;
-            if (tmp_addr - FLASH_MCU_ADD_HPM_CFG >= FLASH_MCU_SIZE_HPM_CFG)
-            {
-                break;
-            }
-        }
-
-        if_ftp_4g_download(hpm_download_info.url, strlen((char *)hpm_download_info.url),
-                           IF_4G_PUBLIC_APN, hpm_param_ftp_download_call_back);
-        hpm_param_set_state(HPM_PARAM_DOWNLOADING);
-
+    case HPM_FETCH_FTP_INIT:
+        hpm_fetch_ftp_handle_init();
         break;
-    }
-    case HPM_PARAM_DOWNLOADING:
-    {
-        if (hpm_param_calc_diff_secs() >= HPM_PARAM_DOWNLOAD_TIMEOUT)
-        {
-            MODULE_LOG_E(HPM, "download timeout,set state init");
-            hpm_param_set_state(HPM_PARAM_INIT);
-        }
+    case HPM_FETCH_FTP_START:
+        hpm_fetch_ftp_handle_start();
         break;
-    }
-    case HPM_PARAM_READ_CFG:
-    {
-        if (if_4g_is_downloading())
-        {
-            MODULE_LOG_I(HPM, "ftp is downloading, wait ftp idle");
-            break;
-        }
-
-        if (0 == hpm_param_read_download_cfg(hpm_download_info.file_size))
-        {
-            hpm_param_read_cfg_success();
-            hpm_param_cfg_info_record_success();
-            hpm_param_set_common_cfg();
-            // hpm_can_data_reset();
-        }
-        else
-        {
-            hpm_param_read_cfg_failed();
-            hpm_param_cfg_info_record_failed();
-        }
-
-        hpm_param_set_state(HPM_PARAM_INIT);
-
+    case HPM_FETCH_FTP_DOWNLOAD:
+        hpm_fetch_ftp_handle_download();
         break;
-    }
-
+    case HPM_FETCH_FTP_FINISH:
+        hpm_fetch_ftp_handle_finish();
+        break;
     default:
         break;
     }
 }
 
-int8_t hpm_param_canid_type1_index_find(uint32_t canid)
+static INT32 hpm_fetch_save_config(VOID)
 {
-    int8_t i = 0;
-    for (i = 0; i < hpm_param_cfg_info.can1_num; i++)
+    UINT32 addr = (UINT32)FLASH_MCU_ADDR_HPM_NODE;
+    hpm_fetch_config.magic_num = HPM_PARAM_MAGIC_NUM;
+    drv_flash_mcu_erase(addr, sizeof(hpm_fetch_config));
+    if (0 != drv_flash_mcu_write(addr, (UINT8 *)&hpm_fetch_config, sizeof(hpm_fetch_config)))
     {
-        if (hpm_param_cfg_info.can1_single[i].canID == canid)
-        {
-            break;
-        }
-    }
-    // printf("\r\n index:%d \r\n",i);
-    if (i < hpm_param_cfg_info.can1_num)
-    {
-        return i;
-    }
-    else
-    {
+        MODULE_LOG_E(HPM, "save config error.");
         return -1;
     }
-#if 0
-    uint8_t low, high, mid;
-    
-    low = 0;
-    //HPM_PARAM_LOCK();	
-    high = hpm_param_cfg_info.can1_num - 1;
-
-    while(low<=high)
-    {
-        mid = (low+high)/2;
-        if(hpm_param_cfg_info.can1_single[mid].canID == canid)
-        {
-            //HPM_PARAM_UNLOCK();       
-            return mid;
-        }
-        if(hpm_param_cfg_info.can1_single[mid].canID > canid)
-        {
-            high = mid-1;
-        }
-        if(hpm_param_cfg_info.can1_single[mid].canID < canid)
-        {
-            low = mid+1;
-        }
-    }
-    
-    //HPM_PARAM_UNLOCK();
-
-    return -1;
-#endif
-}
-
-int8_t hpm_param_canid_type2_index_find(uint32_t canid, uint8_t *frame_num, uint8_t *indexpos)
-{
-    int8_t i = 0;
-    for (i = 0; i < hpm_param_cfg_info.can2_num; i++)
-    {
-        if (hpm_param_cfg_info.can2_complex[i].canID == canid)
-        {
-            *frame_num = hpm_param_cfg_info.can2_complex[i].frame_num;
-            *indexpos = hpm_param_cfg_info.can2_complex[i].index;
-            break;
-        }
-    }
-    // printf("\r\n index:%d \r\n",i);
-    if (i < hpm_param_cfg_info.can2_num)
-    {
-        return i;
-    }
-    else
-    {
-        return -1;
-    }
-
-#if 0
-    uint8_t low, high, mid;
-    
-    low = 0;
-    
-    HPM_PARAM_LOCK();	
-    high = hpm_param_cfg_info.can2_num - 1;
-    
-    while(low<=high)
-    {
-        mid = (low+high)/2;
-        if(hpm_param_cfg_info.can2_complex[mid].canID == canid)
-        {
-            *frame_num = hpm_param_cfg_info.can2_complex[mid].frame_num;
-            *indexpos = hpm_param_cfg_info.can2_complex[mid].index;
-            HPM_PARAM_UNLOCK();    
-            return mid;
-        }
-        if(hpm_param_cfg_info.can2_complex[mid].canID > canid)
-        {
-            high = mid-1;
-        }
-        if(hpm_param_cfg_info.can2_complex[mid].canID < canid)
-        {
-            low = mid+1;
-        }
-    }
-    
-    HPM_PARAM_UNLOCK();
-    return -1;
-#endif
-}
-
-int8_t hpm_param_pgn_type3_index_find(uint32_t pgn)
-{
-    int8_t i = 0;
-
-    // HPM_PARAM_LOCK();
-    for (i = 0; i < hpm_param_cfg_info.can3_num; i++)
-    {
-        if (pgn == hpm_param_cfg_info.can3_pgn_bc[i].pgn)
-        {
-            // HPM_PARAM_UNLOCK();
-            return i;
-        }
-    }
-    // HPM_PARAM_UNLOCK();
-    return -1;
-}
-
-int8_t hpm_param_pgn_type4_index_find(uint32_t pgn)
-{
-    int8_t i = 0;
-
-    // HPM_PARAM_LOCK();
-    for (i = 0; i < hpm_param_cfg_info.can4_num; i++)
-    {
-        if (pgn == hpm_param_cfg_info.can4_pgn_req[i].pgn)
-        {
-            // HPM_PARAM_UNLOCK();
-            return i;
-        }
-    }
-    // HPM_PARAM_UNLOCK();
-    return -1;
-}
-
-int8_t hpm_param_j1939_req(void)
-{
-    HPM_PARAM_LOCK();
-
-    if (hpm_param_cfg_info.can4_num > 0 && hpm_pgn_req_index != -1)
-    {
-        // j1939_pgn_req(hpm_param_cfg_info.can4_pgn_req[hpm_pgn_req_index].pgn,
-        //               hpm_param_cfg_info.can4_pgn_req[hpm_pgn_req_index].ta,
-        //               hpm_param_cfg_info.can4_pgn_req[hpm_pgn_req_index].sa);
-        hpm_pgn_req_index++;
-        if (hpm_pgn_req_index >= hpm_param_cfg_info.can4_num)
-        {
-            hpm_pgn_req_index = 0;
-        }
-    }
-
-    HPM_PARAM_UNLOCK();
     return 0;
 }
 
-int8_t hpm_param_uds_req(void)
+static INT32 hpm_fetch_load_config(VOID)
 {
-    HPM_PARAM_LOCK();
-
-    hpm_param_uds_close();
-
-    if (hpm_param_info_tmp.can5_num > 0 && hpm_did_req_index >= 0)
+    UINT32 addr = (UINT32)FLASH_MCU_ADDR_HPM_NODE;
+    memset(&hpm_fetch_config, 0, sizeof(hpm_fetch_config));
+    drv_flash_mcu_read(addr, (UINT8 *)&hpm_fetch_config, sizeof(hpm_fetch_config));
+    if (HPM_PARAM_MAGIC_NUM != hpm_fetch_config.magic_num)
     {
-        hpm_param_uds_open(hpm_did_req_index);
+        memset(&hpm_fetch_config, 0, sizeof(hpm_fetch_config));
+        hpm_fetch_save_config();
     }
-
-    if (hpm_uds_handle >= 0)
-    {
-        // uds_client_readdatabydid(hpm_uds_handle, hpm_param_cfg_info.can5_uds[hpm_did_req_index].did);
-    }
-
-    HPM_PARAM_UNLOCK();
     return 0;
 }
 
-int8_t hpm_param_get_uds_did_index(void)
+static VOID hpm_fetch_can_data_clear(VOID)
 {
-    int8_t index;
+    for (UINT16 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
+    {
+        hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
+        HPM_PARAM_LOCK();
+        node->obtained = (UINT32)HPM_FETCH_STATUS_UNOBTAINED;
+        node->len = 0;
+        HPM_PARAM_UNLOCK();
+    }
+}
+
+static VOID hpm_fetch_handle_single_msg(const can_msg_t *msg)
+{
     HPM_PARAM_LOCK();
-    index = hpm_did_req_index;
+    for (UINT32 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
+    {
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        if (NULL_PTR == p->node)
+        {
+            continue;
+        }
+        if ((p->node->canid == (msg->id & 0x7FFFFFFF)) &&
+            (p->node->type == (UINT32)HPM_FETCH_NODE_SINGLE) &&
+            ((UINT8)p->node->channel == msg->ins))
+        {
+            memcpy(p->data, msg->data, HPM_FECTCH_SINGLE_DATA_LEN);
+            p->node->obtained = (UINT32)HPM_FETCH_STATUS_OBTAINED;
+        }
+    }
     HPM_PARAM_UNLOCK();
-    return index;
 }
 
-int8_t hpm_param_uds_did_index_add(void)
+static BOOL hpm_fetch_regiseter_single(hpm_fetch_node_t *node)
 {
-    int8_t index;
-    HPM_PARAM_LOCK();
-    hpm_did_req_index++;
-    if (hpm_did_req_index >= hpm_param_info_tmp.can5_num)
+    for (UINT32 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
     {
-        hpm_did_req_index = 0;
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        if (NULL_PTR == p->node)
+        {
+            p->node = node;
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_SINGLE);
+            hpm_fetch_config.count++;
+            return TRUE;
+        }
     }
-    index = hpm_did_req_index;
-    HPM_PARAM_UNLOCK();
-
-    return index;
+    return FALSE;
 }
 
-uint32_t hpm_param_get_uds_did(void)
+static hpm_fetch_can_multi_t *hpm_fetch_can_consecutive_get(const can_msg_t *msg)
 {
-    uint32_t did;
-    HPM_PARAM_LOCK();
-    did = hpm_param_cfg_info.can5_uds[hpm_did_req_index].did;
-    HPM_PARAM_UNLOCK();
-    return did;
+    for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR == p->node)
+        {
+            continue;
+        }
+        if ((p->node->canid == (msg->id & 0x7FFFFFFF)) &&
+            (p->node->type == (UINT32)HPM_FETCH_NODE_CONSECTIVE) &&
+            (p->node->channel == msg->ins))
+        {
+            return p;
+        }
+    }
+    return NULL_PTR;
 }
 
-void hpm_param_show_cfg(void)
+static BOOL hpm_fetch_regiseter_consecutive(hpm_fetch_node_t *node)
 {
-    uint8_t i = 0;
-    tbox_log_print("\r\n\r\n-------------------------------------------------------------\r\n");
-
-    tbox_log_print(" %-24s : 0x%x\r\n", "id", (unsigned int)hpm_param_cfg_info.id);
-    tbox_log_print(" %-24s : %d\r\n", "intv", hpm_param_cfg_info.intv);
-    tbox_log_print(" %-24s : %d\r\n", "baud1", hpm_param_cfg_info.baud1);
-    tbox_log_print(" %-24s : %d\r\n", "baud2", hpm_param_cfg_info.baud2);
-    tbox_log_print(" %-24s : %d\r\n", "obd type", hpm_param_cfg_info.obd);
-
-    tbox_log_print(" %-24s : %d\r\n", "can type1 num", hpm_param_cfg_info.can1_num);
-    for (i = 0; i < hpm_param_cfg_info.can1_num; i++)
+    for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
-        tbox_log_print(" channel:%d	canid:0x%x\r\n", hpm_param_cfg_info.can1_single[i].can_channel, (unsigned int)hpm_param_cfg_info.can1_single[i].canID);
+        if (NULL_PTR == hpm_fetch_can_multi[i].node)
+        {
+            hpm_fetch_can_multi[i].node = node;
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_CONSECTIVE);
+            hpm_fetch_config.count++;
+            return TRUE;
+        }
     }
-
-    tbox_log_print(" %-24s : %d\r\n", "can type2 num", hpm_param_cfg_info.can2_num);
-    for (i = 0; i < hpm_param_cfg_info.can2_num; i++)
-    {
-        tbox_log_print(" channel:%d,	canid:0x%x, fram num:%d, fram index:%d\r\n", hpm_param_cfg_info.can2_complex[i].can_channel,
-                       (unsigned int)hpm_param_cfg_info.can2_complex[i].canID, hpm_param_cfg_info.can2_complex[i].frame_num,
-                       hpm_param_cfg_info.can2_complex[i].index);
-    }
-
-    tbox_log_print(" %-24s : %d\r\n", "can type3 num", hpm_param_cfg_info.can3_num);
-    for (i = 0; i < hpm_param_cfg_info.can3_num; i++)
-    {
-        tbox_log_print(" channel:%d,	SA:0x%x, PGN:0x%x\r\n", hpm_param_cfg_info.can3_pgn_bc[i].can_channel,
-                       (unsigned int)hpm_param_cfg_info.can3_pgn_bc[i].sa, (unsigned int)hpm_param_cfg_info.can3_pgn_bc[i].pgn);
-    }
-
-    tbox_log_print(" %-24s : %d\r\n", "can type4 num", hpm_param_cfg_info.can4_num);
-    for (i = 0; i < hpm_param_cfg_info.can4_num; i++)
-    {
-        tbox_log_print(" channel:%d,	SA:0x%x, TA:0x%x, PGN:0x%x\r\n", hpm_param_cfg_info.can4_pgn_req[i].can_channel,
-                       (unsigned int)hpm_param_cfg_info.can4_pgn_req[i].sa, (unsigned int)hpm_param_cfg_info.can4_pgn_req[i].ta,
-                       (unsigned int)hpm_param_cfg_info.can4_pgn_req[i].pgn);
-    }
-
-    tbox_log_print(" %-24s : %d\r\n", "can type5 num", hpm_param_cfg_info.can5_num);
-    for (i = 0; i < hpm_param_cfg_info.can5_num; i++)
-    {
-        tbox_log_print(" channel:%d,	req_id:0x%x, resp_id:0x%x, did:0x%x\r\n", hpm_param_cfg_info.can5_uds[i].can_channel,
-                       (unsigned int)hpm_param_cfg_info.can5_uds[i].req_id, (unsigned int)hpm_param_cfg_info.can5_uds[i].resp_id,
-                       (unsigned int)hpm_param_cfg_info.can5_uds[i].did);
-    }
-
-    tbox_log_print("\r\n\r\n-------------------------------------------------------------\r\n");
+    return FALSE;
 }
 
-uint32_t hpm_param_get_id(void)
+static VOID hpm_fetch_handle_consecutive_msg(const can_msg_t *msg)
 {
-    return hpm_param_cfg_info.id;
+    hpm_fetch_can_multi_t *p = hpm_fetch_can_consecutive_get(msg);
+    if ((NULL_PTR == p) || (NULL_PTR == p->node))
+    {
+        return;
+    }
+
+    UINT8 seq = msg->data[p->node->offset];
+    UINT8 insert_pos = 0;
+    for (UINT8 i = 0; i < HPM_FECTCH_MULTI_DATA_LEN; i += HPM_FECTCH_SINGLE_DATA_LEN)
+    {
+        UINT8 cur_seq = msg->data[p->node->offset + i];
+        if (cur_seq == seq)
+        {
+            HPM_PARAM_LOCK();
+            memcpy(p->data + i, msg->data + p->node->offset + 1, HPM_FECTCH_SINGLE_DATA_LEN - 1);
+            p->node->obtained = (UINT32)HPM_FETCH_STATUS_OBTAINED;
+            HPM_PARAM_UNLOCK();
+            return;
+        }
+        else if (cur_seq > seq)
+        {
+            insert_pos = i;
+            break;
+        }
+        insert_pos = i + HPM_FECTCH_SINGLE_DATA_LEN;
+    }
+
+    if (insert_pos < p->node->len)
+    {
+        HPM_PARAM_LOCK();
+        if (p->node->len + HPM_FECTCH_SINGLE_DATA_LEN <= HPM_FECTCH_MULTI_DATA_LEN)
+        {
+            memmove(p->data + insert_pos + HPM_FECTCH_SINGLE_DATA_LEN,
+                    p->data + insert_pos, p->node->len - insert_pos);
+            memcpy(p->data + insert_pos, msg->data, HPM_FECTCH_SINGLE_DATA_LEN);
+            p->node->len += HPM_FECTCH_SINGLE_DATA_LEN;
+        }
+        HPM_PARAM_UNLOCK();
+    }
+    else
+    {
+        HPM_PARAM_LOCK();
+        if (p->node->len + HPM_FECTCH_SINGLE_DATA_LEN <= HPM_FECTCH_MULTI_DATA_LEN)
+        {
+            memcpy(p->data + p->node->len, msg->data, HPM_FECTCH_SINGLE_DATA_LEN);
+            p->node->len += HPM_FECTCH_SINGLE_DATA_LEN;
+        }
+        HPM_PARAM_UNLOCK();
+    }
+}
+
+static VOID hpm_fetch_j1939_pgn_callback(UINT8 *msg, UINT16 len, UINT8 src_addr, UINT32 pgn)
+{
+    if (NULL_PTR == msg || 0 == pgn)
+    {
+        MODULE_LOG_E(HPM, "invalid parameter");
+        return;
+    }
+
+    if (len > HPM_FECTCH_MULTI_DATA_LEN)
+    {
+        MODULE_LOG_E(HPM, "data len %d for pgn 0x%X overflow.", len, pgn);
+        return;
+    }
+
+    for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR == p->node)
+        {
+            continue;
+        }
+        if ((p->node->pgn == pgn) &&
+            (p->node->sa == src_addr) &&
+            ((p->node->type == (UINT32)HPM_FETCH_NODE_MULTI ||
+              p->node->type == (UINT32)HPM_FETCH_NODE_PGN)))
+        {
+            HPM_PARAM_LOCK();
+            memcpy(p->data, msg, len);
+            p->node->len = (UINT32)len;
+            p->node->obtained = (UINT32)HPM_FETCH_STATUS_OBTAINED;
+            HPM_PARAM_UNLOCK();
+        }
+    }
+}
+
+static BOOL hpm_fetch_regiseter_multi(hpm_fetch_node_t *node)
+{
+    for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR == p->node)
+        {
+            p->node = node;
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_MULTI);
+            hpm_fetch_config.count++;
+            j1939_al_subscribe(node->sa, node->pgn, hpm_fetch_j1939_pgn_callback);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static BOOL hpm_fetch_regiseter_pgn(hpm_fetch_node_t *node)
+{
+    for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR == p->node)
+        {
+            p->node = node;
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_PGN);
+            hpm_fetch_config.count++;
+            j1939_pgn_req(node->channel, node->pgn, node->ta, node->sa);
+            j1939_al_subscribe(node->sa, node->pgn, hpm_fetch_j1939_pgn_callback);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static BOOL hpm_fetch_regiseter_uds(hpm_fetch_node_t *node)
+{
+    for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR == p->node)
+        {
+            p->node = node;
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_UDS);
+            hpm_fetch_config.count++;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static BOOL hpm_fetch_register_node(VOID)
+{
+    hpm_fetch_config.count = 0;
+
+    if ((0 == hpm_fetch_config.sequence) || (0xFFFFFFFF == hpm_fetch_config.sequence))
+    {
+        MODULE_LOG_I(HPM, "config sequence is 0 or 0xFFFFFFFF.");
+        return FALSE;
+    }
+
+    for (UINT8 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
+    {
+        hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
+        switch (node->type)
+        {
+        case HPM_FETCH_NODE_SINGLE:
+            if (FALSE == hpm_fetch_regiseter_single(node))
+            {
+                MODULE_LOG_E(HPM, "register single node failed, slot overflow");
+            }
+            break;
+        case HPM_FETCH_NODE_CONSECTIVE:
+            if (FALSE == hpm_fetch_regiseter_consecutive(node))
+            {
+                MODULE_LOG_E(HPM, "register consecutive node failed, slot overflow");
+            }
+            break;
+        case HPM_FETCH_NODE_MULTI:
+            if (FALSE == hpm_fetch_regiseter_multi(node))
+            {
+                MODULE_LOG_E(HPM, "register multi node failed, slot overflow");
+            }
+            break;
+        case HPM_FETCH_NODE_PGN:
+            if (FALSE == hpm_fetch_regiseter_pgn(node))
+            {
+                MODULE_LOG_E(HPM, "register pgn node failed, slot overflow");
+            }
+            break;
+        case HPM_FETCH_NODE_UDS:
+            if (FALSE == hpm_fetch_regiseter_uds(node))
+            {
+                MODULE_LOG_E(HPM, "register uds node failed, slot overflow");
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return TRUE;
+}
+
+static VOID hpm_fetch_unregister_all(VOID)
+{
+    for (UINT32 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
+    {
+        hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
+        node->type = (UINT32)HPM_FETCH_NODE_INVALID;
+        node->obtained = (UINT32)HPM_FETCH_STATUS_UNUSED;
+        node->len = 0;
+    }
+
+    hpm_fetch_config.registered = 0;
+    hpm_fetch_config.count = 0;
+}
+
+static VOID hpm_fetch_can_recv_cb(can_msg_t *msgs, UINT32 count)
+{
+    for (UINT32 i = 0; i < count; i++)
+    {
+        can_msg_t *msg = &msgs[i];
+        if (NULL_PTR != msg)
+        {
+            hpm_fetch_handle_single_msg(msg);
+            hpm_fetch_handle_consecutive_msg(msg);
+        }
+    }
+}
+
+INT32 hpm_param_fetch_init(UINT8 seq)
+{
+    switch (seq)
+    {
+    case MODULE_INIT_SEQ_OS:
+        break;
+    case MODULE_INIT_SEQ_STORAGE:
+        break;
+    case MODULE_INIT_SEQ_MODULE:
+        hpm_param_task_mutex = xSemaphoreCreateMutex();
+        hpm_can_register(hpm_fetch_can_recv_cb);
+        hpm_fetch_ftp_init();
+        hpm_fetch_load_config();
+        hpm_fetch_register_node();
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
+VOID hpm_param_fetch_deinit(VOID)
+{
+    if (NULL_PTR != hpm_param_task_mutex)
+    {
+        vSemaphoreDelete(hpm_param_task_mutex);
+        hpm_param_task_mutex = NULL_PTR;
+    }
+}
+
+VOID hpm_param_fetch_process(VOID)
+{
+    hpm_fetch_ftp_handle_process();
+}
+
+VOID hpm_param_fetch_wakeup(VOID)
+{
+    hpm_fetch_can_data_clear();
+    hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
+}
+
+VOID hpm_param_fetch_sleep(VOID)
+{
+    hpm_fetch_can_data_clear();
+}
+
+INT32 hpm_param_fetch_report_single(UINT8 *data, INT32 remain_size)
+{
+    if (remain_size < 2)
+    {
+        MODULE_LOG_E(HPM, "remain size %d is too small for single node data.", remain_size);
+        return -1;
+    }
+    UINT16 len = 0;
+    UINT8 *len_ptr = data + len;
+    data[len++] = 0x00;
+    data[len++] = 0x00;
+    remain_size -= 2;
+
+    for (UINT8 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
+    {
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        HPM_PARAM_LOCK();
+        if ((NULL_PTR != p->node))
+        {
+            if (remain_size < (INT32)(p->node->len + 5))
+            {
+                MODULE_LOG_E(HPM, "remain size %d is too small for single node data.", remain_size);
+                HPM_PARAM_UNLOCK();
+                return -1;
+            }
+            data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid) & 0xFF;
+            data[len++] = (UINT8)(HPM_FECTCH_SINGLE_DATA_LEN);
+            if (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED)
+            {
+                memcpy(data + len, p->data, HPM_FECTCH_SINGLE_DATA_LEN);
+            }
+            else
+            {
+                memset(data + len, 0xFF, HPM_FECTCH_SINGLE_DATA_LEN);
+            }
+            len += HPM_FECTCH_SINGLE_DATA_LEN;
+            remain_size -= (HPM_FECTCH_SINGLE_DATA_LEN + 5);
+        }
+        HPM_PARAM_UNLOCK();
+    }
+
+    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+
+    return (INT32)len;
+}
+
+INT32 hpm_param_fetch_report_consecutive(UINT8 *data, INT32 remain_size)
+{
+    if (remain_size < 2)
+    {
+        MODULE_LOG_E(HPM, "remain size %d is too small for single node data.", remain_size);
+        return -1;
+    }
+
+    UINT16 len = 0;
+    UINT8 *len_ptr = data + len;
+    data[len++] = 0x00;
+    data[len++] = 0x00;
+    remain_size -= 2;
+
+    for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        HPM_PARAM_LOCK();
+        if ((NULL_PTR != p->node) &&
+            (p->node->type == (UINT32)HPM_FETCH_NODE_CONSECTIVE))
+        {
+            if (remain_size < (INT32)(p->node->len + 5))
+            {
+                MODULE_LOG_E(HPM, "remain size %d is too small for consecutive node data.", remain_size);
+                HPM_PARAM_UNLOCK();
+                return -1;
+            }
+
+            data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid) & 0xFF;
+
+            if (p->node->obtained != (UINT32)HPM_FETCH_STATUS_OBTAINED)
+            {
+                p->node->len = 0;
+                data[len++] = (UINT8)(p->node->len);
+            }
+            else
+            {
+                if (p->node->len > (p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN)))
+                {
+                    p->node->len = p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN);
+                }
+                data[len++] = (UINT8)(p->node->len);
+                memcpy(data + len, p->data, p->node->len);
+            }
+            len += p->node->len;
+            remain_size -= (p->node->len + 5);
+        }
+        HPM_PARAM_UNLOCK();
+    }
+
+    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+
+    return (INT32)len;
+}
+
+INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
+{
+    if (remain_size < 2)
+    {
+        MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
+        return -1;
+    }
+
+    UINT16 len = 0;
+    UINT8 *len_ptr = data + len;
+    data[len++] = 0x00;
+    data[len++] = 0x00;
+    remain_size -= 2;
+
+    for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        HPM_PARAM_LOCK();
+        if ((NULL_PTR != p->node) &&
+            (p->node->type == (UINT32)HPM_FETCH_NODE_MULTI))
+        {
+            if (remain_size < (INT32)(p->node->len + 5))
+            {
+                MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
+                HPM_PARAM_UNLOCK();
+                return -1;
+            }
+            data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
+            data[len++] = (UINT8)(p->node->canid) & 0xFF;
+            if (p->node->obtained != (UINT32)HPM_FETCH_STATUS_OBTAINED)
+            {
+                p->node->len = 0;
+                data[len++] = (UINT8)(p->node->len);
+            }
+            else
+            {
+                if (p->node->len > HPM_FECTCH_MULTI_DATA_LEN)
+                {
+                    p->node->len = HPM_FECTCH_MULTI_DATA_LEN;
+                }
+                data[len++] = (UINT8)(p->node->len);
+                memcpy(data + len, p->data, p->node->len);
+            }
+            len += p->node->len;
+            remain_size -= (p->node->len + 5);
+        }
+    }
+
+    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+
+    return (INT32)len;
+}
+
+INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
+{
+    if (NULL_PTR == data || remain_size <= 6)
+    {
+        MODULE_LOG_E(HPM, "invalid parameter");
+        return -1;
+    }
+
+    hpm_fetch_config_t *p = &hpm_fetch_config;
+
+    if ((0 == p->sequence) || (0xFFFFFFFF == p->sequence) || (0 == p->count))
+    {
+        MODULE_LOG_I(HPM, "config fetch no data to report.");
+        return -1;
+    }
+
+    UINT16 len = 0;
+    UINT8 *len_ptr = data + len;
+
+    data[len++] = 0x00;
+    data[len++] = 0x00;
+    data[len++] = (p->sequence >> 24) & 0xFF;
+    data[len++] = p->sequence >> 16;
+    data[len++] = (p->sequence >> 8) & 0xFF;
+    data[len++] = p->sequence & 0xFF;
+
+    remain_size -= len;
+
+    if (p->registered & (1U << HPM_FETCH_NODE_SINGLE))
+    {
+        data[len++] = (UINT8)(HPM_FETCH_NODE_SINGLE);
+        INT32 single_len = hpm_param_fetch_report_single(data + len, remain_size);
+        if (single_len <= 0)
+        {
+            MODULE_LOG_E(HPM, "single node data overflow remain : %d.", remain_size);
+            return -1;
+        }
+        len += single_len;
+        remain_size -= single_len;
+    }
+
+    if (p->registered & (1U << HPM_FETCH_NODE_CONSECTIVE))
+    {
+        if (remain_size <= 0)
+        {
+            MODULE_LOG_E(HPM, "remain size %d is too small for consecutive node data.", remain_size);
+            return -1;
+        }
+        data[len++] = (UINT8)(HPM_FETCH_NODE_CONSECTIVE);
+        INT32 consecutive_len = hpm_param_fetch_report_consecutive(data + len, remain_size);
+        if (consecutive_len < 0)
+        {
+            MODULE_LOG_E(HPM, "consecutive node data overflow remain : %d.", remain_size);
+            return -1;
+        }
+        len += consecutive_len;
+        remain_size -= consecutive_len;
+    }
+
+    if (p->registered & (1U << HPM_FETCH_NODE_MULTI))
+    {
+        if (remain_size <= 0)
+        {
+            MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
+            return -1;
+        }
+        data[len++] = (UINT8)(HPM_FETCH_NODE_MULTI);
+        INT32 multi_len = hpm_param_fetch_report_multi(data + len, remain_size);
+        if (multi_len < 0)
+        {
+            MODULE_LOG_E(HPM, "multi node data overflow remain : %d.", remain_size);
+            return -1;
+        }
+        len += multi_len;
+    }
+
+    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+
+    return len;
+}
+
+static VOID hpm_fetch_set_param(hpm_fetch_config_t *config)
+{
+    if (NULL_PTR == config)
+    {
+        return;
+    }
+
+    TBOX_CFG_ID cfg_id;
+    UINT32 baud = hpm_param_get_baudrate((hpm_fetch_can_rate_e)config->can_rate1);
+
+    if (0 != baud)
+    {
+        TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
+        tbox_cfg_write(cfg_id, &baud);
+    }
+
+    baud = hpm_param_get_baudrate((hpm_fetch_can_rate_e)config->can_rate2);
+    if (0 != baud)
+    {
+        TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
+        tbox_cfg_write(cfg_id, &baud);
+    }
+
+    baud = hpm_param_get_baudrate((hpm_fetch_can_rate_e)config->can_rate3);
+    if (0 != baud)
+    {
+        TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
+        tbox_cfg_write(cfg_id, &baud);
+    }
+
+    UINT32 report_intv = config->interval;
+    if (0 != report_intv)
+    {
+        TBOX_CFG_ID_GET(HPMCYCON, cfg_id);
+        tbox_cfg_write(cfg_id, &report_intv);
+    }
+
+    // obd protocol, do nothing currently
+}
+
+VOID hpm_param_show_cfg(VOID)
+{
+    tbox_log_print("\r\n-------------------------------------------------------------\r\n");
+    tbox_log_print("%-24s : 0X%08X\r\n", "id", hpm_fetch_config.sequence);
+    tbox_log_print("%-24s : %d\r\n", "interval", hpm_fetch_config.interval);
+    tbox_log_print("%-24s : %d\r\n", "protocol", hpm_fetch_config.protocol);
+    tbox_log_print("%-24s : %d\r\n", "can1 baudrate", hpm_param_get_baudrate((hpm_fetch_can_rate_e)hpm_fetch_config.can_rate1));
+    tbox_log_print("%-24s : %d\r\n", "can2 baudrate", hpm_param_get_baudrate((hpm_fetch_can_rate_e)hpm_fetch_config.can_rate2));
+    tbox_log_print("%-24s : %d\r\n", "can3 baudrate", hpm_param_get_baudrate((hpm_fetch_can_rate_e)hpm_fetch_config.can_rate3));
+    tbox_log_print("%-24s : %d\r\n", "count", hpm_fetch_config.count);
+
+    for (UINT8 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
+    {
+        hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
+        if (node->type == (UINT32)HPM_FETCH_NODE_INVALID)
+        {
+            continue;
+        }
+
+        tbox_log_print("Node %d: Type %d, CANID 0x%08X, Channel %d, Obtained %s, Len %d\r\n",
+                       i, node->type, node->canid, node->channel,
+                       node->obtained == HPM_FETCH_STATUS_OBTAINED ? "Yes" : "No", node->len);
+    }
 }

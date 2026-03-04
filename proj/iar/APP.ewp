@@ -2759,6 +2759,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_fetch.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_parse.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_parse.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.c</name>
                 </file>
                 <file>
@@ -2794,6 +2800,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\common\delay.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\common\md5.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\common\stateMachine.c</name>
@@ -3003,6 +3012,9 @@
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\include\common\dlist.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\include\common\md5.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\include\common\stateMachine.h</name>
