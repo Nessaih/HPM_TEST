@@ -2888,13 +2888,7 @@
             <group>
                 <name>eio</name>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\eio\drv_eio_def.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\eio\drv_eio_gnss.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\eio\drv_eio_gnss.h</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\eio\drv_eio.c</name>
                 </file>
             </group>
             <group>

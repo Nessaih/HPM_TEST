@@ -404,7 +404,7 @@ VOID gnss_parse_periodic(VOID)
     UINT32       len = GNSS_PARSE_BUFF_SIZE - rem - 1;
 	INT32		 ret = 0;
 
-	ret = drv_eio_gnss_rx(&gnss_parse_buff[rem], len);
+	ret = drv_eio_read(&gnss_parse_buff[rem], len);
 	if(ret <= 0)
 	{
 		return;

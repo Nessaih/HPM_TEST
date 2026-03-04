@@ -22,7 +22,7 @@ extern "C"
 #include "drv_uart.h"
 #include "drv_uart_485.h"
 #include "drv_uart_bt.h"
-#include "drv_eio_gnss.h"
+#include "drv_eio.h"
 #include "drv_wdg.h"
 #include "fls_spi.h"
 

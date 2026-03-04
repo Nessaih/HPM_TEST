@@ -62,12 +62,15 @@ static INT32 gnss_init(UINT8 seq)
 static VOID gnss_stop(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_STOP);
+    drv_eio_sleep();
 	gnss_parse_sleep();
+
 }
 
 static VOID  gnss_start(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_START);
+    drv_eio_sleep();
 	gnss_parse_wake();
 }
 

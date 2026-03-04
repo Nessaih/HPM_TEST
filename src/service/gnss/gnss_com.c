@@ -1,6 +1,6 @@
 #include "tbox_common.h"
 #include "tbox_core.h"
-#include "drv_eio_gnss.h"
+#include "drv_eio.h"
 #include "tbox_log.h"
 
 #include "gnss_parse.h"
@@ -11,9 +11,9 @@ static TaskHandle_t gnss_task_handle;
 
 VOID gnss_com_task(VOID *param)
 {
-	UNUSED(param);	
+	UNUSED(param);
     UINT32 notify_value;
-	
+
 	for(;;)
 	{
 		BaseType_t notify_status = xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, pdTICKS_TO_MS(1000U));
@@ -22,12 +22,12 @@ VOID gnss_com_task(VOID *param)
             continue;
         }
 
-		if (notify_value & GNSS_COM_MSG_DATAIN) 
-		{			
+		if (notify_value & GNSS_COM_MSG_DATAIN)
+		{
 			gnss_parse_periodic();
 		}
 	}
-	
+
 }
 
 static VOID gnss_com_datain_callback(VOID)
@@ -37,8 +37,8 @@ static VOID gnss_com_datain_callback(VOID)
 	{
 		return;
 	}
-	
-	xTaskNotifyFromISR(gnss_task_handle, GNSS_COM_MSG_DATAIN, eSetBits, &task_switch);	
+
+	xTaskNotifyFromISR(gnss_task_handle, GNSS_COM_MSG_DATAIN, eSetBits, &task_switch);
 }
 
 INT32 gnss_com_init(UINT8 seq)
@@ -54,13 +54,13 @@ INT32 gnss_com_init(UINT8 seq)
 
         case MODULE_INIT_SEQ_MODULE:
 			GET_TBOX_MODULE_HANDLE(GNSS, gnss_task_handle);
-			drv_eio_gnss_register(gnss_com_datain_callback);
+			drv_eio_init(9600,gnss_com_datain_callback);
             break;
-            
+
         default:
             break;
     }
-	
+
 	return 0;
 }
 

@@ -53,6 +53,11 @@ extern "C" {
 /*=================================================CONSTANTS========================================*/
 
 /*============================================DEFINES AND MACROS====================================*/
+
+#ifndef CONFIG_EIO_ENABLE
+#define CONFIG_EIO_ENABLE       0
+#endif
+
 #ifndef CONFIG_UART0_ENABLE
 #define CONFIG_UART0_ENABLE     1
 #endif

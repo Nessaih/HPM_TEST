@@ -79,7 +79,6 @@ const Ckgen_ClkMuxCfgType CLK_DEV[] = {
 
     {.Clk = CKGEN_TIMER_CLK, .ClkSrc = CKGEN_SPLL_DIV2_CLK},
     {.Clk = CKGEN_PCT_CLK,   .ClkSrc = CKGEN_SPLL_DIV2_CLK},
-    {.Clk = CKGEN_EIO_CLK,   .ClkSrc = CKGEN_SPLL_DIV2_CLK},
     {.Clk = CKGEN_I2C0_CLK,  .ClkSrc = CKGEN_SPLL_DIV2_CLK},
     {.Clk = CKGEN_I2C1_CLK,  .ClkSrc = CKGEN_SPLL_DIV2_CLK},
     {.Clk = CKGEN_ADC0_CLK,  .ClkSrc = CKGEN_SPLL_DIV2_CLK},
