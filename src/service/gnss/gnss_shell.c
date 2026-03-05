@@ -2,7 +2,7 @@
 #include "tbox_core.h"
 #include "tbox_shell_if.h"
 #include "gnss_if.h"
-
+#include "drv_eio.h"
 #include "gnss_shell.h"
 #include "gnss_parse.h"
 
@@ -56,6 +56,9 @@ static BaseType_t gnss_shell_cmd(char *buf, size_t bufsz, const char *cmd)
 	else if(0 == strncmp(param1_ptr, "mod", param1_len))
 	{
 		//TODO: 发送数据, 设置GNSS模式
+
+		drv_eio_write("$PCAS03,5,5,5,5,5,5,0,5*07\r\n", 29);
+
 		return pdFALSE;
 	}
 	else
