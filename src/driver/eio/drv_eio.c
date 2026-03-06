@@ -64,7 +64,7 @@ static void drv_eio_init_device(uint32_t speed)
 
     eio_speed = speed;
 
-    tmpvalue = 2000000U / speed;
+    tmpvalue = (uint32_t)(2000000.0 / speed - 0.5);
     tmpvalue = (tmpvalue & 0xFFFFFF00U) ? 0xFFU : tmpvalue;
     tmpvalue = 0x0F00U | (tmpvalue & 0x00FF);
 
@@ -74,6 +74,7 @@ static void drv_eio_init_device(uint32_t speed)
 
     MODIFY_REG32(EIO->CTRL, EIO_CTRL_SWRST_Msk, EIO_CTRL_SWRST_Pos, 1UL);
     WRITE_REG32(EIO->CTRL, 0);
+    WRITE_REG32(EIO->CTRL, 1);
 
     Core_Hal_DisableIrq(EIO_IRQn);
 
@@ -81,7 +82,7 @@ static void drv_eio_init_device(uint32_t speed)
     WRITE_REG32(EIO->SHIFTCTL[0], 0x00030002U);
     WRITE_REG32(EIO->TIMCMP[0], tmpvalue);
     WRITE_REG32(EIO->TIMCFG[0], 0x00002222U);
-    WRITE_REG32(EIO->TIMCTL[0], 0x01c00001U);
+    WRITE_REG32(EIO->TIMCTL[0], 0x01c00000U);
 
     WRITE_REG32(EIO->SHIFTCFG[1], 0x00000032U);
     WRITE_REG32(EIO->SHIFTCTL[1], 0x01800101U);
@@ -91,12 +92,11 @@ static void drv_eio_init_device(uint32_t speed)
 
     tmpvalue = READ_REG32(EIO->SHIFTBUF[1]);
     WRITE_REG32(EIO->SHIFTERR, 0x03U);
-    WRITE_REG32(EIO->SHIFTERR, 0x03U);
     WRITE_REG32(EIO->SHIFTSTAT, 0x03U);
-    WRITE_REG32(EIO->SHIFTSTAT, 0x03U);
+    WRITE_REG32(EIO->TIMSTAT, 0x03U);
     WRITE_REG32(EIO->SHIFTSIEN, 0x02U);
     WRITE_REG32(EIO->SHIFTEIEN, 0x02U);
-    WRITE_REG32(EIO->CTRL, 0x05U);
+    // WRITE_REG32(EIO->CTRL, 0x01U);
 
     Core_Hal_EnableIrq(EIO_IRQn);
 }
@@ -166,82 +166,101 @@ static void drv_eio_deinit_pin(void)
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
 }
-
+#pragma diag_suppress=Pa082
 void EIO_IRQHandler(void)
 {
-    uint32_t reg;
-    uint8_t  data;
     bool     tx_active = FALSE;
     bool     rx_active = FALSE;
+    uint32_t reg = 0;
+    uint32_t clear = 0;
+    uint32_t state;
+    uint32_t error;
+    uint32_t timer;
 
-    uint32_t error = 0;
+    state = READ_BIT32(EIO->SHIFTSIEN, EIO->SHIFTSTAT);
+    error = READ_BIT32(EIO->SHIFTEIEN, EIO->SHIFTERR);
+    timer = READ_BIT32(EIO->TIMIEN, EIO->TIMSTAT);
 
-    if (READ_BIT(EIO->SHIFTEIEN, 0) && READ_BIT(EIO->SHIFTERR, 0))
+    // tx register process
+    if (READ_BIT(state, 0) || READ_BIT(error, 0) || READ_BIT(timer, 0))
     {
-        tx_active = TRUE;
-        error |= 0x01U;
+        if (READ_BIT(state, 0))
+        {
+            tx_active = TRUE;
+        }
+        if (READ_BIT(error, 0))
+        {
+            clear |= 0x01U;
+            tx_active = TRUE;
+        }
+        if (READ_BIT(timer, 0))
+        {
+            SET_BIT32(EIO->TIMSTAT, 1);
+        }
     }
 
-    if (READ_BIT(EIO->SHIFTSIEN, 0) && READ_BIT(EIO->SHIFTSTAT, 0))
+    // rx register process
+    if (READ_BIT(state, 1) || READ_BIT(error, 1) || READ_BIT(timer, 1))
     {
-        tx_active = TRUE;
+        if (READ_BIT(state, 1))
+        {
+            rx_active = TRUE;
+        }
+        if (READ_BIT(error, 1))
+        {
+            clear |= 0x02U;
+            rx_active = TRUE;
+        }
+        if (READ_BIT(timer, 1))
+        {
+            SET_BIT32(EIO->TIMSTAT, 2);
+        }
     }
 
-    if (READ_BIT(EIO->SHIFTEIEN, 1) && READ_BIT(EIO->SHIFTERR, 1))
-    {
-        rx_active = TRUE;
-        error |= 0x02U;
-    }
-
-    if (READ_BIT(EIO->SHIFTSIEN, 1) && READ_BIT(EIO->SHIFTSTAT, 1))
-    {
-        rx_active = TRUE;
-    }
-
+    // tx data process
     if (tx_active && eio_tx_len > 0)
     {
-        data = eio_tx_buf[--eio_tx_len];
-        reg  = data ;
+        reg = eio_tx_buf[--eio_tx_len];
         WRITE_REG32(EIO->SHIFTBUF[0], reg);
+
+        if (eio_tx_len == 0)
+        {
+            uint32_t l = cqueue_get(&eio_queue_tx, eio_tx_buf, EIO_TX_SIZE);
+            if (l > 0)
+            {
+                reverse_buffer(eio_tx_buf, l);
+            }
+            else
+            {
+                CLEAR_BIT32(EIO->TIMSTAT, 0x01UL);
+                CLEAR_BIT32(EIO->TIMCTL[0], 0x01UL);
+                CLEAR_BIT32(EIO->SHIFTSIEN, 0x01UL);
+                CLEAR_BIT32(EIO->SHIFTEIEN, 0x01UL);
+
+                eio_is_txbz = FALSE;
+            }
+        }
     }
 
+    // rx data process
     if (rx_active && eio_rx_len < EIO_RX_SIZE)
     {
-        reg                      = READ_REG32(EIO->SHIFTBUF[1]);
-        data                     = reg >> 24;
-        eio_rx_buf[eio_rx_len++] = data;
-    }
-
-    if (error)
-    {
-        WRITE_REG32(EIO->SHIFTERR, error);
-    }
-
-    if (tx_active && eio_tx_len == 0)
-    {
-        uint32_t l = cqueue_get(&eio_queue_tx, eio_tx_buf, EIO_TX_SIZE);
-        if (l > 0)
+        reg                      = READ_REG32(EIO->SHIFTBUFBYS[1]);
+        eio_rx_buf[eio_rx_len++] = reg;
+        if (eio_rx_len == EIO_RX_SIZE)
         {
-            reverse_buffer(eio_tx_buf, l);
-        }
-        else
-        {
-            CLEAR_BIT32(EIO->SHIFTSIEN, 0x01U);
-            CLEAR_BIT32(EIO->SHIFTEIEN, 0x01U);
-            eio_is_txbz = FALSE;
+            cqueue_put(&eio_queue_rx, eio_rx_buf, eio_rx_len);
+            eio_rx_len = 0;
+            if (eio_rxcb)
+            {
+                eio_rxcb();
+            }
         }
     }
 
-    if (rx_active && eio_rx_len == EIO_RX_SIZE)
-    {
-        cqueue_put(&eio_queue_rx, eio_rx_buf, eio_rx_len);
-        eio_rx_len = 0;
-        if (eio_rxcb)
-        {
-            eio_rxcb();
-        }
-    }
+    SET_BIT32(EIO->SHIFTERR, clear);
 }
+#pragma diag_default=Pa082
 
 int32_t drv_eio_init(uint32_t speed, void (*rxcb)(void))
 {
@@ -272,7 +291,7 @@ int32_t drv_eio_wake(void)
 {
     if (!eio_is_init)
     {
-        //drv_eio_init_pin();
+        drv_eio_init_pin();
         drv_eio_init(eio_speed, eio_rxcb);
     }
     return 0;
@@ -309,6 +328,7 @@ int32_t drv_eio_write(uint8_t *data, uint32_t len)
     {
         eio_tx_len = l;
         reverse_buffer(eio_tx_buf, l);
+        SET_BIT32(EIO->TIMCTL[0], 0x01U);
         SET_BIT32(EIO->SHIFTSIEN, 0x01U);
         SET_BIT32(EIO->SHIFTEIEN, 0x01U);
     }

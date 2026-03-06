@@ -501,6 +501,7 @@ static void Eio_Uart_Hal_CheckStatusTx(void *StateStruct)
 
     /* No need to check for Tx underflow since timer is controlled by the shifter status flag */
     /* Check for transfer end */
+    #if 0
     if (EioUartState[Channel].TxRemainingBytes == 0U)
     {
         if (TRUE == Eio_Reg_GetTimerStatus(BaseAddr, UART_TX_TIMER(ResourceIndex)))
@@ -541,7 +542,10 @@ static void Eio_Uart_Hal_CheckStatusTx(void *StateStruct)
         }
     }
     /* Check if transmitter needs more data */
-    else if ((TRUE == Eio_Reg_GetShifterStatus(BaseAddr, UART_TX_SHIFTER(ResourceIndex))) &&
+    else 
+    #endif
+    
+    if ((TRUE == Eio_Reg_GetShifterStatus(BaseAddr, UART_TX_SHIFTER(ResourceIndex))) &&
             (EioUartState[Channel].TxRemainingBytes > 0U))
     {
         Eio_Uart_Hal_WriteData((uint8)Channel);
@@ -553,6 +557,7 @@ static void Eio_Uart_Hal_CheckStatusTx(void *StateStruct)
                 EioUartState[Channel].TxCallback((uint8)Channel, EIO_UART_EVENT_TX_EMPTY);
             }
         }
+        #if 0
         if (EioUartState[Channel].TxRemainingBytes == 0U)
         {
             /* No more data, transmission will stop after the last bytes are sent.
@@ -567,6 +572,7 @@ static void Eio_Uart_Hal_CheckStatusTx(void *StateStruct)
                 Eio_Reg_SetTimerInterrupt(BaseAddr, (uint8)(1U << UART_TX_TIMER(ResourceIndex)), TRUE);
             }
         }
+        #endif
     }
     else
     {

@@ -1,0 +1,222 @@
+
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "Ckgen_Hal.h"
+#include "Core_Hal.h"
+#include "Device_Register.h"
+#include "Eio_Uart_Hal.h"
+#include "Rcm_Hal.h"
+#include "cqueue.h"
+#include "drv_pin.h"
+
+
+#define EIO_TX_SIZE 128U
+#define EIO_RX_SIZE 128U
+#define EIO_TQ_SIZE 512U
+#define EIO_RQ_SIZE 2048U
+
+static uint8_t       eio_tx_buf[EIO_TX_SIZE];
+static uint8_t       eio_rx_buf[EIO_RX_SIZE];
+static uint8_t       eio_tq_buf[EIO_TQ_SIZE];
+static uint8_t       eio_rq_buf[EIO_RQ_SIZE];
+static cqueue_t      eio_queue_tx;
+static cqueue_t      eio_queue_rx;
+static uint16_t      eio_rx_len  = 0;
+static uint16_t      eio_tx_len  = 0;
+static uint32_t      eio_speed   = 0U;
+static bool          eio_is_init = FALSE;
+static volatile bool eio_is_txbz = FALSE;
+
+static void (*eio_rxcb)(void);
+
+void reverse_buffer(unsigned char *buffer, uint16_t length)
+{
+    uint16_t l, r;
+    uint8_t  t;
+
+    if (buffer == NULL || length == 0)
+        return;
+
+    for (l = 0, r = length - 1; l < r; l++, r--)
+    {
+        t         = buffer[l];
+        buffer[l] = buffer[r];
+        buffer[r] = t;
+    }
+}
+
+static void drv_eio_init_data(void (*rxcb)(void))
+{
+    cqueue_init(&eio_queue_tx, eio_tq_buf, EIO_TQ_SIZE);
+    cqueue_init(&eio_queue_rx, eio_rq_buf, EIO_RQ_SIZE);
+    eio_tx_len = 0;
+    eio_rx_len = 0;
+    if (rxcb)
+        eio_rxcb = rxcb;
+}
+
+static void drv_eio_init_device(uint32_t speed)
+{
+}
+
+static void drv_eio_deinit_device(void)
+{
+    // Core_Hal_DisableIrq(EIO_IRQn);
+    // WRITE_REG32(EIO->CTRL, 0);
+    // Rcm_Hal_SetResetState(RCM_RESET_ID_EIO, RCM_RESET_STATE_ASSERT);
+    // Ckgen_Hal_EnablePeriphClk(CKGEN_EIO_BUS_CLK, FALSE);
+}
+
+static void drv_eio_init_pin(void)
+{
+    pin_port_cfg_t port = {0};
+    pin_gpio_cfg_t gpio = {0};
+
+    port.pin   = 4;
+    port.pull  = PIN_PULL_DISABLE;
+    port.mux   = PIN_MUX_OPTION6;
+    port.edge  = PIN_INT_DISABLE;
+    port.lock  = PIN_LOCK_DISABLE;
+    gpio.pin   = 4;
+    gpio.mode  = GPIO_MODE_HIGH_Z;
+    gpio.level = GPIO_LEVEL_NONE;
+    drv_pin_port_config(&port);
+    drv_pin_gpio_config(&gpio);
+
+    port.pin   = 3;
+    port.pull  = PIN_PULL_DISABLE;
+    port.mux   = PIN_MUX_OPTION6;
+    port.edge  = PIN_INT_DISABLE;
+    port.lock  = PIN_LOCK_DISABLE;
+    gpio.pin   = 3;
+    gpio.mode  = GPIO_MODE_HIGH_Z;
+    gpio.level = GPIO_LEVEL_NONE;
+    drv_pin_port_config(&port);
+    drv_pin_gpio_config(&gpio);
+}
+
+static void drv_eio_deinit_pin(void)
+{
+    pin_port_cfg_t port = {0};
+    pin_gpio_cfg_t gpio = {0};
+
+    port.pin   = 4;
+    port.pull  = PIN_PULL_DISABLE;
+    port.mux   = PIN_MUX_GPIO;
+    port.edge  = PIN_INT_DISABLE;
+    port.lock  = PIN_LOCK_DISABLE;
+    gpio.pin   = 4;
+    gpio.mode  = GPIO_MODE_OUTPUT;
+    gpio.level = GPIO_LEVEL_LOW;
+
+    drv_pin_port_config(&port);
+    drv_pin_gpio_config(&gpio);
+
+    port.pin   = 3;
+    port.pull  = PIN_PULL_DISABLE;
+    port.mux   = PIN_MUX_GPIO;
+    port.edge  = PIN_INT_DISABLE;
+    port.lock  = PIN_LOCK_DISABLE;
+    gpio.pin   = 3;
+    gpio.mode  = GPIO_MODE_OUTPUT;
+    gpio.level = GPIO_LEVEL_LOW;
+
+    drv_pin_port_config(&port);
+    drv_pin_gpio_config(&gpio);
+}
+
+int32_t drv_eio_init(uint32_t speed, void (*rxcb)(void))
+{
+
+    static Eio_UartUserConfigType eio_gnss_config = {
+        .EioInstance  = 0,
+        .DriverType   = EIO_DRIVER_TYPE_INTERRUPTS,
+        .BaudRate     = 9600,
+        .BitCount     = 8U,
+        .Direction    = EIO_UART_DIRECTION_BOTH,
+        .TxDataPin    = 0U,
+        .RxDataPin    = 1U,
+        .TxCallback   = NULL,
+        .RxCallback   = NULL,
+        .TxDmaChannel = 255U,
+        .RxDmaChannel = 255U,
+    };
+    drv_eio_init_data(NULL);
+    Eio_Uart_Hal_Init(0, &eio_gnss_config);
+    Eio_Uart_Hal_SetBaudRate(0, 9600);
+    // status = Eio_Uart_Hal_ReceiveData(0, eio_rx_buf, EIO_GNSS_RX_SIZE);
+
+
+    eio_is_init = TRUE;
+    return 0;
+}
+
+int32_t drv_eio_deinit(void)
+{
+    drv_eio_deinit_device();
+    eio_is_init = FALSE;
+    return 0;
+}
+
+int32_t drv_eio_sleep(void)
+{
+    if (eio_is_init)
+    {
+        drv_eio_deinit();
+        drv_eio_deinit_pin();
+    }
+    return 0;
+}
+
+int32_t drv_eio_wake(void)
+{
+    if (!eio_is_init)
+    {
+        // drv_eio_init_pin();
+        drv_eio_init(eio_speed, eio_rxcb);
+    }
+    return 0;
+}
+
+int32_t drv_eio_read(uint8_t *data, uint32_t len)
+{
+
+    if (cqueue_datalen(&eio_queue_rx))
+    {
+        len = cqueue_get(&eio_queue_rx, data, len);
+    }
+    else
+    {
+        len = 0;
+    }
+
+    return len;
+}
+
+int32_t drv_eio_write(uint8_t *data, uint32_t len)
+{
+    int32_t l;
+
+    if (!eio_is_init)
+        return -1;
+
+    len = cqueue_put(&eio_queue_tx, data, len);
+    if (eio_is_txbz)
+        return len;
+
+    l = cqueue_get(&eio_queue_tx, eio_tx_buf, EIO_TX_SIZE);
+    if (l > 0)
+    {
+
+        Eio_Uart_Hal_SendData(0, eio_tx_buf, l);
+        // eio_tx_len = l;
+        // reverse_buffer(eio_tx_buf, l);
+        // SET_BIT32(EIO->SHIFTSIEN, 0x01U);
+        // SET_BIT32(EIO->SHIFTEIEN, 0x01U);
+    }
+    eio_is_txbz = FALSE;
+
+    return len;
+}
