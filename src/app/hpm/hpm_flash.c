@@ -7,14 +7,14 @@
 
 #include "hpm_flash.h"
 
-#define HPM_REPO_FLASH_MAGICNO    (0x0909)
-#define HPM_REPO_FLASH_VER        (0x1002)
-#define HPM_REPO_FLASH_MAX_SECTOR (0x0180)   /*384*4K*/
-#define HPM_REPO_FLASH_PACKET_LEN (512)    /*header+data*/
+#define HPM_REPO_FLASH_MAGICNO    (0x0304)
+#define HPM_REPO_FLASH_VER        (0x1003)
+#define HPM_REPO_FLASH_MAX_SECTOR (3840)   /*3072*4K*/
+#define HPM_REPO_FLASH_PACKET_LEN (1024)    /*header+data*/
 #define HPM_REPO_FLASH_DATA_LEN   (HPM_REPO_FLASH_PACKET_LEN-sizeof(HPM_REPO_FLASH_HEADER))
-#define HPM_REPO_FLASH_MAX_PACKET (8)      /*4K=8(PACKET)*512*/
-#define HPM_REPO_FLASH_SECTOR_BIT (48)      /*48*8=384, 0:no erase 1:erased*/
-#define HPM_REPO_CALC_ADDR(SECTOR, PACKET) (FLASH_NOR_ADDR_HPM_DATA+SECTOR*4*1024+PACKET*512)
+#define HPM_REPO_FLASH_MAX_PACKET (4)      /*4K=4(PACKET)*1024*/
+#define HPM_REPO_FLASH_SECTOR_BIT (480)      /*3840*8=384, 0:no erase 1:erased*/
+#define HPM_REPO_CALC_ADDR(SECTOR, PACKET) (FLASH_NOR_ADDR_HPM_DATA+SECTOR*4*1024+PACKET*1024)
 #define HPM_REPO_GET_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] & (1 << (SECTOR%8)))
 #define HPM_REPO_SET_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] |= (1 << (SECTOR%8)))
 #define HPM_REPO_CLEAR_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] &= ~(1 << (SECTOR%8)))

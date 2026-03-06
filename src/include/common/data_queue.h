@@ -56,4 +56,6 @@ UINT8 dataqueue_get_data(DATA_QUEUE_PTR data_queue,
                          UINT16 lenght,
                          UINT8* element_body);
 
+BOOL dataqueue_can_put_data(DATA_QUEUE_PTR data_queue, UINT16 lenght, UINT8 slice_num);
+
 #endif /* DATA_QUEUE_H */

@@ -208,3 +208,14 @@ UINT8 dataqueue_get_data(DATA_QUEUE_PTR data_queue,
 
     return (UINT8)DATA_QUEUE_RET_SUCCESS;
 }
+
+BOOL dataqueue_can_put_data(DATA_QUEUE_PTR data_queue, UINT16 lenght, UINT8 slice_num)
+{
+    UINT16 need_size = (slice_num * sizeof(DATA_ELEMENT_HEADER)) + lenght;
+    UINT16 idle_size = (data_queue->head - data_queue->tail + data_queue->len - 1U) % data_queue->len;
+    if (idle_size < need_size)
+    {
+        return FALSE;
+    }
+    return TRUE;
+}

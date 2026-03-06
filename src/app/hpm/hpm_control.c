@@ -8,6 +8,7 @@
 #include "hpm_socket.h"
 #include "hpm_net.h"
 #include "hpm_cfg.h"
+#include "hpm_dev.h"
 #include "hpm_ota_tbox.h"
 #include "hpm_ota_ecu.h"
 #include "hpm_param_fetch.h"
@@ -147,7 +148,7 @@ VOID hpm_control_cmd_handle(UINT16 cmd, UINT8 *data, UINT16 len)
 	switch (ctrl_info.cmd_sub)
 	{
 		case HPM_CTRL_DATA_REQ:
-			//发送一次实时数据, 无通用应答
+			hpm_dev_handle_event(HPM_DEV_EVENT_CALL);
 			break;
 		case HPM_CTRL_CFG_READ:
 			ctrl_res.need_res = TRUE;
@@ -181,7 +182,7 @@ VOID hpm_control_cmd_handle(UINT16 cmd, UINT8 *data, UINT16 len)
 			break;
 		case HPM_CTRL_CAN_FILE:
 			ctrl_res.need_res = TRUE;
-			ret = hpm_param_fetch_ftp_start(data + pos, ctrl_info.len);
+			ret = hpm_param_fetch_ftp_start(data + pos, ctrl_info.len, ctrl_res.data + HPM_CTROL_RES_POS, &ctrl_res.body_len);
 			if(0 == ret)
 			{
 				ctrl_res.result = HPM_CTRL_RES_OK;

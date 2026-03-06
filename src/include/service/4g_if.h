@@ -3,35 +3,35 @@
 
 #include "tbox_common.h"
 
-#define IF_4G_TIME_MAX_LEN              6U
-#define IF_4G_LD_FLASH_INFO_LEN         32U
-#define IF_4G_LD_APPEND_INFO_LEN        64U
-#define IF_4G_MAX_ICCID_LEN             21U
-#define IF_4G_MAX_IMEI_LEN              15U
-#define IF_4G_MAX_PHONE_NUM_LEN         20U
-#define IF_4G_SOCKET_MAX_DATA_LEN       1460U /*EC200U一次发送最大长度*/
+#define IF_4G_TIME_MAX_LEN 6U
+#define IF_4G_LD_FLASH_INFO_LEN 32U
+#define IF_4G_LD_APPEND_INFO_LEN 64U
+#define IF_4G_MAX_ICCID_LEN 21U
+#define IF_4G_MAX_IMEI_LEN 15U
+#define IF_4G_MAX_PHONE_NUM_LEN 20U
+#define IF_4G_SOCKET_MAX_DATA_LEN 1460U /*EC200U一次发送最大长度*/
 
 typedef struct
 {
     UINT8 is_valid;
-    UINT8 time[IF_4G_TIME_MAX_LEN];  //year,mon,day,hour,min,sec
-}IF_4G_TIMINFO;
+    UINT8 time[IF_4G_TIME_MAX_LEN]; // year,mon,day,hour,min,sec
+} IF_4G_TIMINFO;
 
 typedef enum
 {
-    IF_4G_LD_CMD_START     = 0U,
+    IF_4G_LD_CMD_START = 0U,
     IF_4G_LD_CMD_TRANSLATE,
     IF_4G_LD_CMD_END
-}IF_4G_LD_CMD;
+} IF_4G_LD_CMD;
 
 typedef struct
 {
-    UINT8   cmd;
-    UINT8   seq; //from 1
-    UINT16  total_len;
-    UINT16  offset;
-    UINT16  send_len;
-}IF_4G_LD_CTL;
+    UINT8 cmd;
+    UINT8 seq; // from 1
+    UINT16 total_len;
+    UINT16 offset;
+    UINT16 send_len;
+} IF_4G_LD_CTL;
 
 typedef struct
 {
@@ -39,7 +39,7 @@ typedef struct
     UINT8 append_len;
     UINT8 append[IF_4G_LD_APPEND_INFO_LEN];
     IF_4G_LD_CTL ctl;
-}IF_4G_LD;
+} IF_4G_LD;
 
 typedef void (*IF_4G_SEND_CALLBACK)(UINT8 conn_id, UINT8 result);
 typedef void (*IF_4G_RECV_CALLBAKC)(UINT8 conn_id, UINT8 *data, UINT16 len);
@@ -55,14 +55,14 @@ typedef enum
     IF_FTP_4G_CALLBACK_RET_OK = 0U,
     IF_FTP_4G_CALLBACK_RET_ABORT,
     IF_FTP_4G_CALLBACK_RET_CONTINUE,
-}IF_FTP_4G_CALLBACK_RET;
+} IF_FTP_4G_CALLBACK_RET;
 
 typedef enum
 {
     IF_FTP_4G_NOTIFY_PROCESS = 0U,
     IF_FTP_4G_NOTIFY_ERROR,
     IF_FTP_4G_NOTIFY_FINISH
-}IF_FTP_4G_NOTIFY_CODE;
+} IF_FTP_4G_NOTIFY_CODE;
 
 typedef enum
 {
@@ -72,32 +72,32 @@ typedef enum
     IF_FTP_4G_ERR_INVALID_STATE,
     IF_FTP_4G_ERR_DWN_TIMEOUT,
     IF_FTP_4G_ERR_DWN_ERROR
-}IF_FTP_4G_ERROR_CODE;
+} IF_FTP_4G_ERROR_CODE;
 
 typedef enum
 {
     IF_4G_SOCKT_TCP = 0U,
     IF_4G_SOCKT_UDP
-}IF_4G_SOCKT_TYPE;
+} IF_4G_SOCKT_TYPE;
 
 typedef enum
 {
     IF_4G_SEND_OK = 0U,
     IF_4G_SEND_NG,
-}IF_4G_SEND_RESULT;
+} IF_4G_SEND_RESULT;
 
 typedef enum
 {
     IF_4G_SET_APN_OK = 0U,
     IF_4G_SET_APN_NG,
-}IF_4G_SETAPN_RESULT;
+} IF_4G_SETAPN_RESULT;
 
 typedef enum
 {
-    IF_4G_SIMSTATE_PULLOUT  = 0U,
+    IF_4G_SIMSTATE_PULLOUT = 0U,
     IF_4G_SIMSTATE_INSERT,
     IF_4G_SIMSTATE_UNKNOWN
-}IF_4G_SIMSTATE;
+} IF_4G_SIMSTATE;
 
 typedef enum
 {
@@ -105,21 +105,20 @@ typedef enum
     IF_4G_STATE_DISCONNECTEING,
     IF_4G_STATE_CONNECTING,
     IF_4G_STATE_CONNECTED
-}IF_4G_CONN_STATE;
+} IF_4G_CONN_STATE;
 
 typedef enum
 {
     IF_4G_PUBLIC_APN = 0U,
     IF_4G_PRIVATE_APN,
     IF_4G_OTA_APN
-}IF_4G_APN_INDEX;
+} IF_4G_APN_INDEX;
 
 typedef enum
 {
-    IF_4G_GBF_CONN_ID = 0U,
-    IF_4G_HPM_CONN_ID,
+    IF_4G_HPM_CONN_ID = 0U,
     IF_4G_CONN_MAX
-}IF_4G_CONN_ID;
+} IF_4G_CONN_ID;
 
 typedef enum
 {
@@ -127,14 +126,14 @@ typedef enum
     IF_4G_SLP_TYPE_SHUTDOWN,
     IF_4G_SLP_TYPE_SHELL_SLEEP,
     IF_4G_SLP_TYPE_SHELL_SHUTDOWN
-}IF_4G_SLEEP_TYPE;
+} IF_4G_SLEEP_TYPE;
 
 typedef enum
 {
     IF_4G_SEND_PRI_HIGH = 0U,
     IF_4G_SEND_PRI_MID,
     IF_4G_SEND_PRI_LOW
-}IF_4G_SEND_PRI;
+} IF_4G_SEND_PRI;
 
 typedef enum
 {
@@ -153,7 +152,7 @@ typedef enum
     TBOX_4G_STATE_RUNNING,
     TBOX_4G_STATE_STOPPING,
     TBOX_4G_STATE_UNKNOWN
-}TBOX_4G_STATE;
+} TBOX_4G_STATE;
 
 INT8 if_4g_get_call_state(UINT8 apn_index);
 
@@ -167,8 +166,8 @@ VOID if_4g_set_apn(UINT8 index,
                    UINT8 *password);
 
 UINT8 if_4g_reg_transmit_callback(UINT8 conn_id,
-                                 IF_4G_SEND_CALLBACK send_callback,
-                                 IF_4G_RECV_CALLBAKC recv_callback);
+                                  IF_4G_SEND_CALLBACK send_callback,
+                                  IF_4G_RECV_CALLBAKC recv_callback);
 
 UINT8 if_4g_socket_connect(UINT8 context_id,
                            UINT8 conn_id,
@@ -199,7 +198,7 @@ UINT8 if_4g_get_sim_state(VOID);
 
 BOOL if_4g_is_downloading(VOID);
 
-VOID if_ftp_4g_download(UINT8 *url, 
+VOID if_ftp_4g_download(UINT8 *url,
                         UINT16 len,
                         UINT8 context_id,
                         IF_FTP_4G_DOWNLOAD_CALLBACK call_bak);
@@ -225,4 +224,3 @@ VOID if_4g_cclk(IF_4G_TIME_CALLBAK call_back);
 VOID if_4g_ntp(UINT8 context_id, UINT8 *ip, UINT16 port, IF_4G_TIME_CALLBAK call_back);
 
 #endif /* TBOX_4G_IF_H */
-

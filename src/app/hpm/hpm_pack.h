@@ -29,6 +29,16 @@ typedef enum
     HPM_PACK_PARSE_OVERFLOW = 5
 } hpm_pack_parse_result_e;
 
+typedef enum
+{
+    HPM_PARSE_POS_PERFIX0 = 0,
+    HPM_PARSE_POS_PERFIX1 = 1,
+    HPM_PARSE_POS_CMD = 2,
+    HPM_PARSE_POS_LENH = 25,
+    HPM_PARSE_POS_LENL = 26,
+    HPM_PARSE_POS_DATA = 27,
+} hpm_parse_recv_pos_e;
+
 typedef struct
 {
     UINT16 seq;

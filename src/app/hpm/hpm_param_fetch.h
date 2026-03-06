@@ -7,7 +7,7 @@ VOID hpm_param_fetch_process(VOID);
 VOID hpm_param_fetch_wakeup(VOID);
 VOID hpm_param_fetch_sleep(VOID);
 
-INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len);
+INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len, UINT8 *resp, UINT16 *resp_len);
 
 INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size);
 

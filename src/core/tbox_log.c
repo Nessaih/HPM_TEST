@@ -142,6 +142,59 @@ static VOID tbox_log_task(VOID *param)
     vTaskDelete(NULL_PTR);
 }
 
+static INT32 tbox_log_put_data(TBOX_LOG_HEADER *header, UINT8 *data, UINT16 len)
+{
+#define TBOX_LOG_PUT_RETRY_COUNT    (3U)
+    UINT8 retry_count = 0U;
+    BOOL canbe_put = FALSE;
+    TaskHandle_t handle;
+    
+    xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+    {
+        if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+len))
+        {
+            canbe_put = TRUE;
+        }
+        else
+        {
+            handle = tbox_log_mgr.task_handle;
+            if(NULL_PTR == handle)
+            {
+                xSemaphoreGive(tbox_log_mgr.mutex);
+                return (INT32)TBOX_E_FAILED;
+            }
+
+            /*等待释放资源*/
+            while(retry_count++ < TBOX_LOG_PUT_RETRY_COUNT)
+            {
+                xSemaphoreGive(tbox_log_mgr.mutex);
+                xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
+                vTaskDelay(pdMS_TO_TICKS(20U));
+
+                xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+                if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+len))
+                {
+                    canbe_put = TRUE;
+                    break;
+                }
+            }
+        }
+        if(TRUE == canbe_put)
+        {
+            cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)header, sizeof(TBOX_LOG_HEADER));
+            cqueue_put(&tbox_log_mgr.log_queue, data, len);
+        }
+    }
+    xSemaphoreGive(tbox_log_mgr.mutex);
+
+    if(FALSE == canbe_put)
+    {
+        return (INT32)TBOX_E_FAILED;
+    }
+
+    return (INT32)TBOX_E_OK;
+}
+
 INT32 tbox_log_init(VOID)
 {
     if(TBOX_LOG_SEQ_NOINIT != tbox_log_init_seq)
@@ -369,9 +422,7 @@ VOID tbox_log_print(const CHAR *format, ...)
     }
 
     va_list args;
-    BOOL direct_output = FALSE;
     CHAR *temp_ptr = NULL_PTR;
-    UINT8 retry_count = 0;
     TaskHandle_t handle;
     xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
     {
@@ -380,26 +431,7 @@ VOID tbox_log_print(const CHAR *format, ...)
             xSemaphoreGive(tbox_log_mgr.mutex);
             return;
         }
-        handle = tbox_log_mgr.task_handle;    
-        if(cqueue_surplus(&tbox_log_mgr.log_queue) < (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-        {
-            xSemaphoreGive(tbox_log_mgr.mutex);
-            xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
-            while(retry_count++ < 3U)
-            {
-                if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-                {
-                    break;
-                }
-                vTaskDelay(pdMS_TO_TICKS(20U));
-            }
-
-            xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-            if(cqueue_surplus(&tbox_log_mgr.log_queue) < (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-            {
-                direct_output = TRUE;
-            }
-        }
+        handle = tbox_log_mgr.task_handle;
         temp_ptr = tbox_log_mgr.temp_buffer + tbox_log_mgr.temp_pos*TBOX_LOG_LINEBUFF_SIZE;
         tbox_log_mgr.temp_pos++;
     }
@@ -413,27 +445,21 @@ VOID tbox_log_print(const CHAR *format, ...)
     TBOX_LOG_HEADER header;
     header.magic = TBOX_LOG_MAGIC_NO;
     header.size = (UINT16)strlen(temp_ptr);
-    if(TRUE == direct_output)
+    if((INT32)TBOX_E_OK == tbox_log_put_data(&header, (UINT8 *)temp_ptr, header.size))
     {
-         tbox_log_raw_output(temp_ptr, header.size);
-         xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-         tbox_log_mgr.temp_pos--;
-         xSemaphoreGive(tbox_log_mgr.mutex);     
-    }
-    else
-    {
-        xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-        {
-            cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)&header, sizeof(TBOX_LOG_HEADER));
-            cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)temp_ptr, header.size);
-            tbox_log_mgr.temp_pos--;
-        }
-        xSemaphoreGive(tbox_log_mgr.mutex);
         if(NULL_PTR != handle)
         {
             xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
-        }    
+        }           
     }
+    else
+    {
+         tbox_log_raw_output(temp_ptr, header.size);        
+    }
+
+    xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+    tbox_log_mgr.temp_pos--;
+    xSemaphoreGive(tbox_log_mgr.mutex);       
 }
 
 VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, const INT32 line, const CHAR *fmt, ...)
@@ -442,10 +468,6 @@ VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, c
     {
         return;
     }
-
-    va_list args;
-    BOOL direct_output = FALSE;
-    UINT8 retry_count = 0;
 
     TBOX_MODULE_INFO config = {.name = NULL_PTR, .log_level = LOG_LEVEL_NONE};
     tbox_module_get_config(modlue_id, &config);
@@ -465,31 +487,13 @@ VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, c
             xSemaphoreGive(tbox_log_mgr.mutex);
             return;
         }
-        handle = tbox_log_mgr.task_handle;
-        if(cqueue_surplus(&tbox_log_mgr.log_queue) < (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-        {
-            xSemaphoreGive(tbox_log_mgr.mutex);
-            xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
-            while(retry_count++ < 3U)
-            {
-                if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-                {
-                    break;
-                }
-                vTaskDelay(pdMS_TO_TICKS(20U));
-            }
-
-            xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-            if(cqueue_surplus(&tbox_log_mgr.log_queue) < (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
-            {
-                direct_output = TRUE;
-            }
-        }
         temp_ptr = tbox_log_mgr.temp_buffer + tbox_log_mgr.temp_pos*TBOX_LOG_LINEBUFF_SIZE;
         tbox_log_mgr.temp_pos++;
+        handle = tbox_log_mgr.task_handle;
     }
     xSemaphoreGive(tbox_log_mgr.mutex);
 
+    va_list args;
     TBOX_LOG_HEADER header;
     header.magic = TBOX_LOG_MAGIC_NO;
     memset(temp_ptr, 0, TBOX_LOG_LINEBUFF_SIZE);
@@ -509,28 +513,20 @@ VOID tbox_log_output(TBOX_ID modlue_id, TBOX_LOG_LEVEL level, const CHAR *fun, c
         temp_ptr[header.size++] = '\0';        
     }
 
-    if(TRUE == direct_output)
+    if((INT32)TBOX_E_OK == tbox_log_put_data(&header, (UINT8 *)temp_ptr, header.size))
     {
-        tbox_log_raw_output(temp_ptr, header.size);
-        xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-        tbox_log_mgr.temp_pos--;
-        xSemaphoreGive(tbox_log_mgr.mutex);          
-    }
-    else
-    {
-        xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-        {
-            cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)&header, sizeof(TBOX_LOG_HEADER));
-            cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)temp_ptr, header.size);
-            tbox_log_mgr.temp_pos--;
-        }
-        xSemaphoreGive(tbox_log_mgr.mutex);
-
         if(NULL_PTR != handle)
         {
             xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
-        }
+        }       
     }
+    else
+    {
+        tbox_log_raw_output(temp_ptr, header.size);       
+    }
+    xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+    tbox_log_mgr.temp_pos--;
+    xSemaphoreGive(tbox_log_mgr.mutex);       
 }
 
 VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const UINT16 len)
@@ -596,19 +592,13 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
 		pos += 16U;
 		if((header.size + (ibuf-line_buff)) >= (TBOX_LOG_LINEBUFF_SIZE-1U))
 		{
-            xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+            if((INT32)TBOX_E_OK == tbox_log_put_data(&header, (UINT8 *)temp_ptr, header.size))
             {
-                if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
+                if(NULL_PTR != handle)
                 {
-                    cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)&header, sizeof(TBOX_LOG_HEADER));
-                    cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)temp_ptr, header.size);                    
+                    xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
                 }
                 header.size = 0U;
-            }
-            xSemaphoreGive(tbox_log_mgr.mutex);
-            if(NULL_PTR != handle)
-            {
-                xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
             }
 		}
 		header.size += (UINT16)tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
@@ -632,49 +622,34 @@ VOID tbox_log_dump(TBOX_ID modlue_id, const CHAR *tag, const UINT8 *data, const 
         ibuf += 2U;
 		if((header.size + (ibuf-line_buff)) >= (TBOX_LOG_LINEBUFF_SIZE-1U))
 		{
-            xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+            if((INT32)TBOX_E_OK == tbox_log_put_data(&header, (UINT8 *)temp_ptr, header.size))
             {
-                if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
+                if(NULL_PTR != handle)
                 {
-                    cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)&header, sizeof(TBOX_LOG_HEADER));
-                    cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)temp_ptr, header.size);                    
+                    xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
                 }
                 header.size = 0U;
-            }
-            xSemaphoreGive(tbox_log_mgr.mutex);
-            if(NULL_PTR != handle)
-            {
-                xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
             }
 		}
 		header.size += (UINT16)tbox_log_copydata_to_linebuffer(header.size, temp_ptr+header.size, line_buff);
 	}
     if(header.size > 0U)
     {
-        xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
+        if((INT32)TBOX_E_OK == tbox_log_put_data(&header, (UINT8 *)temp_ptr, header.size))
         {
-            if(cqueue_surplus(&tbox_log_mgr.log_queue) >= (sizeof(TBOX_LOG_HEADER)+TBOX_LOG_LINEBUFF_SIZE))
+            if(NULL_PTR != handle)
             {
-                cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)&header, sizeof(TBOX_LOG_HEADER));
-                cqueue_put(&tbox_log_mgr.log_queue, (UINT8 *)temp_ptr, header.size);                    
+                xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
             }
-            tbox_log_mgr.temp_pos -= 2U;
             header.size = 0U;
         }
-        xSemaphoreGive(tbox_log_mgr.mutex);
-        if(NULL_PTR != handle)
-        {
-            xTaskNotify(handle, TBOX_LOG_EVENT_OUTPUT_BIT, eSetBits);
-        }
     }
-    else
+
+    xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
     {
-        xSemaphoreTake(tbox_log_mgr.mutex, portMAX_DELAY);
-        {
-            tbox_log_mgr.temp_pos -= 2U;
-        }
-        xSemaphoreGive(tbox_log_mgr.mutex);        
-    }   
+        tbox_log_mgr.temp_pos -= 2U;
+    }
+    xSemaphoreGive(tbox_log_mgr.mutex);   
 }
 
 __weak VOID tbox_log_get_time(TBOX_LOG_TIME *time)

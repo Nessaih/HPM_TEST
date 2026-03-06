@@ -215,7 +215,7 @@ static INT32 hpm_param_parse_co(hpm_fetch_config_t *config, const char *line)
         MODULE_LOG_E(HPM, "parse sequence error.");
         return -1;
     }
-    hpm_fetch_param_hex_to_uint32(buf, &val);
+    tbox_string_get_num_bylen((UINT8*)buf, sizeof(buf), &val);
     config->sequence = val;
 
     /* interval */
@@ -305,7 +305,6 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
 
     if (0 != hpm_param_split_str(&p, buf, sizeof(buf), ','))
     {
-        MODULE_LOG_E(HPM, "parse es error.");
         return -1;
     }
     tbox_string_get_num_bylen((UINT8 *)buf, sizeof(buf), &val);

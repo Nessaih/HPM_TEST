@@ -23,7 +23,7 @@
 #define HPM_SESSION_SEQ_NAME "HPM_SESSION_SEQ"
 
 #define HPM_SESSION_MAX_RECV_LEN (256)
-#define HPM_SESSION_MAX_SEND_LEN (1024)
+#define HPM_SESSION_MAX_SEND_LEN (1024UL)
 #define HPM_SESSION_LOG_TIMEOUT (10)
 #define HPM_SESSION_RETRY_CNT (3)
 
@@ -266,6 +266,43 @@ static INT32 hpm_session_com_login(VOID)
     }
 
     mempool_free(buf);
+    return 0;
+}
+
+static INT32 hpm_session_com_report(VOID)
+{
+    HPM_PACKET *pack = hpm_data_get_report_pack();
+    if (NULL_PTR == pack)
+    {
+        return -1;
+    }
+
+    if ((pack->len + HPM_PARSE_POS_DATA) >= HPM_SESSION_MAX_SEND_LEN)
+    {
+        hpm_data_put_to_list(HPM_FREE_LIST, pack);
+        MODULE_LOG_E(HPM, "report data len overflow, len: %d", pack->len);
+        return -1;
+    }
+
+    memset(hpm_session_send_buffer, 0, sizeof(hpm_session_send_buffer));
+
+    INT32 len = hpm_pack_report_data(pack, hpm_session_send_buffer);
+    if (len <= 0)
+    {
+        hpm_data_put_back_report_pack(pack);
+        return -1;
+    }
+
+    if (0 != hpm_net_send(hpm_session_send_buffer, len))
+    {
+        hpm_data_put_back_report_pack(pack);
+    }
+    else
+    {
+        hpm_data_put_trans_list(pack);
+        MODULE_LOG_DUMP(HPM, "report data", hpm_session_send_buffer, len);
+    }
+
     return 0;
 }
 
@@ -532,37 +569,12 @@ static INT32 hpm_session_send_report(UINT8 resp)
     case HPM_SESSION_SEND_INIT:
     case HPM_SESSION_SEND_SUCCESS:
     {
-        HPM_PACKET *pack = hpm_data_get_report_pack();
-        if (NULL_PTR == pack)
+        if (0 == hpm_session_com_report())
         {
-            return 0;
-        }
-
-        memset(hpm_session_send_buffer, 0, HPM_SESSION_MAX_SEND_LEN);
-        INT32 len = hpm_pack_report_data(pack, hpm_session_send_buffer);
-        if (len <= 0)
-        {
-            hpm_data_put_back_report_pack(pack);
-            return -1;
-        }
-
-        sender->request = pack->type;
-
-        if (0 != hpm_net_send(hpm_session_send_buffer, len))
-        {
-            hpm_data_put_back_report_pack(pack);
-            return -1;
-        }
-        else
-        {
-            hpm_data_put_trans_list(pack);
             sender->wait_time = current_tick;
             sender->state = HPM_SESSION_SEND_WAIT;
+            hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT].wait_time = current_tick;
         }
-
-        MODULE_LOG_DUMP(HPM, "report data", hpm_session_send_buffer, len);
-
-        hpm_session_send_info[HPM_SESSION_EVENT_HEARTBEAT].wait_time = current_tick;
         break;
     }
     case HPM_SESSION_SEND_WAIT:
@@ -593,6 +605,7 @@ static INT32 hpm_session_send_report(UINT8 resp)
             sender->wait_time = 0;
             hpm_data_flush_trans_list();
             MODULE_LOG_E(HPM, "tsp timeout");
+            hpm_socket_force_stop();
         }
 
         break;
@@ -700,6 +713,11 @@ static VOID hpm_session_proc_logout(VOID)
 
 VOID hpm_session_process(VOID)
 {
+    if (TRUE == if_4g_is_downloading())
+    {
+        return;
+    }
+
     hpm_data_recv_process();
     switch (hpm_session_get_step())
     {

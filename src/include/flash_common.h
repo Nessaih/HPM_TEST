@@ -39,7 +39,7 @@
 #define FLASH_NOR_SIZE_HPM_MGR      (0x00001000)
 
 #define FLASH_NOR_ADDR_HPM_DATA     (FLASH_NOR_ADDR_HPM_MGR + 0x00010000)
-#define FLASH_NOR_SIZE_HPM_DATA     (0x00180000) // 1.5M
+#define FLASH_NOR_SIZE_HPM_DATA     (0x00F00000) // 15M
 
 /*────────────────────────────────────────ENDDEF BLOCK4────────────────────────────────────────*/
 /*===================================  NOR Flash Memory Map ===================================*/

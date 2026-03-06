@@ -41,16 +41,6 @@ typedef enum
     HPM_PARSE_STEP_CHECKSUM = 5,
 } hpm_parse_recv_step_e;
 
-typedef enum
-{
-    HPM_PARSE_POS_PERFIX0 = 0,
-    HPM_PARSE_POS_PERFIX1 = 1,
-    HPM_PARSE_POS_CMD = 2,
-    HPM_PARSE_POS_LENH = 25,
-    HPM_PARSE_POS_LENL = 26,
-    HPM_PARSE_POS_DATA = 27,
-} hpm_parse_recv_pos_e;
-
 static INT32 hpm_get_imei(UINT8 *buf)
 {
     UINT8 imei[IF_4G_MAX_IMEI_LEN] = {0};
@@ -185,23 +175,19 @@ INT32 hpm_pack_heartbeat(UINT8 *buf)
 
 INT32 hpm_pack_report_data(HPM_PACKET *pack, UINT8 *buf)
 {
-    UINT8 *data;
-    UINT16 len;
-
-    data = mempool_alloc(HPM_DATA_BUFF_LENGTH);
-    if (NULL == data)
-    {
-        MODULE_LOG_E(HPM, "malloc data buf failed");
-        return 0;
-    }
-
-    len = 0;
-    memcpy(data + len, pack->data, pack->len);
+    UINT16 len = 0;
+    buf[len++] = 0x53;
+    buf[len++] = 0x4C;
+    buf[len++] = pack->type;
+    len += hpm_get_imei(buf + len);
+    buf[len++] = HPM_PROTOCOL_VERSION;
+    buf[len++] = (HPM_COMPRESS_NONE << 0) | (HPM_ENCRYPT_NONE << 4);
+    buf[len++] = (pack->len >> 8) & 0xFF;
+    buf[len++] = (pack->len >> 0) & 0xFF;
+    memcpy(buf + len, pack->data, pack->len);
     len += pack->len;
-    len = hpm_pack((HPM_CMD_TYPE)pack->type, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, len, data, buf);
-
-    mempool_free(data);
-
+    UINT8 cs = xor_checksum(&buf[HPM_UNIQUE_CODE_LENGTH + 3], pack->len + 4);
+    buf[len++] = cs;
     return len;
 }
 

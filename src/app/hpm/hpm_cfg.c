@@ -582,9 +582,9 @@ static INT32 hpm_cfg_tsp_check_apn(UINT8 *data, UINT16 in_len)
     if (in_len >= TBOX_CFG_APN_LEN || in_len <= 0)
     {
         MODULE_LOG_E(HPM, "hpm_cfg_tsp_check_apn len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
-    return 1;
+    return HPM_CFG_RESP_OK;
 }
 
 static INT32 hpm_cfg_tsp_set_apn(UINT8 *data, UINT16 in_len)
@@ -1024,19 +1024,29 @@ static INT32 hpm_cfg_tsp_get_report_intv(UINT8 *data, UINT16 *out_len)
 {
     INT32 ret = 0;
     TBOX_CFG_ID cfg_id;
-    UINT16 intv = 0;
+    UINT16 intv_on  = 0;
+    UINT16 intv_off = 0;
 
     TBOX_CFG_ID_GET(HPMCYCON, cfg_id);
-    ret = tbox_cfg_read(cfg_id, &intv);
+    ret = tbox_cfg_read(cfg_id, &intv_on);
     if (0 != ret)
     {
         return HPM_CFG_RESP_NG;
     }
 
-    data[0] = intv >> 8;
-    data[1] = intv;
+	TBOX_CFG_ID_GET(HPMCYCOFF, cfg_id);
+    ret = tbox_cfg_read(cfg_id, &intv_off);
+    if (0 != ret)
+    {
+        return HPM_CFG_RESP_NG;
+    }
 
-    *out_len = 2;
+    data[0] = intv_on >> 8;
+    data[1] = intv_on;
+	data[2] = intv_off >> 8;
+    data[3] = intv_off;
+
+    *out_len = 4;
     return HPM_CFG_RESP_OK;
 }
 
@@ -1046,10 +1056,10 @@ static INT32 hpm_cfg_tsp_check_report_intv(UINT8 *data, UINT16 in_len)
     if (4 != in_len)
     {
         MODULE_LOG_E(HPM, "hpm_cfg_check_report_intv len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
 
-    return 1;
+    return HPM_CFG_RESP_OK;
 }
 
 static INT32 hpm_cfg_tsp_set_report_intv(UINT8 *data, UINT16 in_len)
@@ -1058,12 +1068,22 @@ static INT32 hpm_cfg_tsp_set_report_intv(UINT8 *data, UINT16 in_len)
 
     INT32 ret = 0;
     TBOX_CFG_ID cfg_id;
-    UINT16 intv = (data[0] << 8) + data[1];
+    UINT16 intv_on = (data[0] << 8) + data[1];
+    UINT16 intv_off = (data[2] << 8) + data[3];
 
     TBOX_CFG_ID_GET(HPMCYCON, cfg_id);
-    ret = tbox_cfg_write(cfg_id, &intv);
+    ret = tbox_cfg_write(cfg_id, &intv_on);
     if (0 != ret)
     {
+    	MODULE_LOG_E(HPM, "set acc on failed, ret: %d", ret);
+        return HPM_CFG_RESP_NG;
+    }
+	
+	TBOX_CFG_ID_GET(HPMCYCOFF, cfg_id);
+    ret = tbox_cfg_write(cfg_id, &intv_off);
+    if (0 != ret)
+    {
+    	MODULE_LOG_E(HPM, "set acc off failed, ret: %d", ret);
         return HPM_CFG_RESP_NG;
     }
 
@@ -1106,7 +1126,7 @@ static INT32 hpm_cfg_tsp_check_acc_time(UINT8 *data, UINT16 in_len)
     if (4 != in_len)
     {
         MODULE_LOG_E(HPM, "hpm_cfg_check_acc_time len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
 
     return HPM_CFG_RESP_OK;
@@ -1138,7 +1158,7 @@ static INT32 hpm_cfg_tsp_check_gps_odo(UINT8 *data, UINT16 in_len)
     if (4 != in_len)
     {
         MODULE_LOG_E(HPM, "hpm_cfg_check_gps_odo len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
 
     return HPM_CFG_RESP_OK;
@@ -1417,7 +1437,7 @@ static INT32 hpm_cfg_tsp_check_baud2(UINT8 *data, UINT16 in_len)
     if (2 != in_len)
     {
         MODULE_LOG_E(HPM, "hpm_cfg_check_baud2 len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
 
     return HPM_CFG_RESP_OK;
@@ -1518,7 +1538,7 @@ static INT32 hpm_cfg_tsp_check_gps_mode(UINT8 *data, UINT16 in_len)
     if ((data[0] > 7) || (in_len != 1))
     {
         MODULE_LOG_E(HPM, "hpm_cfg_check_gps_mode len:%d", in_len);
-        return 0;
+        return HPM_CFG_RESP_NG;
     }
 
     return HPM_CFG_RESP_OK;

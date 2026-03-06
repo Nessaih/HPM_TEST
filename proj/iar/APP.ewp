@@ -3263,6 +3263,12 @@
                     <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_com.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_control.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_control.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_nmeap.c</name>
                 </file>
                 <file>

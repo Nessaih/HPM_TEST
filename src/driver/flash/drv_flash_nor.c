@@ -21,8 +21,8 @@
 #define EFS_PAGE_COUNT                 (EFS_SECTOR_SIZE / EFS_PAGE_SIZE)
 #define EFS_BACKUP_SECTOR              (EXFLASH_ADDR_BLOCK6)
 #define EFS_TRANSFER_HEAD_SIZE         (5)
-#define EFS_TRANSFER_DATA_SIZE         (251)
-#define EFS_TRANSFER_BUFF_SIZE         (256)
+#define EFS_TRANSFER_DATA_SIZE         (256)
+#define EFS_TRANSFER_BUFF_SIZE         (EFS_TRANSFER_HEAD_SIZE + EFS_TRANSFER_DATA_SIZE)
 
 #define EFS_CAL_PAGE_HEAD_ADDR(addr)   ((addr) & ~0XFFUL)
 #define EFS_CAL_SECTOR_HEAD_ADDR(addr) ((addr) & ~0XFFFUL)

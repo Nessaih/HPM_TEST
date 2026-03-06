@@ -166,6 +166,9 @@ static INT32 hpm_fetch_ftp_check_file(VOID)
         return -1;
     }
 
+    hpm_fetch_unregister_all();
+    memset(&hpm_fetch_config, 0, sizeof(hpm_fetch_config));
+
     MD5_CTX ctx;
     MD5Init(&ctx);
 
@@ -188,6 +191,8 @@ static INT32 hpm_fetch_ftp_check_file(VOID)
         {
             break;
         }
+
+        MODULE_LOG_DUMP(HPM, "config data", data, len);
 
         MD5Update(&ctx, data, len);
         read_len += len;
@@ -385,8 +390,19 @@ static VOID hpm_fetch_ftp_handle_finish(VOID)
     hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
 }
 
-INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len)
+INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len, UINT8 *resp, UINT16 *resp_len)
 {
+    if ((NULL_PTR == resp) || (NULL_PTR == resp_len) || (NULL_PTR == data))
+    {
+        MODULE_LOG_E(HPM, "invalid param.");
+        return -1;
+    }
+
+    UINT16 out_len = 0;
+    resp[out_len++] = 0x00;
+    resp[out_len++] = 0x00;
+    *resp_len = out_len;
+
     if (HPM_FETCH_FTP_INIT != hpm_fetch_ftp_state_get())
     {
         MODULE_LOG_E(HPM, "ftp state error, state %d.", hpm_fetch_ftp_state_get());
@@ -777,7 +793,21 @@ static BOOL hpm_fetch_register_node(VOID)
 
 static VOID hpm_fetch_unregister_all(VOID)
 {
-    for (UINT32 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
+    UINT32 i = 0;
+
+    for (i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
+    {
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        p->node = NULL_PTR;
+    }
+
+    for (i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        p->node = NULL_PTR;
+    }
+
+    for (i = 0; i < HPM_FETCH_NODE_COUNT; i++)
     {
         hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
         node->type = (UINT32)HPM_FETCH_NODE_INVALID;
@@ -848,24 +878,27 @@ VOID hpm_param_fetch_sleep(VOID)
     hpm_fetch_can_data_clear();
 }
 
-INT32 hpm_param_fetch_report_single(UINT8 *data, INT32 remain_size)
+static INT32 hpm_param_fetch_report_single(UINT8 *data, INT32 remain_size)
 {
-    if (remain_size < 2)
+    if (remain_size < 3)
     {
         MODULE_LOG_E(HPM, "remain size %d is too small for single node data.", remain_size);
         return -1;
     }
     UINT16 len = 0;
+    data[len++] = (UINT8)(HPM_FETCH_NODE_SINGLE);
     UINT8 *len_ptr = data + len;
     data[len++] = 0x00;
     data[len++] = 0x00;
-    remain_size -= 2;
+    remain_size -= 3;
+
+    BOOL no_data = TRUE;
 
     for (UINT8 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
     {
         hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
         HPM_PARAM_LOCK();
-        if ((NULL_PTR != p->node))
+        if ((NULL_PTR != p->node) && (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED))
         {
             if (remain_size < (INT32)(p->node->len + 5))
             {
@@ -873,50 +906,53 @@ INT32 hpm_param_fetch_report_single(UINT8 *data, INT32 remain_size)
                 HPM_PARAM_UNLOCK();
                 return -1;
             }
+            no_data = FALSE;
             data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
             data[len++] = (UINT8)(p->node->canid) & 0xFF;
             data[len++] = (UINT8)(HPM_FECTCH_SINGLE_DATA_LEN);
-            if (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED)
-            {
-                memcpy(data + len, p->data, HPM_FECTCH_SINGLE_DATA_LEN);
-            }
-            else
-            {
-                memset(data + len, 0xFF, HPM_FECTCH_SINGLE_DATA_LEN);
-            }
+            memcpy(data + len, p->data, HPM_FECTCH_SINGLE_DATA_LEN);
             len += HPM_FECTCH_SINGLE_DATA_LEN;
             remain_size -= (HPM_FECTCH_SINGLE_DATA_LEN + 5);
         }
         HPM_PARAM_UNLOCK();
     }
 
-    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
-    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+    if (TRUE == no_data)
+    {
+        return 0;
+    }
+
+    len_ptr[0] = (UINT8)((len - 3) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 3) & 0xFF);
 
     return (INT32)len;
 }
 
-INT32 hpm_param_fetch_report_consecutive(UINT8 *data, INT32 remain_size)
+static INT32 hpm_param_fetch_report_consecutive(UINT8 *data, INT32 remain_size)
 {
-    if (remain_size < 2)
+    if (remain_size < 3)
     {
         MODULE_LOG_E(HPM, "remain size %d is too small for single node data.", remain_size);
         return -1;
     }
 
     UINT16 len = 0;
+    data[len++] = (UINT8)(HPM_FETCH_NODE_CONSECTIVE);
     UINT8 *len_ptr = data + len;
     data[len++] = 0x00;
     data[len++] = 0x00;
-    remain_size -= 2;
+    remain_size -= 3;
+
+    BOOL no_data = TRUE;
 
     for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
         HPM_PARAM_LOCK();
         if ((NULL_PTR != p->node) &&
+            (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED) &&
             (p->node->type == (UINT32)HPM_FETCH_NODE_CONSECTIVE))
         {
             if (remain_size < (INT32)(p->node->len + 5))
@@ -926,40 +962,38 @@ INT32 hpm_param_fetch_report_consecutive(UINT8 *data, INT32 remain_size)
                 return -1;
             }
 
+            no_data = FALSE;
             data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
             data[len++] = (UINT8)(p->node->canid) & 0xFF;
 
-            if (p->node->obtained != (UINT32)HPM_FETCH_STATUS_OBTAINED)
+            if (p->node->len > (p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN)))
             {
-                p->node->len = 0;
-                data[len++] = (UINT8)(p->node->len);
+                p->node->len = p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN);
             }
-            else
-            {
-                if (p->node->len > (p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN)))
-                {
-                    p->node->len = p->node->frame * (HPM_FECTCH_SINGLE_DATA_LEN);
-                }
-                data[len++] = (UINT8)(p->node->len);
-                memcpy(data + len, p->data, p->node->len);
-            }
+            data[len++] = (UINT8)(p->node->len);
+            memcpy(data + len, p->data, p->node->len);
             len += p->node->len;
             remain_size -= (p->node->len + 5);
         }
         HPM_PARAM_UNLOCK();
     }
 
-    len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
-    len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+    if (TRUE == no_data)
+    {
+        return 0;
+    }
+
+    len_ptr[0] = (UINT8)((len - 3) >> 8) & 0xFF;
+    len_ptr[1] = (UINT8)((len - 3) & 0xFF);
 
     return (INT32)len;
 }
 
-INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
+static INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
 {
-    if (remain_size < 2)
+    if (remain_size < 3)
     {
         MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
         return -1;
@@ -967,15 +1001,19 @@ INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
 
     UINT16 len = 0;
     UINT8 *len_ptr = data + len;
+    data[len++] = (UINT8)(HPM_FETCH_NODE_MULTI);
     data[len++] = 0x00;
     data[len++] = 0x00;
-    remain_size -= 2;
+    remain_size -= 3;
+
+    BOOL no_data = TRUE;
 
     for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
         HPM_PARAM_LOCK();
         if ((NULL_PTR != p->node) &&
+            (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED) &&
             (p->node->type == (UINT32)HPM_FETCH_NODE_MULTI))
         {
             if (remain_size < (INT32)(p->node->len + 5))
@@ -984,27 +1022,26 @@ INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
                 HPM_PARAM_UNLOCK();
                 return -1;
             }
+
+            no_data = FALSE;
             data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
             data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
             data[len++] = (UINT8)(p->node->canid) & 0xFF;
-            if (p->node->obtained != (UINT32)HPM_FETCH_STATUS_OBTAINED)
+            if (p->node->len > HPM_FECTCH_MULTI_DATA_LEN)
             {
-                p->node->len = 0;
-                data[len++] = (UINT8)(p->node->len);
+                p->node->len = HPM_FECTCH_MULTI_DATA_LEN;
             }
-            else
-            {
-                if (p->node->len > HPM_FECTCH_MULTI_DATA_LEN)
-                {
-                    p->node->len = HPM_FECTCH_MULTI_DATA_LEN;
-                }
-                data[len++] = (UINT8)(p->node->len);
-                memcpy(data + len, p->data, p->node->len);
-            }
+            data[len++] = (UINT8)(p->node->len);
+            memcpy(data + len, p->data, p->node->len);
             len += p->node->len;
             remain_size -= (p->node->len + 5);
         }
+    }
+
+    if (TRUE == no_data)
+    {
+        return 0;
     }
 
     len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
@@ -1023,12 +1060,6 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
 
     hpm_fetch_config_t *p = &hpm_fetch_config;
 
-    if ((0 == p->sequence) || (0xFFFFFFFF == p->sequence) || (0 == p->count))
-    {
-        MODULE_LOG_I(HPM, "config fetch no data to report.");
-        return -1;
-    }
-
     UINT16 len = 0;
     UINT8 *len_ptr = data + len;
 
@@ -1043,9 +1074,8 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
 
     if (p->registered & (1U << HPM_FETCH_NODE_SINGLE))
     {
-        data[len++] = (UINT8)(HPM_FETCH_NODE_SINGLE);
         INT32 single_len = hpm_param_fetch_report_single(data + len, remain_size);
-        if (single_len <= 0)
+        if (single_len < 0)
         {
             MODULE_LOG_E(HPM, "single node data overflow remain : %d.", remain_size);
             return -1;
@@ -1061,7 +1091,7 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
             MODULE_LOG_E(HPM, "remain size %d is too small for consecutive node data.", remain_size);
             return -1;
         }
-        data[len++] = (UINT8)(HPM_FETCH_NODE_CONSECTIVE);
+
         INT32 consecutive_len = hpm_param_fetch_report_consecutive(data + len, remain_size);
         if (consecutive_len < 0)
         {
@@ -1079,7 +1109,7 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
             MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
             return -1;
         }
-        data[len++] = (UINT8)(HPM_FETCH_NODE_MULTI);
+
         INT32 multi_len = hpm_param_fetch_report_multi(data + len, remain_size);
         if (multi_len < 0)
         {
@@ -1091,6 +1121,8 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
 
     len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
     len_ptr[1] = (UINT8)((len - 2) & 0xFF);
+
+    hpm_fetch_can_data_clear();
 
     return len;
 }

@@ -505,7 +505,6 @@ void mgr_4g_dump_4ginfo(void)
     LOG_PRINT("\r\n chipid : %s \r\n", (char *)modem_4g_info.modem_4g_mtid);
     LOG_PRINT("\r\n fwversion : %s \r\n", (char *)modem_4g_info.modem_4g_taid);
     LOG_PRINT("\r\n dial[%d] state : %d \r\n", IF_4G_PUBLIC_APN, IF_4G_STATE_CONNECTED == dial_4g_get_callstate(IF_4G_PUBLIC_APN) ? 1 : 0);
-	LOG_PRINT("\r\n gbf socket[%d] state : %d \r\n", 1, IF_4G_STATE_CONNECTED == socket_4g_get_conn_state(IF_4G_GBF_CONN_ID) ? 1 : 0);
 	LOG_PRINT("\r\n hpm socket[%d] state : %d \r\n", 1, IF_4G_STATE_CONNECTED == socket_4g_get_conn_state(IF_4G_HPM_CONN_ID) ? 1 : 0);
     LOG_PRINT("\r\n imei: ");
     for(index = 0; index < MODEM_4G_IMEI_MAX; index++)

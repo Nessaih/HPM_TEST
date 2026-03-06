@@ -152,17 +152,12 @@ static INT32 hpm_get_position_data(UINT8 *buf)
     GNSS_POSITION_DATA pos;
     gnss_get_position(&pos);
 
-    if (GNSS_POS_STATE_FIX == gnss_get_fix_state())
-    {
-        status |= (pos.is_north << 1);
-        status |= (pos.is_east << 2);
-    }
-    else
+    if (GNSS_POS_STATE_FIX != gnss_get_fix_state())
     {
         status = 0x01;
-        status |= (pos.is_north << 1);
-        status |= (pos.is_east << 2);
     }
+    status |= (pos.is_north ? 0 : 1U << 1);
+    status |= (pos.is_east ? 0 : 1U << 2);
 
     buf[len++] = status;
 
@@ -274,6 +269,7 @@ static INT32 hpm_make_report_pack(UINT8 *data)
     UINT8 count = 0;
     UINT16 len = 0;
     len += hpm_sesion_get_data_seq(data + len);
+    UINT8 *ptr_count = &data[len];
     data[len++] = 0x00;
     len += hpm_get_location_data(data + len);
     count++;
@@ -290,7 +286,7 @@ static INT32 hpm_make_report_pack(UINT8 *data)
         len += ret;
     }
 
-    data[2] = count;
+    *ptr_count = count;
     return len;
 }
 
