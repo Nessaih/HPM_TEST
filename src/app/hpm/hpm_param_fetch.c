@@ -715,7 +715,7 @@ static BOOL hpm_fetch_regiseter_pgn(hpm_fetch_node_t *node)
             p->node = node;
             hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_PGN);
             hpm_fetch_config.count++;
-            j1939_pgn_req(node->channel, node->pgn, node->ta, node->sa);
+            j1939_request(node->channel, node->pgn, node->ta, node->sa);
             j1939_al_subscribe(node->sa, node->pgn, hpm_fetch_j1939_pgn_callback);
             return TRUE;
         }

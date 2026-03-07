@@ -272,9 +272,9 @@ void j1939_tl_periodic(void)
 
                 while ((i < 7) && (volatile_packet_number <= J1939_rx_context[channel].machine.byte_count))
                 {
-                    volatile_packet_number                        = J1939_rx_context[channel].machine.packet_number * 7 + i;
+                    volatile_packet_number                                     = J1939_rx_context[channel].machine.packet_number * 7 + i;
                     J1939_rx_context[channel].msg.data[volatile_packet_number] = J1939_rx_context[channel].pdu.data[i + 1];
-                    J1939_rx_context[channel].pdu.data[i + 1]     = 0;
+                    J1939_rx_context[channel].pdu.data[i + 1]                  = 0;
                     i++;
                 }
                 J1939_rx_context[channel].machine.packet_number++;
@@ -316,18 +316,18 @@ void j1939_tl_periodic(void)
     } // end for
 }
 
-uint8_t j1939_tl_send(J1939_TX_MESSAGE_T *msg_ptr)
+bool j1939_tl_send(J1939_TX_MESSAGE_T *msg_ptr, void (*finshed_callback)(void))
 {
-    if (msg_ptr->byte_count > 8)
+    int32_t ret = true;
+
+    if (msg_ptr->byte_count <= 8)
     {
-#if NOT_YET
-        // Transport layer for transmission of J1939 messages > 8 bytes not implemented yet
-#endif
+        ret = j1939_dl_tx(msg_ptr, finshed_callback);
     }
     else
     {
-        j1939_dl_tx(msg_ptr);
+        // TODO: Implement transport layer for transmission of J1939 messages > 8 bytes
     }
 
-    return true;
+    return ret;
 }

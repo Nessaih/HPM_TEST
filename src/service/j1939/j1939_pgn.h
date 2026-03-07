@@ -40,6 +40,5 @@ void j1939_pgn_init(void);
 void j1939_pgn_show(void);
 bool j1939_pgn_add(uint8_t addr, uint32_t pgn);
 bool j1939_pgn_filter(uint8_t addr, uint32_t pgn);
-void j1939_pgn_req(uint8_t channel, uint32_t pgn, uint8_t dstaddr,uint8_t saaddr);
 
 #endif //__PGN_H__

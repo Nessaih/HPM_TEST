@@ -36,6 +36,7 @@ static struct dl_rx_list_t rx_list;
 static struct dl_tx_list_t tx_list;
 
 uint8_t dl_state;
+void (*dl_txfcb)(void);
 
 //========================================================================================
 // Datalink Layer Interface Functions
@@ -48,6 +49,7 @@ void j1939_dl_init(void)
     list_init(&tx_list);
 
     dl_state = NOTPRIMED;
+    dl_txfcb = NULL;
 
     j1939_pgn_init();
 }
@@ -84,6 +86,8 @@ void j1939_dl_periodic(void)
         if (list_is_empty(&tx_list))
         {
             dl_state = NOTPRIMED;
+            if (dl_txfcb)
+                dl_txfcb();
         }
         else
         {
@@ -131,7 +135,7 @@ void j1939_dl_periodic(void)
     j1939_tl_process(m_CH, &pdu);
 }
 
-void j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr)
+bool j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr, void (*finshed_callback)(void))
 {
     CAN_PACKET_T pkt;
     uint32_t     temp_identifier;
@@ -158,8 +162,9 @@ void j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr)
     }
 
     if (list_is_full(&tx_list))
-        return;
+        return false;
     list_put(&tx_list, pkt);
 
     dl_state = PRIMED;
+    return true;
 }

@@ -47,7 +47,6 @@ struct PGN_TABLE pgn_table = {
 };
 // clang-format on
 
-
 void j1939_pgn_init(void)
 {
     uint32_t i, j, m;
@@ -141,26 +140,4 @@ bool j1939_pgn_filter(uint8_t addr, uint32_t pgn)
     }
 
     return false;
-}
-
-void j1939_pgn_req(uint8_t channel, uint32_t pgn, uint8_t dstaddr, uint8_t saaddr)
-{
-    J1939_TX_MESSAGE_T msg;
-
-    msg.PGN        = REQUEST_PGN;
-    msg.priority   = 6;
-    msg.dest_addr  = dstaddr;
-    msg.sa_addr    = saaddr;
-    msg.byte_count = 8;
-    msg.channel    = channel;
-    msg.data[0]    = pgn;
-    msg.data[1]    = pgn >> 8;
-    msg.data[2]    = 0xFF;
-    msg.data[3]    = 0xFF;
-    msg.data[4]    = 0xFF;
-    msg.data[5]    = 0xFF;
-    msg.data[6]    = 0xFF;
-    msg.data[7]    = 0xFF;
-
-    j1939_tl_send(&msg);
 }

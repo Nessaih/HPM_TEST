@@ -1,15 +1,15 @@
 #include "tbox_common.h"
 #include "tbox_core.h"
 #include "can_if.h"
-#include "api_rtos.h"
 #include "j1939_if.h"
+#include "api_rtos.h"
 
 #define J1939_SVR_TASK_EVENT_TASK_START   0x01U
 #define J1939_SVR_TASK_EVENT_TASK_STOP    0x02U
 #define J1939_SVR_TASK_EVENT_CAN_ACTIVE   0x04U
 #define J1939_SVR_TASK_EVENT_CAN_INACTIVE 0x08U
 #define J1939_SVR_TASK_EVENT_CAN_DATAIN   0x10U
-#define J1939_SVR_TASK_EVENT_ALL          0x1FU
+#define J1939_SVR_TASK_EVENT_ALL          0x3FU
 
 static INT32 j1939_svr_init(UINT8 seq);
 static VOID  j1939_svr_stop(VOID);
@@ -48,6 +48,18 @@ static INT32 j1939_svr_init(UINT8 seq)
     }
 
     return ret;
+}
+
+VOID j1939_svr_active(VOID)
+{
+    if (j1939_svr_module_handle)
+        xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_CAN_ACTIVE, eSetBits);
+}
+
+VOID j1939_svr_inactive(VOID)
+{
+    if (j1939_svr_module_handle)
+        xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_CAN_INACTIVE, eSetBits);
 }
 
 static VOID j1939_svr_stop(VOID)
@@ -115,15 +127,13 @@ static INT32 j1939_svr_can_handler(CAN_EVENT event, UINT32 arg1, UINT32 arg2)
     {
     case CAN_EVENT_ACTIVE:
     {
-        if (j1939_svr_module_handle)
-            xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_CAN_ACTIVE, eSetBits);
+        j1939_svr_active();
         break;
     }
 
     case CAN_EVENT_INACTIVE:
     {
-        if (j1939_svr_module_handle)
-            xTaskNotify(j1939_svr_module_handle, J1939_SVR_TASK_EVENT_CAN_INACTIVE, eSetBits);
+        j1939_svr_inactive();
         break;
     }
 

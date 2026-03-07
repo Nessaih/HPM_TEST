@@ -166,13 +166,13 @@ static void drv_eio_deinit_pin(void)
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
 }
-#pragma diag_suppress=Pa082
+#pragma diag_suppress = Pa082
 void EIO_IRQHandler(void)
 {
     bool     tx_active = FALSE;
     bool     rx_active = FALSE;
-    uint32_t reg = 0;
-    uint32_t clear = 0;
+    uint32_t reg       = 0;
+    uint32_t clear     = 0;
     uint32_t state;
     uint32_t error;
     uint32_t timer;
@@ -222,6 +222,7 @@ void EIO_IRQHandler(void)
     {
         reg = eio_tx_buf[--eio_tx_len];
         WRITE_REG32(EIO->SHIFTBUF[0], reg);
+        SET_BIT32(EIO->SHIFTERR, clear & 1U);
 
         if (eio_tx_len == 0)
         {
@@ -229,14 +230,13 @@ void EIO_IRQHandler(void)
             if (l > 0)
             {
                 reverse_buffer(eio_tx_buf, l);
+                eio_tx_len = l;
             }
             else
             {
-                CLEAR_BIT32(EIO->TIMSTAT, 0x01UL);
                 CLEAR_BIT32(EIO->TIMCTL[0], 0x01UL);
                 CLEAR_BIT32(EIO->SHIFTSIEN, 0x01UL);
                 CLEAR_BIT32(EIO->SHIFTEIEN, 0x01UL);
-
                 eio_is_txbz = FALSE;
             }
         }
@@ -245,7 +245,8 @@ void EIO_IRQHandler(void)
     // rx data process
     if (rx_active && eio_rx_len < EIO_RX_SIZE)
     {
-        reg                      = READ_REG32(EIO->SHIFTBUFBYS[1]);
+        reg = READ_REG32(EIO->SHIFTBUFBYS[1]);
+        SET_BIT32(EIO->SHIFTERR, clear & 2U);
         eio_rx_buf[eio_rx_len++] = reg;
         if (eio_rx_len == EIO_RX_SIZE)
         {
@@ -258,9 +259,9 @@ void EIO_IRQHandler(void)
         }
     }
 
-    SET_BIT32(EIO->SHIFTERR, clear);
+    // SET_BIT32(EIO->SHIFTERR, clear);
 }
-#pragma diag_default=Pa082
+#pragma diag_default = Pa082
 
 int32_t drv_eio_init(uint32_t speed, void (*rxcb)(void))
 {
@@ -328,6 +329,7 @@ int32_t drv_eio_write(uint8_t *data, uint32_t len)
     {
         eio_tx_len = l;
         reverse_buffer(eio_tx_buf, l);
+        SET_BIT32(EIO->SHIFTERR, 0x01U);
         SET_BIT32(EIO->TIMCTL[0], 0x01U);
         SET_BIT32(EIO->SHIFTSIEN, 0x01U);
         SET_BIT32(EIO->SHIFTEIEN, 0x01U);

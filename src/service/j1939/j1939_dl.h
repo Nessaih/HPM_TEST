@@ -34,10 +34,10 @@
 // Datalink Layer Interface Functions
 //==========================================================================================
 
-void                j1939_dl_init(void);
-void                j1939_dl_process(const CAN_PACKET_T *pkt_ptr);
-void                j1939_dl_periodic(void);
-void                j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr);
+void j1939_dl_init(void);
+void j1939_dl_process(const CAN_PACKET_T *pkt_ptr);
+void j1939_dl_periodic(void);
+bool j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr, void (*finshed_callback)(void));
 
 //========================================================================================
 // Datalink Module Data Objects
