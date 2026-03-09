@@ -19,7 +19,7 @@ void driver_init(void)
     DRV_INIT_RETRY(drv_uart_init, 3);
     DRV_INIT_RETRY(drv_uart_485_init, 3);
     DRV_INIT_RETRY(drv_uart_bt_init, 3);
-    DRV_INIT_RETRY(fls_spi_init, 3);
+    DRV_INIT_RETRY(drv_spi_nor_flash_init, 3);
     DRV_INIT_RETRY(drv_adc_init, 3);
     DRV_INIT_RETRY(drv_i2c_init, 3);
     DRV_INIT_RETRY(drv_flash_nor_init, 3);
@@ -35,7 +35,7 @@ void driver_sleep(void)
     drv_uart_sleep();
     drv_uart_485_sleep();
     drv_uart_bt_sleep();
-    fls_spi_sleep();
+    drv_spi_nor_flash_sleep();
     drv_adc_sleep();
     drv_i2c_sleep();
     drv_flash_nor_sleep();
@@ -48,7 +48,7 @@ void driver_wake(void)
     drv_uart_wake();
     drv_uart_485_wake();
     drv_uart_bt_wake();
-    fls_spi_wake();
+    drv_spi_nor_flash_wake();
     drv_adc_wake();
     drv_i2c_wake();
     drv_flash_nor_wake();

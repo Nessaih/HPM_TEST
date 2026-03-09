@@ -1,42 +1,49 @@
+#include <string.h>
+#include "tbox_log.h"
 #include "api_rtos.h"
-#include "drv_flash.h"
-#include "log.h"
-#include "main.h"
-#include "module_id.h"
-
+#include "spi_sdcard.h"
 
 static TaskHandle_t xTaskHandle = NULL;
+static uint8_t      write_data[512];
+static uint8_t      read_data[512];
 
-void test_flash_write(void)
+void test_sd_flash(void)
 {
-    uint8_t data[100] = {0};
-
-    for (size_t i = 0; i < 100; i++) {
-        data[i] = i + 1;
+    if (sd_init())
+    {
+        tbox_log_print("\nSD card init Failed!\n");
+        return;
+    }
+    else
+    {
+        tbox_log_print("\nSD card init success!\n");
     }
 
-    drv_flash_erase(0x01000000, 100);
-    drv_flash_write(0x01000000, data, 100);
+    uint32_t c = sd_get_sector_count();
 
+    tbox_log_print("\nSD card sector count:%d\n", c);
+
+    memset(write_data, 0xAB, sizeof(write_data));
+    sd_write_disk(write_data, 0, 1);
+
+    memset(read_data, 0x00, sizeof(read_data));
+    sd_read_disk(read_data, 0, 1);
+    for (size_t j = 0; j < 16; j++)
+    {
+        for (size_t i = 0; i < 32; i++)
+        {
+            tbox_log_print("%02X ", read_data[j * 32 + i]);
+        }
+        tbox_log_print("\n");
+    }
 }
-
-
-void test_flash_read(void)
-{
-    uint8_t data[100] = {0};
-
-
-    drv_flash_read(0x01000000, data, 100);
-
-    log_dumphex(MODULE_ID_SVR, "flash read data:", data, 100);
-}
-
 
 void test_flash_task(void *param)
 {
-    drv_flash_init();
-    test_flash_write();
-    test_flash_read();
+    // drv_flash_init();
+    // test_flash_write();
+    // test_flash_read();
+    test_sd_flash();
     vTaskDelete(NULL);
 }
 
@@ -44,13 +51,12 @@ void test_flash_init(void *param)
 {
     BaseType_t xReturn = pdPASS;
 
-    xReturn = xTaskCreate(
-        (TaskFunction_t)test_flash_task, /* 任务函数 */
-        (const char *)"flash_task",      /* 任务名称 */
-        (configSTACK_DEPTH_TYPE)512,     /* 任务堆栈大小 */
-        (void *)NULL,                    /* 传递给任务函数的参数 */
-        (UBaseType_t)19,                 /* 任务优先级 */
-        (TaskHandle_t *)&xTaskHandle);   /* 任务句柄 */
+    xReturn = xTaskCreate((TaskFunction_t)test_flash_task, /* 任务函数 */
+                          (const char *)"flash_task",      /* 任务名称 */
+                          (configSTACK_DEPTH_TYPE)512,     /* 任务堆栈大小 */
+                          (void *)NULL,                    /* 传递给任务函数的参数 */
+                          (UBaseType_t)19,                 /* 任务优先级 */
+                          (TaskHandle_t *)&xTaskHandle);   /* 任务句柄 */
 
     configASSERT(pdPASS == xReturn);
 }

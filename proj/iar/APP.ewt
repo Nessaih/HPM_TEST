@@ -3422,6 +3422,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_fetch.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_parse.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_param_parse.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_session.c</name>
                 </file>
                 <file>
@@ -3457,6 +3463,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\common\delay.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\common\md5.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\common\stateMachine.c</name>
@@ -3565,6 +3574,9 @@
                 <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
                 </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\flash\spi_sdcard.c</name>
+                </file>
             </group>
             <group>
                 <name>iic</name>
@@ -3593,10 +3605,13 @@
             <group>
                 <name>spi</name>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\fls_spi.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_nor_flash.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\vse_spi.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_sd_flash.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_vse.c</name>
                 </file>
             </group>
             <group>
@@ -3666,6 +3681,9 @@
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\include\common\dlist.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\include\common\md5.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\include\common\stateMachine.h</name>
@@ -3912,6 +3930,12 @@
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_com.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_control.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_control.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\gnss\gnss_nmeap.c</name>

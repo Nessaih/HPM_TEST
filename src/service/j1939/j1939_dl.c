@@ -153,7 +153,7 @@ bool j1939_dl_tx(J1939_TX_MESSAGE_T *msg_ptr, void (*finshed_callback)(void))
         pkt.identifier  = temp_identifier + msg_ptr->dest_addr;
     }
 
-    temp_identifier = pkt.identifier << 18;
+    temp_identifier = pkt.identifier << 8;
     pkt.identifier  = temp_identifier + msg_ptr->sa_addr;
 
     for (uint8_t i = 0; i < pkt.byte_count; i++)

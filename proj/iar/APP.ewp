@@ -2911,6 +2911,9 @@
                 <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
                 </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\flash\spi_sdcard.c</name>
+                </file>
             </group>
             <group>
                 <name>iic</name>
@@ -2939,10 +2942,13 @@
             <group>
                 <name>spi</name>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\fls_spi.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_nor_flash.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\vse_spi.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_sd_flash.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_vse.c</name>
                 </file>
             </group>
             <group>
@@ -3562,9 +3568,6 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_flash.c</name>
-                <excluded>
-                    <configuration>Debug</configuration>
-                </excluded>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_j1939.c</name>

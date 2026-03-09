@@ -29,8 +29,11 @@
 
 #define PIN_FLS_NAND_HOLD     (25U)
 #define PIN_FLS_NAND_WP       (27U)
+#define PIN_FLS_NAND_CS       (82U)
+
 #define PIN_FLS_NOR_HOLD      (67U)
 #define PIN_FLS_NOR_WP        (68U)
+#define PIN_FLS_NOR_CS        (63U)
 
 #define PIN_485_DIR           (95U)
 
@@ -112,7 +115,6 @@
 #define GPIO_LEVEL_HIGH       1U
 #define GPIO_LEVEL_NONE       2U
 // ====================================== GPIO CONFIGURATION DEFINITIONS END  ====================================== //
-
 
 typedef void (*drv_pin_cb_t)(uint32_t context);
 

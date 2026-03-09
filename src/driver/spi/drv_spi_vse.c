@@ -1,14 +1,14 @@
 #include "Spi_Hal.h"
 #include "api_rtos.h"
-#include "vse_spi.h"
-#include "drv_pin.h"
 #include "delay.h"
 #include "drv_log.h"
+#include "drv_pin.h"
+#include "drv_spi_vse.h"
+
 
 #define VSE_SPI_INSTANCE 0U
 
-
-static const Spi_HalConfigType vse_spi_cfg = {
+static const Spi_HalConfigType drv_spi_vse_cfg = {
     .CsSetup      = 5U,
     .CsHold       = 5U,
     .CsIdle       = 5U,
@@ -29,24 +29,22 @@ static const Spi_HalConfigType vse_spi_cfg = {
     .BaudRate     = 1000000UL,
 };
 
-
-int32_t vse_spi_open(void)
+int32_t drv_spi_vse_open(void)
 {
-    Spi_Hal_Init(VSE_SPI_INSTANCE, &vse_spi_cfg);
+    Spi_Hal_Init(VSE_SPI_INSTANCE, &drv_spi_vse_cfg);
     return 0;
 }
 
-int32_t vse_spi_close(void)
+int32_t drv_spi_vse_close(void)
 {
     Spi_Hal_DeInit(VSE_SPI_INSTANCE);
     return 0;
 }
 
-int32_t vse_spi_send(uint8_t *data, uint16_t length)
+int32_t drv_spi_vse_send(uint8_t *data, uint16_t length)
 {
     int32_t status;
     int32_t timeout = 10000;
-
 
     status = Spi_Hal_TransceivePoll(VSE_SPI_INSTANCE, data, NULL_PTR, length, 50000UL);
     do
@@ -68,9 +66,7 @@ int32_t vse_spi_send(uint8_t *data, uint16_t length)
     return 0;
 }
 
-
-
-int32_t vse_spi_recv(uint8_t *data, uint16_t length)
+int32_t drv_spi_vse_recv(uint8_t *data, uint16_t length)
 {
     int32_t status;
     int32_t timeout = 10000;
@@ -93,7 +89,6 @@ int32_t vse_spi_recv(uint8_t *data, uint16_t length)
         DRV_LOG_E(DRVSPI, "efs spi transfer get status error, status = %d", status);
         return 1;
     }
-    
+
     return 0;
 }
-

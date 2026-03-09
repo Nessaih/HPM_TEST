@@ -5,7 +5,7 @@
 #include "drv_pin.h"
 #include "tbox_log.h"
 #include "vse_cfg.h"
-#include "vse_spi.h"
+#include "drv_spi_vse.h"
 
 #define VSE_DEBUG_ENABLE 1
 
@@ -46,12 +46,12 @@ int32_t vse_get_time(vse_time_t *time)
 
 int32_t vse_init(void)
 {
-    return vse_spi_open();
+    return drv_spi_vse_open();
 }
 
 int32_t vse_deinit(void)
 {
-    return vse_spi_close();
+    return drv_spi_vse_close();
 }
 
 int32_t vse_send(uint8_t *data, uint16_t length)
@@ -62,7 +62,7 @@ int32_t vse_send(uint8_t *data, uint16_t length)
         return -1;
     }
 
-    if (0 != vse_spi_send(data, length))
+    if (0 != drv_spi_vse_send(data, length))
     {
         return -1;
     }
@@ -78,7 +78,7 @@ int32_t vse_recv(uint8_t *data, uint16_t length)
         return -1;
     }
 
-    if (0 != vse_spi_recv(data, length))
+    if (0 != drv_spi_vse_recv(data, length))
     {
         return -1;
     }

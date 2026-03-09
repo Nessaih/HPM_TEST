@@ -1,7 +1,7 @@
 #include "tbox_common.h"
 #include "delay.h"
 #include "drv_pin.h"
-#include "fls_spi.h"
+#include "drv_spi_nor_flash.h"
 #include "macros.h"
 #include "drv_log.h"
 
@@ -41,7 +41,7 @@ static uint8_t rx_buffer[2148];
 static int32_t nand_write_enable(void)
 {
     tx_buffer[0] = CMD_WRITE_ENABLE;
-    if (fls_spi_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2))
+    if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2))
     {
         DRV_LOG_E(DRVFLASH, "nand write enable error");
         return -1;
@@ -52,7 +52,7 @@ static int32_t nand_write_enable(void)
 static int32_t nand_write_disable(void)
 {
     tx_buffer[0] = CMD_WRITE_DISABLE;
-    if (fls_spi_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2))
+    if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2))
     {
         DRV_LOG_E(DRVFLASH, "nand write disable error");
         return -1;
@@ -66,7 +66,7 @@ static int32_t nand_read_status(uint8_t sr, uint8_t *status)
     tx_buffer[1] = sr;
     tx_buffer[2] = 0xFFU;
     memset(rx_buffer, 0xFF, 3);
-    if (0 == fls_spi_transfer(tx_buffer, rx_buffer, 3, SPI_PCS_2))
+    if (0 == drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 3, SPI_PCS_2))
     {
         *status = rx_buffer[2];
         return 0;
@@ -80,7 +80,7 @@ static int32_t nand_write_status(uint8_t sr, uint8_t status)
     tx_buffer[1] = sr;
     tx_buffer[2] = status;
     memset(rx_buffer, 0xFF, 3);
-    if (0 == fls_spi_transfer(tx_buffer, rx_buffer, 3, SPI_PCS_2))
+    if (0 == drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 3, SPI_PCS_2))
     {
         return 0;
     }
@@ -114,7 +114,7 @@ int32_t drv_flash_read_id(uint32_t *id)
 
     tx_buffer[0] = CMD_READ_ID;
     tx_buffer[1] = 0xFF;
-    status       = fls_spi_transfer(tx_buffer, rx_buffer, 5, SPI_PCS_2);
+    status       = drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 5, SPI_PCS_2);
     if (status)
     {
         DRV_LOG_E(DRVFLASH, "read id error");
@@ -133,7 +133,7 @@ int32_t drv_flash_nand_init(void)
     uint32_t id     = 0;
 
     tx_buffer[0] = CMD_RESET_ENABLE;
-    status       = fls_spi_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2);
+    status       = drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2);
     if (status)
     {
         DRV_LOG_E(DRVFLASH, "reset error");
@@ -141,7 +141,7 @@ int32_t drv_flash_nand_init(void)
     }
 
     tx_buffer[0] = CMD_RESET_DEVICE;
-    status       = fls_spi_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2);
+    status       = drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 1, SPI_PCS_2);
     if (status)
     {
         DRV_LOG_E(DRVFLASH, "reset error (0x66)");
@@ -150,7 +150,7 @@ int32_t drv_flash_nand_init(void)
 
     tx_buffer[0] = CMD_READ_ID;
     tx_buffer[1] = 0xFF;
-    status       = fls_spi_transfer(tx_buffer, rx_buffer, 5, SPI_PCS_2);
+    status       = drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 5, SPI_PCS_2);
     if (status)
     {
         DRV_LOG_E(DRVFLASH, "read id error");
@@ -244,7 +244,7 @@ int32_t drv_flash_nand_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         tx_buffer[2] = NAND_BYTE_1(page_addr);
         tx_buffer[3] = NAND_BYTE_0(page_addr);
 
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand read command error");
             return -1;
@@ -261,7 +261,7 @@ int32_t drv_flash_nand_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         tx_buffer[2] = NAND_BYTE_0(col_addr);
         tx_buffer[3] = 0xFFU;
 
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 4 + read_len, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 4 + read_len, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand read data error");
             return -1;
@@ -301,7 +301,7 @@ int32_t drv_flash_nand_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         tx_buffer[2] = NAND_BYTE_0(col_addr);
 
         memcpy(&tx_buffer[3], data, write_len);
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 3 + write_len, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 3 + write_len, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand write load error");
             return -1;
@@ -311,7 +311,7 @@ int32_t drv_flash_nand_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         tx_buffer[1] = NAND_BYTE_2(page_addr);
         tx_buffer[2] = NAND_BYTE_1(page_addr);
         tx_buffer[3] = NAND_BYTE_0(page_addr);
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand write exec error");
             return -1;
@@ -324,7 +324,7 @@ int32_t drv_flash_nand_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         }
 
         tx_buffer[0] = CMD_READ_STATUS;
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 2, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 2, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand read status error");
             return -1;
@@ -370,7 +370,7 @@ int32_t drv_flash_nand_erase(uint32_t addr, uint16_t n_128KB)
         tx_buffer[1] = NAND_BYTE_2(page_addr);
         tx_buffer[2] = NAND_BYTE_1(page_addr);
         tx_buffer[3] = NAND_BYTE_0(page_addr);
-        if (fls_spi_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
+        if (drv_spi_nor_flash_transfer(tx_buffer, rx_buffer, 4, SPI_PCS_2))
         {
             DRV_LOG_E(DRVFLASH, "nand erase command error");
             return -3;

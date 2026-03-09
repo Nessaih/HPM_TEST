@@ -24,7 +24,7 @@ extern "C"
 #include "drv_uart_bt.h"
 #include "drv_eio.h"
 #include "drv_wdg.h"
-#include "fls_spi.h"
+#include "drv_spi_nor_flash.h"
 
 #ifdef __cplusplus
 }

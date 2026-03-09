@@ -5,9 +5,9 @@
 #include "api_rtos.h"
 #include "drv_log.h"
 
-#define FLS_SPI_INSTANCE 1U
+#define DRV_SPI_NOR_FLASH_INSTANCE 1U
 
-static const Spi_HalConfigType fls_spi_cfg = {
+static const Spi_HalConfigType drv_spi_nor_flash_cfg = {
     .CsSetup      = 5U,
     .CsHold       = 5U,
     .CsIdle       = 5U,
@@ -28,66 +28,66 @@ static const Spi_HalConfigType fls_spi_cfg = {
     .BaudRate     = 8000000UL,
 };
 
-static bool          fls_spi_is_init = false;
-static volatile bool fls_spi_is_busy = true;
+static bool          drv_spi_nor_flash_is_init = false;
+static volatile bool drv_spi_nor_flash_is_busy = true;
 
-int32_t fls_spi_init(void)
+int32_t drv_spi_nor_flash_init(void)
 {
-    Spi_Hal_Init(FLS_SPI_INSTANCE, &fls_spi_cfg);
-    fls_spi_is_init = true;
-    fls_spi_is_busy = false;
+    Spi_Hal_Init(DRV_SPI_NOR_FLASH_INSTANCE, &drv_spi_nor_flash_cfg);
+    drv_spi_nor_flash_is_init = true;
+    drv_spi_nor_flash_is_busy = false;
     return 0;
 }
 
-int32_t fls_spi_deinit(void)
+int32_t drv_spi_nor_flash_deinit(void)
 {
-    Spi_Hal_DeInit(FLS_SPI_INSTANCE);
-    fls_spi_is_init = false;
-    fls_spi_is_busy = true;
+    Spi_Hal_DeInit(DRV_SPI_NOR_FLASH_INSTANCE);
+    drv_spi_nor_flash_is_init = false;
+    drv_spi_nor_flash_is_busy = true;
     return 0;
 }
 
-int32_t fls_spi_wake(void)
+int32_t drv_spi_nor_flash_wake(void)
 {
-    if (!fls_spi_is_init)
+    if (!drv_spi_nor_flash_is_init)
     {
-        fls_spi_init();
+        drv_spi_nor_flash_init();
     }
     return 0;
 }
 
-int32_t fls_spi_sleep(void)
+int32_t drv_spi_nor_flash_sleep(void)
 {
-    if (fls_spi_is_init)
+    if (drv_spi_nor_flash_is_init)
     {
-        fls_spi_deinit();
+        drv_spi_nor_flash_deinit();
     }
     return 0;
 }
 
-int32_t fls_spi_transfer(uint8_t *tx_buf, uint8_t *rx_buf, uint32_t len, Spi_PcsType pcs)
+int32_t drv_spi_nor_flash_transfer(uint8_t *tx_buf, uint8_t *rx_buf, uint32_t len, Spi_PcsType pcs)
 {
 
     int32_t status;
     int32_t timeout = 10;
 
-    if (fls_spi_is_busy)
+    if (drv_spi_nor_flash_is_busy)
         return -1;
-    fls_spi_is_busy = true;
+    drv_spi_nor_flash_is_busy = true;
 
-    Spi_Hal_SetCsPin(FLS_SPI_INSTANCE, pcs, SPI_PCS_POLARITY_LOW);
-    status = Spi_Hal_TransceivePoll(FLS_SPI_INSTANCE, tx_buf, rx_buf, len, 50000UL);
+    Spi_Hal_SetCsPin(DRV_SPI_NOR_FLASH_INSTANCE, pcs, SPI_PCS_POLARITY_LOW);
+    status = Spi_Hal_TransceivePoll(DRV_SPI_NOR_FLASH_INSTANCE, tx_buf, rx_buf, len, 50000UL);
 
     if (STATUS_SUCCESS != status)
     {
         DRV_LOG_E(DRVSPI, "efs spi transfer error, status = %d", status);
-        fls_spi_is_busy = false;
+        drv_spi_nor_flash_is_busy = false;
         return -2;
     }
 
     do
     {
-        status = Spi_Hal_GetTransceiveStatus(FLS_SPI_INSTANCE);
+        status = Spi_Hal_GetTransceiveStatus(DRV_SPI_NOR_FLASH_INSTANCE);
         if (SPI_TRANSCEIVE_SUCCESS == status)
         {
             break;
@@ -99,11 +99,11 @@ int32_t fls_spi_transfer(uint8_t *tx_buf, uint8_t *rx_buf, uint32_t len, Spi_Pcs
     if (SPI_TRANSCEIVE_SUCCESS != status)
     {
         DRV_LOG_E(DRVFLASH, "efs spi transfer get status error, status = %d", status);
-        fls_spi_is_busy = false;
+        drv_spi_nor_flash_is_busy = false;
         return -3;
     }
 
-    fls_spi_is_busy = false;
+    drv_spi_nor_flash_is_busy = false;
 
     return 0;
 }
