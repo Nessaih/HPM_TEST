@@ -26,7 +26,7 @@ int32_t drv_wdg_init(void)
     BaseType_t xReturn = pdPASS;
 
     Wdg_Hal_Init(&wdg_cfg);
-
+    
     xReturn = xTaskCreate(wdg_feed_task, "Wdg Svc", 256, NULL, TBOX_TASK_PRIORITY_HIGH, &xTaskHandle);
     configASSERT(pdPASS == xReturn);
 

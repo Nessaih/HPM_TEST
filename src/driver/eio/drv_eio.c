@@ -15,21 +15,21 @@
 #define EIO_TQ_SIZE 512U
 #define EIO_RQ_SIZE 2048U
 
-static uint8_t       eio_tx_buf[EIO_TX_SIZE];
-static uint8_t       eio_rx_buf[EIO_RX_SIZE];
-static uint8_t       eio_tq_buf[EIO_TQ_SIZE];
-static uint8_t       eio_rq_buf[EIO_RQ_SIZE];
-static cqueue_t      eio_queue_tx;
-static cqueue_t      eio_queue_rx;
-static uint16_t      eio_rx_len  = 0;
-static uint16_t      eio_tx_len  = 0;
-static uint32_t      eio_speed   = 0U;
-static bool          eio_is_init = FALSE;
-static volatile bool eio_is_txbz = FALSE;
+static uint8_t           eio_tx_buf[EIO_TX_SIZE];
+static uint8_t           eio_rx_buf[EIO_RX_SIZE];
+static uint8_t           eio_tq_buf[EIO_TQ_SIZE];
+static uint8_t           eio_rq_buf[EIO_RQ_SIZE];
+static cqueue_t          eio_queue_tx;
+static cqueue_t          eio_queue_rx;
+static volatile uint16_t eio_rx_len  = 0;
+static volatile uint16_t eio_tx_len  = 0;
+static volatile bool     eio_is_txbz = FALSE;
+static uint32_t          eio_speed   = 0U;
+static bool              eio_is_init = FALSE;
 
 static void (*eio_rxcb)(void);
 
-void reverse_buffer(unsigned char *buffer, uint16_t length)
+static void reverse_buffer(unsigned char *buffer, uint16_t length)
 {
     uint16_t l, r;
     uint8_t  t;
@@ -115,7 +115,7 @@ static void drv_eio_init_pin(void)
     pin_gpio_cfg_t gpio = {0};
 
     port.pin   = 4;
-    port.pull  = PIN_PULL_DISABLE;
+    port.pull  = PIN_PULL_UP;
     port.mux   = PIN_MUX_OPTION6;
     port.edge  = PIN_INT_DISABLE;
     port.lock  = PIN_LOCK_DISABLE;
@@ -126,7 +126,7 @@ static void drv_eio_init_pin(void)
     drv_pin_gpio_config(&gpio);
 
     port.pin   = 3;
-    port.pull  = PIN_PULL_DISABLE;
+    port.pull  = PIN_PULL_UP;
     port.mux   = PIN_MUX_OPTION6;
     port.edge  = PIN_INT_DISABLE;
     port.lock  = PIN_LOCK_DISABLE;
@@ -166,102 +166,151 @@ static void drv_eio_deinit_pin(void)
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
 }
+
 #pragma diag_suppress = Pa082
-void EIO_IRQHandler(void)
+static uint8_t drv_eio_get_state(void)
 {
-    bool     tx_active = FALSE;
-    bool     rx_active = FALSE;
-    uint32_t reg       = 0;
-    uint32_t clear     = 0;
-    uint32_t state;
-    uint32_t error;
-    uint32_t timer;
+    uint32_t flag[3];
+    uint8_t  i, j, state = 0;
 
-    state = READ_BIT32(EIO->SHIFTSIEN, EIO->SHIFTSTAT);
-    error = READ_BIT32(EIO->SHIFTEIEN, EIO->SHIFTERR);
-    timer = READ_BIT32(EIO->TIMIEN, EIO->TIMSTAT);
+    flag[0] = READ_BIT32(EIO->SHIFTSIEN, EIO->SHIFTSTAT);
+    flag[1] = READ_BIT32(EIO->SHIFTEIEN, EIO->SHIFTERR);
+    flag[2] = READ_BIT32(EIO->TIMIEN, EIO->TIMSTAT);
 
-    // tx register process
-    if (READ_BIT(state, 0) || READ_BIT(error, 0) || READ_BIT(timer, 0))
+    for (i = 0; i < 2; i++)
     {
-        if (READ_BIT(state, 0))
+        for (j = 0; j < 3; j++)
         {
-            tx_active = TRUE;
-        }
-        if (READ_BIT(error, 0))
-        {
-            clear |= 0x01U;
-            tx_active = TRUE;
-        }
-        if (READ_BIT(timer, 0))
-        {
-            SET_BIT32(EIO->TIMSTAT, 1);
+            if (flag[j] & (1U << i))
+            {
+                state = state | (1U << (j + i * 4));
+            }
         }
     }
+    return state;
+}
+#pragma diag_default = Pa082
 
-    // rx register process
-    if (READ_BIT(state, 1) || READ_BIT(error, 1) || READ_BIT(timer, 1))
+static void drv_eio_tx_process(uint8_t state)
+{
+    static uint8_t flush = 0;
+    uint32_t       reg;
+
+    if (0U == READ_BIT32(state, 0x0FU))
+        return;
+
+    if (READ_BIT32(state, 0x03))
     {
-        if (READ_BIT(state, 1))
+        if (eio_tx_len > 0) // 发送数据
         {
-            rx_active = TRUE;
+            reg = eio_tx_buf[--eio_tx_len];
+            WRITE_REG32(EIO->SHIFTBUF[0], reg);
         }
-        if (READ_BIT(error, 1))
-        {
-            clear |= 0x02U;
-            rx_active = TRUE;
-        }
-        if (READ_BIT(timer, 1))
-        {
-            SET_BIT32(EIO->TIMSTAT, 2);
-        }
-    }
-
-    // tx data process
-    if (tx_active && eio_tx_len > 0)
-    {
-        reg = eio_tx_buf[--eio_tx_len];
-        WRITE_REG32(EIO->SHIFTBUF[0], reg);
-        SET_BIT32(EIO->SHIFTERR, clear & 1U);
-
-        if (eio_tx_len == 0)
+        else
         {
             uint32_t l = cqueue_get(&eio_queue_tx, eio_tx_buf, EIO_TX_SIZE);
-            if (l > 0)
+            if (l > 0) // 新一轮传输
             {
                 reverse_buffer(eio_tx_buf, l);
+                reg = eio_tx_buf[--l];
+                WRITE_REG32(EIO->SHIFTBUF[0], reg);
                 eio_tx_len = l;
             }
             else
             {
-                CLEAR_BIT32(EIO->TIMCTL[0], 0x01UL);
-                CLEAR_BIT32(EIO->SHIFTSIEN, 0x01UL);
-                CLEAR_BIT32(EIO->SHIFTEIEN, 0x01UL);
-                eio_is_txbz = FALSE;
+                CLEAR_BIT32(EIO->SHIFTSIEN, 1U);
+                SET_BIT32(EIO->TIMSTAT, 1U);
+                SET_BIT32(EIO->TIMIEN, 1U);
+                flush = 2;
             }
+        }
+
+        if (READ_BIT(state, 1))
+        {
+            SET_BIT32(EIO->SHIFTERR, 1U);
         }
     }
 
-    // rx data process
-    if (rx_active && eio_rx_len < EIO_RX_SIZE)
+    if (READ_BIT(state, 2U))
+    {
+        SET_BIT32(EIO->TIMSTAT, 1U);
+        if (--flush > 0) // 启动FLUSH
+        {
+            if (READ_BIT(EIO->SHIFTSTAT, 0))
+            {
+
+                reg = READ_REG32(EIO->SHIFTCFG[0]);
+                MODIFY_REG32(reg, EIO_SHIFTCFG0_SSTART_Msk, EIO_SHIFTCFG0_SSTART_Pos, 3U);
+                WRITE_REG32(EIO->SHIFTCFG[0], reg);
+                reg = 0xFFFFFFFFU;
+                WRITE_REG32(EIO->SHIFTBUF[0], reg);
+
+                // WRITE_REG32(EIO->SHIFTBUF[0], 0xFFU);
+                // if (READ_BIT(state, 1))
+                // {
+                //     SET_BIT32(EIO->SHIFTERR, 1U);
+                // }
+            }
+        }
+        else
+        {
+            CLEAR_BIT32(EIO->TIMCTL[0], 0x03U);
+            CLEAR_BIT32(EIO->SHIFTCTL[0], 0x07U);
+            // SET_BIT32(EIO->SHIFTERR, 1U);
+            // CLEAR_BIT32(EIO->SHIFTSIEN, 0x01UL);
+            CLEAR_BIT32(EIO->SHIFTEIEN, 0x01UL);
+            CLEAR_BIT32(EIO->TIMIEN, 0x01UL);
+
+            MODIFY_REG32(EIO->SHIFTCFG[0], EIO_SHIFTCFG0_SSTART_Msk, EIO_SHIFTCFG0_SSTART_Pos, 2U);
+            MODIFY_REG32(EIO->SHIFTCTL[0], EIO_SHIFTCTL0_SMOD_Msk, EIO_SHIFTCTL0_SMOD_Pos, 2U);
+        }
+    }
+}
+
+static void drv_eio_rx_process(uint8_t state)
+{
+
+    uint32_t reg;
+
+    if (0U == READ_BIT32(state, 0xF0U))
+        return;
+    if (READ_BIT32(state, 0x30))
     {
         reg = READ_REG32(EIO->SHIFTBUFBYS[1]);
-        SET_BIT32(EIO->SHIFTERR, clear & 2U);
-        eio_rx_buf[eio_rx_len++] = reg;
-        if (eio_rx_len == EIO_RX_SIZE)
+        if (READ_BIT(state, 5))
         {
-            cqueue_put(&eio_queue_rx, eio_rx_buf, eio_rx_len);
-            eio_rx_len = 0;
-            if (eio_rxcb)
+            SET_BIT32(EIO->SHIFTERR, 2U);
+        }
+
+        if (eio_rx_len < EIO_RX_SIZE)
+        {
+            eio_rx_buf[eio_rx_len++] = reg;
+            if (eio_rx_len == EIO_RX_SIZE)
             {
-                eio_rxcb();
+                cqueue_put(&eio_queue_rx, eio_rx_buf, eio_rx_len);
+                eio_rx_len = 0;
+                if (eio_rxcb)
+                {
+                    eio_rxcb();
+                }
             }
         }
     }
 
-    // SET_BIT32(EIO->SHIFTERR, clear);
+    if (READ_BIT(state, 6))
+    {
+        SET_BIT32(EIO->TIMSTAT, 2);
+    }
 }
-#pragma diag_default = Pa082
+
+void EIO_IRQHandler(void)
+{
+    uint32_t state;
+
+    state = drv_eio_get_state();
+    drv_eio_tx_process(state);
+    drv_eio_rx_process(state);
+}
 
 int32_t drv_eio_init(uint32_t speed, void (*rxcb)(void))
 {
