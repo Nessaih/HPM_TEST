@@ -201,7 +201,7 @@ static void drv_eio_tx_process(uint8_t state)
 
     if (READ_BIT32(state, 0x03))
     {
-        if (eio_tx_len > 0) // 发送数据
+        if (eio_tx_len > 0)
         {
             reg = eio_tx_buf[--eio_tx_len];
             WRITE_REG32(EIO->SHIFTBUF[0], reg);
@@ -209,7 +209,7 @@ static void drv_eio_tx_process(uint8_t state)
         else
         {
             uint32_t l = cqueue_get(&eio_queue_tx, eio_tx_buf, EIO_TX_SIZE);
-            if (l > 0) // 新一轮传输
+            if (l > 0)
             {
                 reverse_buffer(eio_tx_buf, l);
                 reg = eio_tx_buf[--l];
@@ -234,30 +234,21 @@ static void drv_eio_tx_process(uint8_t state)
     if (READ_BIT(state, 2U))
     {
         SET_BIT32(EIO->TIMSTAT, 1U);
-        if (--flush > 0) // 启动FLUSH
+        if (--flush > 0)
         {
             if (READ_BIT(EIO->SHIFTSTAT, 0))
             {
-
                 reg = READ_REG32(EIO->SHIFTCFG[0]);
                 MODIFY_REG32(reg, EIO_SHIFTCFG0_SSTART_Msk, EIO_SHIFTCFG0_SSTART_Pos, 3U);
                 WRITE_REG32(EIO->SHIFTCFG[0], reg);
                 reg = 0xFFFFFFFFU;
                 WRITE_REG32(EIO->SHIFTBUF[0], reg);
-
-                // WRITE_REG32(EIO->SHIFTBUF[0], 0xFFU);
-                // if (READ_BIT(state, 1))
-                // {
-                //     SET_BIT32(EIO->SHIFTERR, 1U);
-                // }
             }
         }
         else
         {
             CLEAR_BIT32(EIO->TIMCTL[0], 0x03U);
             CLEAR_BIT32(EIO->SHIFTCTL[0], 0x07U);
-            // SET_BIT32(EIO->SHIFTERR, 1U);
-            // CLEAR_BIT32(EIO->SHIFTSIEN, 0x01UL);
             CLEAR_BIT32(EIO->SHIFTEIEN, 0x01UL);
             CLEAR_BIT32(EIO->TIMIEN, 0x01UL);
 
