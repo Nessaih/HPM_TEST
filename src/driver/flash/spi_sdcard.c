@@ -26,6 +26,7 @@
  */
 
 #include "spi_sdcard.h"
+#include "Device_Register.h"
 
 /* 函数声明 */
 static void    sd_deselect(void);                           /* SD卡取消选中 */
@@ -86,9 +87,8 @@ static uint8_t sd_wait_ready(void)
         {
             return SD_OK; /* OK */
         }
-
-        t++;
-    } while (t < 0XFFFFFF); /* 等待 */
+        __NOP();
+    } while (++t < 0XFFFFFF); /* 等待 */
 
     return SD_ERROR;
 }

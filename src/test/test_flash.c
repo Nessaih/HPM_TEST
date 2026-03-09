@@ -2,12 +2,13 @@
 #include "tbox_log.h"
 #include "api_rtos.h"
 #include "spi_sdcard.h"
+#include "drv_flash_sd.h"
 
 static TaskHandle_t xTaskHandle = NULL;
 static uint8_t      write_data[512];
 static uint8_t      read_data[512];
 
-void test_sd_flash(void)
+void test_sd_flash1(void)
 {
     if (sd_init())
     {
@@ -38,12 +39,43 @@ void test_sd_flash(void)
     }
 }
 
+void test_sd_flash2(void)
+{
+    if (drv_flash_sd_init())
+    {
+        tbox_log_print("\nSD card init Failed!\n");
+        return;
+    }
+    else
+    {
+        tbox_log_print("\nSD card init success!\n");
+    }
+
+
+    memset(write_data, 0xAB, sizeof(write_data));
+    drv_flash_sd_write(0,write_data, 512);
+
+    memset(read_data, 0x00, sizeof(read_data));
+    drv_flash_sd_read(0,read_data, 512);
+    for (size_t j = 0; j < 16; j++)
+    {
+        for (size_t i = 0; i < 32; i++)
+        {
+            tbox_log_print("%02X ", read_data[j * 32 + i]);
+        }
+        tbox_log_print("\n");
+    }
+}
+
+
+
+
 void test_flash_task(void *param)
 {
     // drv_flash_init();
     // test_flash_write();
     // test_flash_read();
-    test_sd_flash();
+    test_sd_flash2();
     vTaskDelete(NULL);
 }
 

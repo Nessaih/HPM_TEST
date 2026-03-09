@@ -2912,6 +2912,9 @@
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_sd.c</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\spi_sdcard.c</name>
                 </file>
             </group>

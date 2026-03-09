@@ -3,13 +3,13 @@
 #include "Gpio_Hal.h"
 #include "Spi_Hal.h"
 #include "api_rtos.h"
-#include "drv_log.h"
 #include "delay.h"
+#include "drv_log.h"
 
 #define DRV_SPI_SD_FLASH_INSTANCE 2U
 #define DRV_SPI_SD_LOG_NAME       "SPI2"
 
-static const Spi_HalConfigType drv_spi_sd_flash_cfg = {
+static Spi_HalConfigType drv_spi_sd_flash_cfg = {
     .CsSetup      = 5U,
     .CsHold       = 5U,
     .CsIdle       = 5U,
@@ -97,6 +97,13 @@ uint8_t drv_spi_sd_flash_transfer(uint8_t txdata)
     return rx_buf;
 }
 
-void drv_spi_sd_flash_set_speed(uint8_t speed)
+void drv_spi_sd_flash_set_speed(uint32_t speed)
 {
+
+    if (speed == drv_spi_sd_flash_cfg.BaudRate && drv_spi_sd_flash_is_init)
+        return;
+
+    drv_spi_sd_flash_deinit();
+    drv_spi_sd_flash_cfg.BaudRate = speed;
+    drv_spi_sd_flash_init();
 }
