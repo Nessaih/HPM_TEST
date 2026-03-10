@@ -9,6 +9,6 @@ int32_t drv_flash_nor_wake(void);
 int32_t drv_flash_nor_read(uint32_t addr, uint8_t *data, uint32_t data_len);
 int32_t drv_flash_nor_write(uint32_t addr, uint8_t *data, uint32_t data_len);
 int32_t drv_flash_nor_erase(uint32_t addr, uint16_t n_4KB);
-int32_t drv_flash_nor_read_id(uint32_t *id);
+int32_t drv_flash_nor_get_id(uint32_t *id);
 
 #endif //__DRV_FLASH_NOR_H__

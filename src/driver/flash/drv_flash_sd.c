@@ -1,17 +1,24 @@
 #include <stddef.h>
 #include "spi_sdcard.h"
 
+#define SD_STATIC_CAPACITY 1
+#define SD_SECTOR_SIZE     512 // 扇区大小（字节）
 
+#if SD_STATIC_CAPACITY
 #define SD_TOTAL_SECTORS 242688                              // SD卡总扇区数
-#define SD_SECTOR_SIZE   512                                 // 扇区大小（字节）
 #define SD_TOTAL_SIZE    (SD_TOTAL_SECTORS * SD_SECTOR_SIZE) // SD卡总大小（字节）
+#else
+#define SD_TOTAL_SIZE drv_flash_sd_sector_size
+#endif
 
-static uint8_t drv_flash_sd_buffer[SD_SECTOR_SIZE];
-static uint8_t drv_flash_sd_is_busy = 0;
-static uint8_t drv_flash_sd_is_init = 0;
+static uint32_t drv_flash_sd_sector_size;
+static uint8_t  drv_flash_sd_buffer[SD_SECTOR_SIZE];
+static uint8_t  drv_flash_sd_is_busy = 0;
+static uint8_t  drv_flash_sd_is_init = 0;
 
 int32_t drv_flash_sd_init(void)
 {
+    uint32_t count;
 
     if (drv_flash_sd_is_init)
         return 0;
@@ -19,7 +26,12 @@ int32_t drv_flash_sd_init(void)
     if (sd_init() != SD_OK)
         return -1;
 
-    drv_flash_sd_is_init = 1;
+    count = sd_get_sector_count();
+    if (count == 0)
+        return -2;
+
+    drv_flash_sd_sector_size = count * SD_SECTOR_SIZE;
+    drv_flash_sd_is_init     = 1;
 
     return 0;
 }
@@ -34,15 +46,21 @@ int32_t drv_flash_sd_wake(void)
     return 0;
 }
 
-int32_t drv_flash_sd_read_id(uint32_t *id)
+int32_t drv_flash_sd_get_id(uint32_t *id)
 {
     uint8_t cid[16] = {0};
 
     if (SD_OK != sd_get_cid(cid))
         return -1;
 
-    *id = cid[15] | cid[14] << 8 | cid[13] << 16 ;
+    *id = cid[15] | cid[14] << 8 | cid[13] << 16;
 
+    return 0;
+}
+
+int32_t drv_flash_sd_get_size(uint32_t *size)
+{
+    *size = drv_flash_sd_sector_size;
     return 0;
 }
 

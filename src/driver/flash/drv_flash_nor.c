@@ -96,7 +96,7 @@ static int32_t drv_flash_nor_wait_ready(uint32_t wait_10ms)
     return EFS_STATUS_BUZY;
 }
 
-int32_t drv_flash_nor_read_id(uint32_t *id)
+int32_t drv_flash_nor_get_id(uint32_t *id)
 {
     if (EFS_STATUS_BUZY == drv_flash_nor_wait_ready(20))
         return 1;

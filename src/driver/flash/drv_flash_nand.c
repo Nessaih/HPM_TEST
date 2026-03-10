@@ -108,7 +108,7 @@ static int32_t nand_wait_ready(void)
     return -1;
 }
 
-int32_t drv_flash_read_id(uint32_t *id)
+int32_t drv_flash_nand_get_id(uint32_t *id)
 {
     int32_t status;
 

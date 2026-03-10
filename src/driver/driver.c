@@ -23,7 +23,7 @@ void driver_init(void)
     DRV_INIT_RETRY(drv_adc_init, 3);
     DRV_INIT_RETRY(drv_i2c_init, 3);
     DRV_INIT_RETRY(drv_flash_nor_init, 3);
-    DRV_INIT_RETRY(drv_flash_nand_init, 3);
+    DRV_INIT_RETRY(drv_flash_sd_init, 3);
     DRV_INIT_RETRY(drv_spm_init, 3);
     //DRV_INIT_RETRY(drv_wdg_init, 3);
 }
@@ -39,7 +39,7 @@ void driver_sleep(void)
     drv_adc_sleep();
     drv_i2c_sleep();
     drv_flash_nor_sleep();
-    drv_flash_nand_sleep();
+    drv_flash_sd_sleep();
     drv_wdg_sleep();
 }
 
@@ -52,7 +52,7 @@ void driver_wake(void)
     drv_adc_wake();
     drv_i2c_wake();
     drv_flash_nor_wake();
-    drv_flash_nand_wake();
+    drv_flash_sd_wake();
     drv_wdg_wake();
 }
 

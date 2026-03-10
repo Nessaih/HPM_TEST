@@ -1,8 +1,9 @@
 #include <string.h>
 #include "tbox_log.h"
 #include "api_rtos.h"
-#include "spi_sdcard.h"
 #include "drv_flash_sd.h"
+#include "spi_sdcard.h"
+
 
 static TaskHandle_t xTaskHandle = NULL;
 static uint8_t      write_data[512];
@@ -25,10 +26,19 @@ void test_sd_flash1(void)
     tbox_log_print("\nSD card sector count:%d\n", c);
 
     memset(write_data, 0xAB, sizeof(write_data));
-    sd_write_disk(write_data, 0, 1);
+    if (sd_write_disk(write_data, 0, 1))
+    {
+        tbox_log_print("\nSD card write Failed!\n");
+        return;
+    }
 
     memset(read_data, 0x00, sizeof(read_data));
-    sd_read_disk(read_data, 0, 1);
+    if (sd_read_disk(read_data, 0, 1))
+    {
+        tbox_log_print("\nSD card read Failed!\n");
+        return;
+    }
+
     for (size_t j = 0; j < 16; j++)
     {
         for (size_t i = 0; i < 32; i++)
@@ -51,12 +61,11 @@ void test_sd_flash2(void)
         tbox_log_print("\nSD card init success!\n");
     }
 
-
     memset(write_data, 0xAB, sizeof(write_data));
-    drv_flash_sd_write(0,write_data, 512);
+    drv_flash_sd_write(0, write_data, 512);
 
     memset(read_data, 0x00, sizeof(read_data));
-    drv_flash_sd_read(0,read_data, 512);
+    drv_flash_sd_read(0, read_data, 512);
     for (size_t j = 0; j < 16; j++)
     {
         for (size_t i = 0; i < 32; i++)
@@ -67,15 +76,12 @@ void test_sd_flash2(void)
     }
 }
 
-
-
-
 void test_flash_task(void *param)
 {
     // drv_flash_init();
     // test_flash_write();
     // test_flash_read();
-    test_sd_flash2();
+    test_sd_flash1();
     vTaskDelete(NULL);
 }
 

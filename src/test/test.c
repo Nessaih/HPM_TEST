@@ -22,9 +22,9 @@ void test_init_task(void *param)
     // test_rtc_init(NULL);
     // test_adc_init(NULL);
     // test_log_init(NULL);
-    test_flash_init(NULL);
+    // test_flash_init(NULL);
     // test_j1939_init();
-    // test_dv_init(NULL);
+    test_dv_init(NULL);
     vTaskDelete(NULL);
 }
 

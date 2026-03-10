@@ -8,6 +8,7 @@
 #include "se_if.h"
 #include "time_if.h"
 #include "api_rtos.h"
+#include "drv_log.h"
 #include "macros.h"
 #include "test_dv.h"
 
@@ -207,7 +208,7 @@ static INT8 __attribute__((unused)) dv_diag_ble_com(CHAR *des, INT32 deslen)
 		dv_diag_bt_test();
 		return 0;
 	}
-	
+
     return -1;
 #endif
 }
@@ -262,94 +263,72 @@ static INT8 dv_diag_norflash_wr(CHAR *des, INT32 deslen)
 
 static INT8 dv_diag_nandflash_wr(CHAR *des, INT32 deslen)
 {
-#if 0
-#define NAND_ERASE_SIZE 0x20000U
+
 #define NAND_WRBUF_SIZE 512U
 
-    static uint32_t erase_addr  = 0;
-    static uint32_t wr_addr     = 0;
-    static uint32_t wr_len      = NAND_WRBUF_SIZE;
-    static uint32_t test_count  = 0;
-    static uint32_t error_count = 0;
-    static bool     need_erase  = true;
-    static bool     init_buf    = false;
     static uint8_t  wbuf[NAND_WRBUF_SIZE];
     static uint8_t  rbuf[NAND_WRBUF_SIZE];
-    int32_t         status = 0;
+    static uint32_t test_addr        = 0;
+    static uint32_t test_total_count = 0;
+    static uint32_t test_error_count = 0;
+    static bool     is_srand_init    = false;
+    static uint32_t flash_size       = 0;
+    int32_t         status           = 0;
 
-    if (need_erase)
+    test_total_count++;
+
+    if (is_srand_init == false)
     {
-        status = drv_flash_nand_erase(erase_addr, 1);
-        if (status != 0)
+        uint32_t tick = xTaskGetTickCount();
+        srand(tick);
+    }
+
+    if (0 == flash_size)
+    {
+        status = drv_flash_sd_get_size(&flash_size);
+        if (0 != status || 0 == flash_size)
         {
-            snprintf(des, deslen, "EC/TC:%d/%d  EA:%08X  WRA:%08X EERR:%d", error_count, test_count, erase_addr, wr_addr, status);
-            tbox_log_print("%s", des);
-            error_count++;
-            test_count++;
+            DRV_LOG_E("nandflash", "get size failed, ret: %d", status);
             return -1;
         }
-        else
-        {
-            need_erase = false;
-        }
     }
 
-    if (init_buf == false)
-    {
-        for (size_t i = 0; i < NAND_WRBUF_SIZE; i++)
-        {
-            wbuf[i] = (uint8_t)i;
-        }
-        init_buf = true;
-    }
-
-    status = drv_flash_nand_write(wr_addr, wbuf, wr_len);
-    if (status != 0)
-    {
-        snprintf(des, deslen, "EC/TC:%d/%d  EA:%08X  WRA:%08X WERR:%d", error_count, test_count, erase_addr, wr_addr, status);
-        error_count++;
-        goto next_nand_test;
-    }
-
-    status = drv_flash_nand_read(wr_addr, rbuf, wr_len);
-    if (status != 0)
-    {
-        snprintf(des, deslen, "EC/TC:%d/%d  EA:%08X  WRA:%08X RERR:%d", error_count, test_count, erase_addr, wr_addr, status);
-        error_count++;
-        goto next_nand_test;
-    }
-
-    status = 0;
     for (size_t i = 0; i < NAND_WRBUF_SIZE; i++)
     {
-        if (wbuf[i] != rbuf[i])
-        {
-            status = -1;
-            tbox_log_print("OFFSET:%d W:%02X R:%02X\n", i, wbuf[i], rbuf[i]);
-        }
+        wbuf[i] = (uint8_t)rand();
     }
 
-    if (0 != status)
+    status = drv_flash_sd_write(test_addr, wbuf, NAND_WRBUF_SIZE);
+    if (status)
     {
-        snprintf(des, deslen, "EC/TC:%d/%d  EA:%08X  WRA:%08X CERR:%d", error_count, test_count, erase_addr, wr_addr, status);
-        tbox_log_print("%s\n", des);
-        error_count++;
-        goto next_nand_test;
+        test_error_count++;
+        DRV_LOG_E("nandflash", "write failed, ret: %d", status);
+        goto exit;
     }
 
-    test_count++;
-    snprintf(des, deslen, "EC/TC:%d/%d  EA:%08X  WRA:%08X SUCCESS", error_count, test_count, erase_addr, wr_addr);
-
-next_nand_test:
-    wr_addr += wr_len;
-    if (wr_addr >= erase_addr + NAND_ERASE_SIZE)
+    status = drv_flash_sd_read(test_addr, rbuf, NAND_WRBUF_SIZE);
+    if (status)
     {
-        need_erase = true;
+        test_error_count++;
+        DRV_LOG_E("nandflash", "read failed, ret: %d", status);
+        goto exit;
     }
-    return status;
-#else
-    return -1;
-#endif
+
+    if (0 != memcmp(wbuf, rbuf, NAND_WRBUF_SIZE))
+    {
+        test_error_count++;
+        DRV_LOG_E("nandflash", "compare failed");
+        goto exit;
+    }
+
+exit:
+    test_addr += NAND_WRBUF_SIZE;
+    if (test_addr >= flash_size)
+    {
+        test_addr = 0;
+    }
+    snprintf(des, deslen, "Total:%d Error:%d Address:%08X", test_total_count, test_error_count, test_addr);
+    return 0;
 }
 
 static INT8 __attribute__((unused)) dv_diag_se_spi(CHAR *des, INT32 deslen)
@@ -357,11 +336,11 @@ static INT8 __attribute__((unused)) dv_diag_se_spi(CHAR *des, INT32 deslen)
     return -1;
 #if 0
 	INT32  ret;
-	UINT8  data_buf[SE_PUBKEY_MAX_LEN] = {0};	
+	UINT8  data_buf[SE_PUBKEY_MAX_LEN] = {0};
 	UINT16 data_len = SE_PUBKEY_MAX_LEN;
 	UINT16 i;
 	CHAR   hex_buf[SE_PUBKEY_MAX_LEN * 2 + 1] = {0};
-	
+
 	ret = se_get_pubkey(data_buf, &data_len);
 	if(0 != ret)
 	{
@@ -372,7 +351,7 @@ static INT8 __attribute__((unused)) dv_diag_se_spi(CHAR *des, INT32 deslen)
 	{
 		snprintf(&hex_buf[i * 2], 3, "%02X", data_buf[i]);
 	}
-	
+
 	snprintf(des, deslen, "PubKey:%s", hex_buf);
     return 0;
 #endif
