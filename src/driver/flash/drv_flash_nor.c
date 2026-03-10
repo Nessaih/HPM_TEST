@@ -114,6 +114,7 @@ int32_t drv_flash_nor_get_id(uint32_t *id)
 
 int32_t drv_flash_nor_init(void)
 {
+    drv_spi_nor_flash_init();
     drv_flash_nor_write_enable();
     efs_txbuf.cmd = EFS_CMD_4BYTES_ADDR;
     if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 1, SPI_PCS_3))
@@ -138,6 +139,8 @@ int32_t drv_flash_nor_sleep(void)
     gpio.mode  = GPIO_MODE_OUTPUT;
     gpio.level = GPIO_LEVEL_HIGH;
 
+
+    drv_spi_nor_flash_sleep();
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
     
@@ -159,7 +162,8 @@ int32_t drv_flash_nor_wake(void)
     gpio.level = GPIO_LEVEL_NONE;
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
-    
+    drv_spi_nor_flash_wake();
+
     return 0;
 }
 

@@ -8,7 +8,9 @@
 #include "Device_Register.h"
 #include "Rcm_Hal.h"
 #include "cqueue.h"
+#include "delay.h"
 #include "drv_pin.h"
+
 
 #define EIO_TX_SIZE 128U
 #define EIO_RX_SIZE 128U
@@ -96,8 +98,6 @@ static void drv_eio_init_device(uint32_t speed)
     WRITE_REG32(EIO->TIMSTAT, 0x03U);
     WRITE_REG32(EIO->SHIFTSIEN, 0x02U);
     WRITE_REG32(EIO->SHIFTEIEN, 0x02U);
-    // WRITE_REG32(EIO->CTRL, 0x01U);
-
     Core_Hal_EnableIrq(EIO_IRQn);
 }
 
@@ -254,6 +254,8 @@ static void drv_eio_tx_process(uint8_t state)
 
             MODIFY_REG32(EIO->SHIFTCFG[0], EIO_SHIFTCFG0_SSTART_Msk, EIO_SHIFTCFG0_SSTART_Pos, 2U);
             MODIFY_REG32(EIO->SHIFTCTL[0], EIO_SHIFTCTL0_SMOD_Msk, EIO_SHIFTCTL0_SMOD_Pos, 2U);
+
+            eio_is_txbz = FALSE;
         }
     }
 }
@@ -355,12 +357,19 @@ int32_t drv_eio_read(uint8_t *data, uint32_t len)
 
 int32_t drv_eio_write(uint8_t *data, uint32_t len)
 {
-    int32_t l;
+    uint32_t t = 5;
+    int32_t  l;
 
     if (!eio_is_init)
         return -1;
 
     len = cqueue_put(&eio_queue_tx, data, len);
+
+    while (eio_is_txbz && --t > 0)
+    {
+        delay_ms(5);
+    }
+
     if (eio_is_txbz)
         return len;
 
