@@ -31,15 +31,6 @@
 #include "drv_pin.h"
 #include "drv_spi_sd_flash.h"
 
-/******************************************************************************************/
-/* SD卡 SPI 操作函数 宏定义
- * 大家移植的时候, 根据需要实现: spi1_read_write_byte 和 spi1_set_speed
- * 这两个函数即可, SD卡 SPI模式, 会通过这两个函数, 实现对SD卡的操作.
- */
-#define sd_spi_init()             drv_spi_sd_flash_init()             /* SD卡 SPI读写函数 */
-#define sd_spi_read_write_byte(x) drv_spi_sd_flash_transfer(x)        /* SD卡 SPI读写函数 */
-#define sd_spi_speed_low()        drv_spi_sd_flash_set_speed(200000)  /* SD卡 SPI低速模式 */
-#define sd_spi_speed_high()       drv_spi_sd_flash_set_speed(2000000) /* SD卡 SPI高速模式 */
 
 /******************************************************************************************/
 /* SD_CS 端口定义 */

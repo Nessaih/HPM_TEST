@@ -3325,12 +3325,6 @@
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\fct\fct_cmd.h</name>
                 </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.h</name>
-                </file>
             </group>
             <group>
                 <name>hpm</name>
@@ -3569,9 +3563,6 @@
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_mcu.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nand.c</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
                 </file>
                 <file>
@@ -3608,13 +3599,7 @@
             <group>
                 <name>spi</name>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_nor_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_sd_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_vse.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi.c</name>
                 </file>
             </group>
             <group>
@@ -4246,6 +4231,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\src\test\test_timer.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\test\test_vse.c</name>
             </file>
         </group>
         <file>

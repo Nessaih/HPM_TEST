@@ -1,13 +1,23 @@
 
+#include "tbox_log.h"
+#include "time_if.h"
 #include "api_rtos.h"
 #include "delay.h"
-#include "time_if.h"
 #include "drv_pin.h"
-#include "tbox_log.h"
+#include "drv_spi.h"
 #include "vse_cfg.h"
-#include "drv_spi_vse.h"
 
 #define VSE_DEBUG_ENABLE 1
+
+static drv_spi_handle_t vse_spi_handle;
+static drv_spi_config_t vse_spi_config = {
+    .instance = 0,
+    .mode     = DRV_SPI_MODE_0,
+    .cs_mode  = DRV_SPI_CS_MODE_AUTO,
+    .cs_index = DRV_SPI_CS_INDEX_0,
+    .speed    = 1000000UL,
+};
+
 
 void vse_gpio_reset(void)
 {
@@ -46,12 +56,12 @@ int32_t vse_get_time(vse_time_t *time)
 
 int32_t vse_init(void)
 {
-    return drv_spi_vse_open();
+    return drv_spi_init(&vse_spi_config, &vse_spi_handle);
 }
 
 int32_t vse_deinit(void)
 {
-    return drv_spi_vse_close();
+    return drv_spi_deinit(&vse_spi_handle);
 }
 
 int32_t vse_send(uint8_t *data, uint16_t length)
@@ -62,7 +72,7 @@ int32_t vse_send(uint8_t *data, uint16_t length)
         return -1;
     }
 
-    if (0 != drv_spi_vse_send(data, length))
+    if (0 != drv_spi_write(&vse_spi_handle, data, length))
     {
         return -1;
     }
@@ -78,7 +88,7 @@ int32_t vse_recv(uint8_t *data, uint16_t length)
         return -1;
     }
 
-    if (0 != drv_spi_vse_recv(data, length))
+    if (0 != drv_spi_read(&vse_spi_handle, data, length))
     {
         return -1;
     }
@@ -86,13 +96,12 @@ int32_t vse_recv(uint8_t *data, uint16_t length)
     return 0;
 }
 
-
 void vse_printf(const char *fmt, ...)
 {
 #if VSE_DEBUG_ENABLE
     static char vse_log[512];
 
-    va_list     args;
+    va_list args;
     va_start(args, fmt);
     vsnprintf(vse_log, sizeof(vse_log) - 1, fmt, args);
     va_end(args);

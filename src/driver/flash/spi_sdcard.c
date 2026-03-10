@@ -25,8 +25,9 @@
  ****************************************************************************************************
  */
 
-#include "spi_sdcard.h"
 #include "Device_Register.h"
+#include "drv_spi.h"
+#include "spi_sdcard.h"
 
 /* 函数声明 */
 static void    sd_deselect(void);                           /* SD卡取消选中 */
@@ -36,6 +37,11 @@ static uint8_t sd_get_response(uint8_t response);           /* 等待SD卡回应
 static uint8_t sd_send_cmd(uint8_t cmd, uint32_t arg);      /* SD卡发送命令 */
 static uint8_t sd_send_block(uint8_t *buf, uint8_t cmd);    /* SD卡发送一个数据块 */
 static uint8_t sd_receive_data(uint8_t *buf, uint16_t len); /* SD卡接收一次数据 */
+
+static void    sd_spi_init(void);
+static uint8_t sd_spi_read_write_byte(uint8_t tx_data);
+static void    sd_spi_speed_low(void);
+static void    sd_spi_speed_high(void);
 
 uint8_t sd_type = 0; /* SD卡的类型 */
 
@@ -563,4 +569,46 @@ uint8_t sd_write_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 
     sd_deselect(); /* 取消片选 */
     return res;
+}
+
+static drv_spi_handle_t sd_spi_handle;
+static drv_spi_config_t sd_spi_config = {
+    .instance = 2,
+    .mode     = DRV_SPI_MODE_3,
+    .cs_mode  = DRV_SPI_CS_MODE_MANUAL,
+    .cs_index = DRV_SPI_CS_INDEX_GPIO,
+    .speed    = 200000UL,
+};
+
+
+static void sd_spi_init(void)
+{
+    drv_spi_init(&sd_spi_config, &sd_spi_handle);
+}
+
+static uint8_t sd_spi_read_write_byte(uint8_t tx_data)
+{
+    int32_t status;
+    uint8_t rx_data = 0;
+
+    status = drv_spi_transfer(&sd_spi_handle, &tx_data, &rx_data, 1);
+    if (status != 0)
+    {
+        return 0xFF;
+    }
+    return rx_data;
+}
+
+static void sd_spi_speed_low(void)
+{
+    drv_spi_deinit(&sd_spi_handle);
+    sd_spi_config.speed = 200000UL;
+    drv_spi_init(&sd_spi_config, &sd_spi_handle);
+}
+
+static void sd_spi_speed_high(void)
+{
+    drv_spi_deinit(&sd_spi_handle);
+    sd_spi_config.speed = 2000000UL;
+    drv_spi_init(&sd_spi_config, &sd_spi_handle);
 }

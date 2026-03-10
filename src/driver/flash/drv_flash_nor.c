@@ -1,8 +1,8 @@
 #include "tbox_common.h"
 #include "api_rtos.h"
-#include "drv_spi_nor_flash.h"
-#include "drv_pin.h"
 #include "drv_log.h"
+#include "drv_pin.h"
+#include "drv_spi.h"
 
 #define EFS_CMD_JEDEC_ID               (0X9F)
 #define EFS_CMD_WRITE_ENABLE           (0X06)
@@ -50,10 +50,21 @@ typedef union
 static efs_data_t efs_txbuf;
 static efs_data_t efs_rxbuf;
 
+#define VSE_DEBUG_ENABLE 1
+
+static drv_spi_handle_t nor_spi_handle;
+static drv_spi_config_t nor_spi_config = {
+    .instance = 1,
+    .mode     = DRV_SPI_MODE_0,
+    .cs_mode  = DRV_SPI_CS_MODE_AUTO,
+    .cs_index = DRV_SPI_CS_INDEX_3,
+    .speed    = 2000000UL,
+};
+
 static void drv_flash_nor_write_enable(void)
 {
     efs_txbuf.cmd = EFS_CMD_WRITE_ENABLE;
-    if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 1, SPI_PCS_3))
+    if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 1))
     {
         DRV_LOG_E(DRVFLASH, "efs write enable error");
     }
@@ -74,7 +85,7 @@ static int32_t drv_flash_nor_read_status_reg1(void)
 {
 
     efs_txbuf.cmd = EFS_CMD_READ_STATUS_REG1;
-    if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 2, SPI_PCS_3))
+    if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 2))
     {
         DRV_LOG_E(DRVFLASH, "read reg1 error");
     }
@@ -102,7 +113,7 @@ int32_t drv_flash_nor_get_id(uint32_t *id)
         return 1;
     efs_txbuf.cmd  = EFS_CMD_JEDEC_ID;
     efs_txbuf.addr = 0;
-    if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 4, SPI_PCS_3))
+    if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 4))
     {
         DRV_LOG_E(DRVFLASH, "ease sector error");
     }
@@ -114,10 +125,12 @@ int32_t drv_flash_nor_get_id(uint32_t *id)
 
 int32_t drv_flash_nor_init(void)
 {
-    drv_spi_nor_flash_init();
+
+    drv_spi_init(&nor_spi_config, &nor_spi_handle);
+
     drv_flash_nor_write_enable();
     efs_txbuf.cmd = EFS_CMD_4BYTES_ADDR;
-    if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 1, SPI_PCS_3))
+    if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 1))
     {
         DRV_LOG_E(DRVFLASH, "enter 4bytes mode fail");
     }
@@ -139,11 +152,9 @@ int32_t drv_flash_nor_sleep(void)
     gpio.mode  = GPIO_MODE_OUTPUT;
     gpio.level = GPIO_LEVEL_HIGH;
 
-
-    drv_spi_nor_flash_sleep();
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
-    
+
     return 0;
 }
 
@@ -162,7 +173,6 @@ int32_t drv_flash_nor_wake(void)
     gpio.level = GPIO_LEVEL_NONE;
     drv_pin_port_config(&port);
     drv_pin_gpio_config(&gpio);
-    drv_spi_nor_flash_wake();
 
     return 0;
 }
@@ -181,7 +191,7 @@ int32_t drv_flash_nor_erase(uint32_t addr, uint16_t n_4KB)
         drv_flash_nor_write_enable();
         efs_txbuf.cmd  = EFS_CMD_SECTOR_ERASE;
         efs_txbuf.addr = EFS_INVERT32(erase_addr);
-        if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 5, SPI_PCS_3))
+        if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 5))
         {
             DRV_LOG_E(DRVFLASH, "ease sector error");
         }
@@ -207,7 +217,7 @@ int32_t drv_flash_nor_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         drv_flash_nor_write_enable();
         efs_txbuf.cmd  = EFS_CMD_READ_DATA;
         efs_txbuf.addr = EFS_INVERT32(addr);
-        if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + rlen, SPI_PCS_3))
+        if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + rlen))
         {
             DRV_LOG_E(DRVFLASH, "ease sector error");
         }
@@ -241,7 +251,7 @@ int32_t drv_flash_nor_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         efs_txbuf.addr = EFS_INVERT32(addr);
         memcpy(efs_txbuf.data, data, wlen);
 
-        if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + wlen, SPI_PCS_3))
+        if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + wlen))
         {
             DRV_LOG_E(DRVFLASH, "efs write data error");
             return 1;

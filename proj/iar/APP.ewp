@@ -2900,9 +2900,6 @@
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_mcu.c</name>
                 </file>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nand.c</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
                 </file>
                 <file>
@@ -2939,13 +2936,7 @@
             <group>
                 <name>spi</name>
                 <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_nor_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_sd_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi_vse.c</name>
+                    <name>$PROJ_DIR$\..\..\src\driver\spi\drv_spi.c</name>
                 </file>
             </group>
             <group>
@@ -3592,6 +3583,9 @@
                 <excluded>
                     <configuration>Debug</configuration>
                 </excluded>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\src\test\test_vse.c</name>
             </file>
         </group>
         <file>

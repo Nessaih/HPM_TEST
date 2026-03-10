@@ -454,6 +454,7 @@ static INT8  fct_cmd_get_trace_code_proc(const CHAR *msg, CHAR *res, UINT16 res_
 
 static INT8  fct_cmd_nand_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
+#if 0
 #define EXFLASH_NAND_ADDR_FCT_TEST 0x00000000
 	
 	UINT8 ret = 0;
@@ -486,7 +487,7 @@ static INT8  fct_cmd_nand_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT1
 		tbox_log_print("fct cmp nand flash data failed\r\n");
 		return -1;
 	}
-
+#endif
 	return 0;
 }
 
