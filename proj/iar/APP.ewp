@@ -2662,12 +2662,6 @@
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\fct\fct_cmd.h</name>
                 </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\src\app\fct\fct_shell.h</name>
-                </file>
             </group>
             <group>
                 <name>hpm</name>

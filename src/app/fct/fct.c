@@ -1,9 +1,9 @@
 #include "tbox_common.h"
 #include "tbox_core.h"
 #include "stimer.h"
+#include "tbox_adsp_if.h"
 
 #include "fct.h"
-#include "fct_shell.h"
 #include "fct_cmd.h"
 
 #define FCT_APP_CYCLE_INTV			(1*1000)
@@ -87,6 +87,7 @@ static INT32 fct_init(UINT8 seq)
         case MODULE_INIT_SEQ_MODULE:            
 			fct_timer_creat();
             tbox_module_set_state(fct_module_id, TBOX_MODULE_STATE_START);
+			tbox_adsp_register(TBOX_ADSP_TYPE_FCT, fct_cmd_is_match, fct_cmd_callback, fct_cmd_is_exit);
             break;
             
         default:
@@ -94,7 +95,6 @@ static INT32 fct_init(UINT8 seq)
     }
 
 	fct_cmd_init(seq);
-	fct_shell_init(seq);
 	
     MODULE_LOG_D(FCT, "init seq:%d, ret:%d", seq, ret);
     return ret;

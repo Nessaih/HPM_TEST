@@ -2,6 +2,7 @@
 #include "tbox_core.h"
 #include "time_if.h"
 #include "4g_if.h"
+#include "tbox_pm_io.h"
 #include "tbox_cfg_if.h"
 #include "flash_common.h"
 #include "drv_flash_mcu.h"
@@ -55,6 +56,7 @@ typedef struct
 {
     hpm_fetch_node_t *node;
     UINT8 data[HPM_FECTCH_MULTI_DATA_LEN];
+    UINT32 request_ticks;
 } hpm_fetch_can_multi_t;
 
 static SemaphoreHandle_t hpm_param_task_mutex;
@@ -64,7 +66,7 @@ static hpm_fetch_config_t hpm_fetch_config;
 static hpm_fetch_can_single_t hpm_fetch_can_single[HPM_FETCH_SINGLE_COUNT];
 static hpm_fetch_can_multi_t hpm_fetch_can_multi[HPM_FETCH_MULTI_COUNT];
 
-static BOOL hpm_fetch_register_node(VOID);
+static BOOL hpm_fetch_register_all_node(VOID);
 static VOID hpm_fetch_unregister_all(VOID);
 static INT32 hpm_fetch_save_config(VOID);
 static INT32 hpm_fetch_load_config(VOID);
@@ -347,7 +349,7 @@ static VOID hpm_fetch_ftp_handle_start(VOID)
         return;
     }
 
-    MODULE_LOG_E(HPM, "can config start.");
+    MODULE_LOG_W(HPM, "can config start.");
 
     hpm_fetch_erase_flash();
     if_ftp_4g_download(hpm_fetch_ftp.url, hpm_fetch_ftp.url_len, IF_4G_PUBLIC_APN, hpm_fetch_ftp_callback);
@@ -357,6 +359,7 @@ static VOID hpm_fetch_ftp_handle_start(VOID)
     {
         mempool_free(hpm_fetch_ftp.url);
         hpm_fetch_ftp.url = NULL_PTR;
+        hpm_fetch_ftp.url_len = 0;
     }
 }
 
@@ -377,14 +380,14 @@ static VOID hpm_fetch_ftp_handle_finish(VOID)
         MODULE_LOG_E(HPM, "file parse error.");
         hpm_fetch_unregister_all();
         hpm_fetch_load_config();
-        hpm_fetch_register_node();
+        hpm_fetch_register_all_node();
     }
     else
     {
         hpm_fetch_save_config();
         hpm_fetch_unregister_all();
         hpm_fetch_load_config();
-        hpm_fetch_register_node();
+        hpm_fetch_register_all_node();
         hpm_fetch_set_param(&hpm_fetch_config);
     }
     hpm_fetch_ftp_state_set(HPM_FETCH_FTP_INIT);
@@ -415,6 +418,15 @@ INT32 hpm_param_fetch_ftp_start(UINT8 *data, UINT16 len, UINT8 *resp, UINT16 *re
         MODULE_LOG_E(HPM, "data len error, len %d.", len);
         return -1;
     }
+
+    if (NULL_PTR != hpm_fetch_ftp.url)
+    {
+        mempool_free(hpm_fetch_ftp.url);
+        hpm_fetch_ftp.url = NULL_PTR;
+    }
+
+    memset(&hpm_fetch_ftp, 0, sizeof(hpm_fetch_ftp));
+    hpm_fetch_ftp.url = NULL_PTR;
 
     UINT16 pos = 0;
     memcpy((UINT8 *)&hpm_fetch_ftp.sequence, data + pos, sizeof(hpm_fetch_ftp.sequence));
@@ -550,11 +562,17 @@ static VOID hpm_fetch_handle_single_msg(const can_msg_t *msg)
     HPM_PARAM_UNLOCK();
 }
 
-static BOOL hpm_fetch_regiseter_single(hpm_fetch_node_t *node)
+static BOOL hpm_fetch_register_single(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
     {
         hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        if (node->canid == p->node->canid)
+        {
+            MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
+            return FALSE;
+        }
+
         if (NULL_PTR == p->node)
         {
             p->node = node;
@@ -563,6 +581,7 @@ static BOOL hpm_fetch_regiseter_single(hpm_fetch_node_t *node)
             return TRUE;
         }
     }
+    MODULE_LOG_E(HPM, "single can not register, no available slot.");
     return FALSE;
 }
 
@@ -585,10 +604,16 @@ static hpm_fetch_can_multi_t *hpm_fetch_can_consecutive_get(const can_msg_t *msg
     return NULL_PTR;
 }
 
-static BOOL hpm_fetch_regiseter_consecutive(hpm_fetch_node_t *node)
+static BOOL hpm_fetch_register_consecutive(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
+        if (node->canid == hpm_fetch_can_multi[i].node->canid)
+        {
+            MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
+            return FALSE;
+        }
+
         if (NULL_PTR == hpm_fetch_can_multi[i].node)
         {
             hpm_fetch_can_multi[i].node = node;
@@ -597,6 +622,7 @@ static BOOL hpm_fetch_regiseter_consecutive(hpm_fetch_node_t *node)
             return TRUE;
         }
     }
+    MODULE_LOG_E(HPM, "consecutive can not register, no available slot.");
     return FALSE;
 }
 
@@ -610,13 +636,13 @@ static VOID hpm_fetch_handle_consecutive_msg(const can_msg_t *msg)
 
     UINT8 seq = msg->data[p->node->offset];
     UINT8 insert_pos = 0;
-    for (UINT8 i = 0; i < HPM_FECTCH_MULTI_DATA_LEN; i += HPM_FECTCH_SINGLE_DATA_LEN)
+    for (UINT8 i = 0; i < p->node->len; i += HPM_FECTCH_SINGLE_DATA_LEN)
     {
-        UINT8 cur_seq = msg->data[p->node->offset + i];
+        UINT8 cur_seq = p->data[p->node->offset + i];
         if (cur_seq == seq)
         {
             HPM_PARAM_LOCK();
-            memcpy(p->data + i, msg->data + p->node->offset + 1, HPM_FECTCH_SINGLE_DATA_LEN - 1);
+            memcpy(p->data + i, msg->data, HPM_FECTCH_SINGLE_DATA_LEN);
             p->node->obtained = (UINT32)HPM_FETCH_STATUS_OBTAINED;
             HPM_PARAM_UNLOCK();
             return;
@@ -676,7 +702,7 @@ static VOID hpm_fetch_j1939_pgn_callback(UINT8 *msg, UINT16 len, UINT8 src_addr,
         }
         if ((p->node->pgn == pgn) &&
             (p->node->sa == src_addr) &&
-            ((p->node->type == (UINT32)HPM_FETCH_NODE_MULTI ||
+            ((p->node->type == (UINT32)HPM_FETCH_NODE_BDPGN ||
               p->node->type == (UINT32)HPM_FETCH_NODE_PGN)))
         {
             HPM_PARAM_LOCK();
@@ -688,42 +714,53 @@ static VOID hpm_fetch_j1939_pgn_callback(UINT8 *msg, UINT16 len, UINT8 src_addr,
     }
 }
 
-static BOOL hpm_fetch_regiseter_multi(hpm_fetch_node_t *node)
+static BOOL hpm_fetch_register_bdpgn(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (node->canid == p->node->canid)
+        {
+            MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
+            return FALSE;
+        }
+
         if (NULL_PTR == p->node)
         {
             p->node = node;
-            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_MULTI);
+            hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_BDPGN);
             hpm_fetch_config.count++;
-            j1939_al_subscribe(node->sa, node->pgn, hpm_fetch_j1939_pgn_callback);
+            j1939_subscribe(node->ta, node->pgn, hpm_fetch_j1939_pgn_callback);
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static BOOL hpm_fetch_regiseter_pgn(hpm_fetch_node_t *node)
+static BOOL hpm_fetch_register_pgn(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (node->canid == p->node->canid)
+        {
+            MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
+            return FALSE;
+        }
+
         if (NULL_PTR == p->node)
         {
             p->node = node;
             hpm_fetch_config.registered |= (1U << HPM_FETCH_NODE_PGN);
             hpm_fetch_config.count++;
-            j1939_request(node->channel, node->pgn, node->ta, node->sa);
-            j1939_al_subscribe(node->sa, node->pgn, hpm_fetch_j1939_pgn_callback);
+            j1939_subscribe(node->ta, node->pgn, hpm_fetch_j1939_pgn_callback);
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static BOOL hpm_fetch_regiseter_uds(hpm_fetch_node_t *node)
+static BOOL hpm_fetch_register_uds(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
@@ -739,56 +776,67 @@ static BOOL hpm_fetch_regiseter_uds(hpm_fetch_node_t *node)
     return FALSE;
 }
 
-static BOOL hpm_fetch_register_node(VOID)
+static BOOL hpm_fetch_register_node(hpm_fetch_node_t *node)
 {
+    if (NULL_PTR == node)
+    {
+        return FALSE;
+    }
+
+    BOOL ret = TRUE;
+
+    switch (node->type)
+    {
+    case HPM_FETCH_NODE_SINGLE:
+        ret = hpm_fetch_register_single(node);
+        break;
+    case HPM_FETCH_NODE_CONSECTIVE:
+        ret = hpm_fetch_register_consecutive(node);
+        break;
+    case HPM_FETCH_NODE_BDPGN:
+        ret = hpm_fetch_register_bdpgn(node);
+        break;
+    case HPM_FETCH_NODE_PGN:
+        ret = hpm_fetch_register_pgn(node);
+        break;
+    case HPM_FETCH_NODE_UDS:
+        ret = hpm_fetch_register_uds(node);
+        break;
+    default:
+        break;
+    }
+    return ret;
+}
+
+static BOOL hpm_fetch_register_all_node(VOID)
+{
+    BOOL ret = FALSE;
     hpm_fetch_config.count = 0;
+    hpm_fetch_config.registered = 0;
+    memset(hpm_fetch_can_single, 0, sizeof(hpm_fetch_can_single));
+    memset(hpm_fetch_can_multi, 0, sizeof(hpm_fetch_can_multi));
 
     if ((0 == hpm_fetch_config.sequence) || (0xFFFFFFFF == hpm_fetch_config.sequence))
     {
         MODULE_LOG_I(HPM, "config sequence is 0 or 0xFFFFFFFF.");
-        return FALSE;
+        return ret;
     }
 
     for (UINT8 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
     {
         hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
-        switch (node->type)
+        if (node->type == (UINT32)HPM_FETCH_NODE_INVALID)
         {
-        case HPM_FETCH_NODE_SINGLE:
-            if (FALSE == hpm_fetch_regiseter_single(node))
-            {
-                MODULE_LOG_E(HPM, "register single node failed, slot overflow");
-            }
-            break;
-        case HPM_FETCH_NODE_CONSECTIVE:
-            if (FALSE == hpm_fetch_regiseter_consecutive(node))
-            {
-                MODULE_LOG_E(HPM, "register consecutive node failed, slot overflow");
-            }
-            break;
-        case HPM_FETCH_NODE_MULTI:
-            if (FALSE == hpm_fetch_regiseter_multi(node))
-            {
-                MODULE_LOG_E(HPM, "register multi node failed, slot overflow");
-            }
-            break;
-        case HPM_FETCH_NODE_PGN:
-            if (FALSE == hpm_fetch_regiseter_pgn(node))
-            {
-                MODULE_LOG_E(HPM, "register pgn node failed, slot overflow");
-            }
-            break;
-        case HPM_FETCH_NODE_UDS:
-            if (FALSE == hpm_fetch_regiseter_uds(node))
-            {
-                MODULE_LOG_E(HPM, "register uds node failed, slot overflow");
-            }
-            break;
-        default:
+            continue;
+        }
+        ret = hpm_fetch_register_node(node);
+        if (FALSE == ret)
+        {
+            MODULE_LOG_E(HPM, "register node %d failed.", i);
             break;
         }
     }
-    return TRUE;
+    return ret;
 }
 
 static VOID hpm_fetch_unregister_all(VOID)
@@ -832,6 +880,37 @@ static VOID hpm_fetch_can_recv_cb(can_msg_t *msgs, UINT32 count)
     }
 }
 
+static VOID hpm_fetch_can_request(VOID)
+{
+    for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        if (NULL_PTR != p->node)
+        {
+            if (TRUE == tbox_pm_io_acc_is_active())
+            {
+                p->request_ticks++;
+                if (p->request_ticks >= (HPM_FETCH_MULTI_COUNT + i))
+                {
+                    if (p->node->type == HPM_FETCH_NODE_PGN)
+                    {
+                        j1939_request(p->node->channel, p->node->pgn, p->node->ta, p->node->sa);
+                    }
+                    else if (p->node->type == HPM_FETCH_NODE_UDS)
+                    {
+                        // hpm_fetch_uds_req(p->node->channel, p->node->canid, p->node->respid, p->node->did);
+                    }
+                    p->request_ticks = 0;
+                }
+            }
+            else
+            {
+                p->request_ticks = 0;
+            }
+        }
+    }
+}
+
 INT32 hpm_param_fetch_init(UINT8 seq)
 {
     switch (seq)
@@ -845,7 +924,8 @@ INT32 hpm_param_fetch_init(UINT8 seq)
         hpm_can_register(hpm_fetch_can_recv_cb);
         hpm_fetch_ftp_init();
         hpm_fetch_load_config();
-        hpm_fetch_register_node();
+        hpm_fetch_register_all_node();
+        hpm_fetch_can_data_clear();
         break;
     default:
         break;
@@ -865,6 +945,7 @@ VOID hpm_param_fetch_deinit(VOID)
 VOID hpm_param_fetch_process(VOID)
 {
     hpm_fetch_ftp_handle_process();
+    hpm_fetch_can_request();
 }
 
 VOID hpm_param_fetch_wakeup(VOID)
@@ -991,7 +1072,7 @@ static INT32 hpm_param_fetch_report_consecutive(UINT8 *data, INT32 remain_size)
     return (INT32)len;
 }
 
-static INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
+static INT32 hpm_param_fetch_report_pgn(UINT8 *data, INT32 remain_size, hpm_fetch_node_type_e type)
 {
     if (remain_size < 3)
     {
@@ -1001,7 +1082,7 @@ static INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
 
     UINT16 len = 0;
     UINT8 *len_ptr = data + len;
-    data[len++] = (UINT8)(HPM_FETCH_NODE_MULTI);
+    data[len++] = (UINT8)(type);
     data[len++] = 0x00;
     data[len++] = 0x00;
     remain_size -= 3;
@@ -1014,20 +1095,21 @@ static INT32 hpm_param_fetch_report_multi(UINT8 *data, INT32 remain_size)
         HPM_PARAM_LOCK();
         if ((NULL_PTR != p->node) &&
             (p->node->obtained == (UINT32)HPM_FETCH_STATUS_OBTAINED) &&
-            (p->node->type == (UINT32)HPM_FETCH_NODE_MULTI))
+            (p->node->type == (UINT32)type))
         {
             if (remain_size < (INT32)(p->node->len + 5))
             {
-                MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
+                MODULE_LOG_E(HPM, "remain size %d is too small for pgn node data.", remain_size);
                 HPM_PARAM_UNLOCK();
                 return -1;
             }
 
             no_data = FALSE;
-            data[len++] = (UINT8)(p->node->canid >> 24) & 0xFF;
-            data[len++] = (UINT8)(p->node->canid >> 16) & 0xFF;
-            data[len++] = (UINT8)(p->node->canid >> 8) & 0xFF;
-            data[len++] = (UINT8)(p->node->canid) & 0xFF;
+            UINT32 id = (p->node->canid & 0x00FFFFFF);
+            data[len++] = (UINT8)(id >> 24) & 0xFF;
+            data[len++] = (UINT8)(id >> 16) & 0xFF;
+            data[len++] = (UINT8)(id >> 8) & 0xFF;
+            data[len++] = (UINT8)(id) & 0xFF;
             if (p->node->len > HPM_FECTCH_MULTI_DATA_LEN)
             {
                 p->node->len = HPM_FECTCH_MULTI_DATA_LEN;
@@ -1102,21 +1184,39 @@ INT32 hpm_param_fetch_report(UINT8 *data, INT32 remain_size)
         remain_size -= consecutive_len;
     }
 
-    if (p->registered & (1U << HPM_FETCH_NODE_MULTI))
+    if (p->registered & (1U << HPM_FETCH_NODE_BDPGN))
     {
         if (remain_size <= 0)
         {
-            MODULE_LOG_E(HPM, "remain size %d is too small for multi node data.", remain_size);
+            MODULE_LOG_E(HPM, "remain size %d is too small for bdpgn node data.", remain_size);
             return -1;
         }
 
-        INT32 multi_len = hpm_param_fetch_report_multi(data + len, remain_size);
+        INT32 multi_len = hpm_param_fetch_report_pgn(data + len, remain_size, HPM_FETCH_NODE_BDPGN);
         if (multi_len < 0)
         {
             MODULE_LOG_E(HPM, "multi node data overflow remain : %d.", remain_size);
             return -1;
         }
         len += multi_len;
+    }
+
+    if (p->registered & (1U << HPM_FETCH_NODE_PGN))
+    {
+        if (remain_size <= 0)
+        {
+            MODULE_LOG_E(HPM, "remain size %d is too small for pgn node data.", remain_size);
+            return -1;
+        }
+
+        INT32 pgn_len = hpm_param_fetch_report_pgn(data + len, remain_size, HPM_FETCH_NODE_PGN);
+        if (pgn_len < 0)
+        {
+            MODULE_LOG_E(HPM, "pgn node data overflow remain : %d.", remain_size);
+            return -1;
+        }
+        len += pgn_len;
+        remain_size -= pgn_len;
     }
 
     len_ptr[0] = (UINT8)((len - 2) >> 8) & 0xFF;
@@ -1167,8 +1267,28 @@ static VOID hpm_fetch_set_param(hpm_fetch_config_t *config)
     // obd protocol, do nothing currently
 }
 
+static INT32 hpm_param_array_to_str(UINT8 *data, UINT8 data_len, char *str, UINT16 in_len)
+{
+    if (data == NULL || str == NULL || in_len == 0)
+    {
+        return -1;
+    }
+    UINT16 str_len = 0;
+    for (int i = 0; i < data_len; i++)
+    {
+        if (str_len >= in_len - 3)
+        {
+            break;
+        }
+        unsigned int byte = data[i];
+        str_len += snprintf(str + str_len, in_len - str_len, "%02X ", byte);
+    }
+    return str_len;
+}
+
 VOID hpm_param_show_cfg(VOID)
 {
+    const UINT16 dump_len = 512UL;
     tbox_log_print("\r\n-------------------------------------------------------------\r\n");
     tbox_log_print("%-24s : 0X%08X\r\n", "id", hpm_fetch_config.sequence);
     tbox_log_print("%-24s : %d\r\n", "interval", hpm_fetch_config.interval);
@@ -1178,16 +1298,132 @@ VOID hpm_param_show_cfg(VOID)
     tbox_log_print("%-24s : %d\r\n", "can3 baudrate", hpm_param_get_baudrate((hpm_fetch_can_rate_e)hpm_fetch_config.can_rate3));
     tbox_log_print("%-24s : %d\r\n", "count", hpm_fetch_config.count);
 
+    CHAR *buf = mempool_alloc(dump_len);
+    if (buf == NULL)
+    {
+        return;
+    }
+
+    UINT8 i = 0;
+    for (i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
+    {
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        hpm_fetch_node_t *node = p->node;
+        if (node && (node->type == (UINT32)HPM_FETCH_NODE_SINGLE))
+        {
+            memset(buf, 0, dump_len);
+            hpm_param_array_to_str(p->data, HPM_FECTCH_SINGLE_DATA_LEN, buf, dump_len);
+            tbox_log_print("Node %02d: Type %d, CANID 0x%08X, Channel %0d, Obtained %-3s, Len %-3d, Data %s\r\n",
+                           i, node->type, node->canid, node->channel,
+                           node->obtained == HPM_FETCH_STATUS_OBTAINED ? "Yes" : "No", HPM_FECTCH_SINGLE_DATA_LEN, buf);
+        }
+    }
+
+    UINT8 j = 0;
+    for (j = 0; j < HPM_FETCH_MULTI_COUNT; j++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[j];
+        hpm_fetch_node_t *node = p->node;
+        if (node && (node->type == (UINT32)HPM_FETCH_NODE_CONSECTIVE ||
+                     node->type == (UINT32)HPM_FETCH_NODE_BDPGN ||
+                     node->type == (UINT32)HPM_FETCH_NODE_PGN ||
+                     node->type == (UINT32)HPM_FETCH_NODE_UDS))
+        {
+            memset(buf, 0, dump_len);
+            hpm_param_array_to_str(p->data, node->len, buf, dump_len);
+            tbox_log_print("Node %02d: Type %d, CANID 0x%08X, Channel %0d, Obtained %-3s, Len %-3d, Data %s\r\n",
+                           i + j, node->type, node->canid, node->channel,
+                           node->obtained == HPM_FETCH_STATUS_OBTAINED ? "Yes" : "No", node->len, buf);
+            vTaskDelay(pdMS_TO_TICKS(10U));
+        }
+    }
+
+    mempool_free(buf);
+}
+
+INT32 hpm_param_register(const char *param, INT32 len)
+{
+    if (NULL_PTR == param || len <= 0)
+    {
+        return -1;
+    }
+
+    hpm_fetch_config_t *config = &hpm_fetch_config;
+
+    if (config->count >= HPM_FETCH_NODE_COUNT)
+    {
+        tbox_log_print("hpm_param_register: node count overflow.");
+        return -1;
+    }
+
+    hpm_fetch_node_t *node = &config->node[config->count];
+    if (0 != hpm_param_parse_node(node, param))
+    {
+        tbox_log_print("hpm_param_register: parse node error.");
+        return -1;
+    }
+    else
+    {
+        if (FALSE == hpm_fetch_register_node(node))
+        {
+            tbox_log_print("hpm_param_register: register node failed.");
+            return -1;
+        }
+    }
+    tbox_log_print("hpm_param_register: id 0x%08X registered", node->canid);
+    hpm_fetch_save_config();
+    return 0;
+}
+
+static VOID hpm_param_unregister_single(UINT32 id)
+{
+    for (UINT8 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
+    {
+        hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
+        hpm_fetch_node_t *node = p->node;
+        if (node && (node->canid == id))
+        {
+            p->node = NULL_PTR;
+        }
+    }
+}
+
+static VOID hpm_param_unregister_multi(UINT32 id)
+{
+    for (UINT8 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
+    {
+        hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
+        hpm_fetch_node_t *node = p->node;
+        if (node && (node->canid == id))
+        {
+            p->node = NULL_PTR;
+        }
+    }
+}
+
+INT32 hpm_param_unregister(const char *param, INT32 len)
+{
+    if (NULL_PTR == param || len <= 0)
+    {
+        return -1;
+    }
+
+    UINT32 id = strtoul(param, NULL, 16);
+
     for (UINT8 i = 0; i < HPM_FETCH_NODE_COUNT; i++)
     {
         hpm_fetch_node_t *node = &hpm_fetch_config.node[i];
-        if (node->type == (UINT32)HPM_FETCH_NODE_INVALID)
+        if (node && (node->canid == id))
         {
-            continue;
+            hpm_param_unregister_single(id);
+            hpm_param_unregister_multi(id);
+            node->type = HPM_FETCH_NODE_INVALID;
+            hpm_fetch_config.count--;
+            tbox_log_print("hpm_param_unregister: id 0x%08X unregistered", id);
+            hpm_fetch_save_config();
+            return 0;
         }
-
-        tbox_log_print("Node %d: Type %d, CANID 0x%08X, Channel %d, Obtained %s, Len %d\r\n",
-                       i, node->type, node->canid, node->channel,
-                       node->obtained == HPM_FETCH_STATUS_OBTAINED ? "Yes" : "No", node->len);
     }
+    tbox_log_print("hpm_param_unregister: id 0x%08X not found", id);
+    return -1;
 }

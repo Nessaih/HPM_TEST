@@ -258,7 +258,7 @@ static BOOL hpm_socket_connect_server(VOID)
 
     if (0 != hpm_net_connect(url, (UINT16)port))
     {
-        MODULE_LOG_E(HPM, "connect server failed, url = %s, port = %d", url, port);
+        MODULE_LOG_W(HPM, "connect server failed, url = %s, port = %d", url, port);
         hpm_socket_info.type = (HPM_SOCKET_ADDR_TYPE_E)((hpm_socket_info.type + 1) % HPM_SOCKET_ADDR_MAX);
         return FALSE;
     }

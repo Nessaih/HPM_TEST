@@ -3,6 +3,10 @@
 
 INT32 gnss_com_init(UINT8 seq);
 
+VOID gnss_com_wake(VOID);
+
+VOID gnss_com_sleep(VOID);
+
 VOID gnss_com_task(VOID *param);
 
 #endif

@@ -10,9 +10,14 @@
 #include "can_if.h"
 #include "tbox_pm_io.h"
 #include "tbox_pm_if.h"
+#include "tbox_adsp_if.h"
 
 #include "fct.h"
 #include "fct_cmd.h"
+
+#define FCT_CMD_MIN_BYTENUM 	(5U)
+#define FCT_CMD_MIN_CHARNUM 	(6U)
+#define FCT_CMD_DATA_LEN_MAX	(256)
 
 typedef INT8 (*FCT_CMD_CMD_PROC)(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len);
 
@@ -1666,7 +1671,7 @@ VOID fct_cmd_timeout(VOID)
 	}
 }
 
-VOID fct_fctcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize)
+static VOID fct_fctcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize)
 {
 	INT8   ret = 0;
 	UINT8  index = 0;
@@ -1696,7 +1701,7 @@ VOID fct_fctcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 
 	return;
 }
 
-VOID fct_eolcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize)
+static VOID fct_eolcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize)
 {
 	INT8   ret = 0;
 	UINT8  index = 0;
@@ -1726,5 +1731,63 @@ VOID fct_eolcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 
 	return;
 }
 
+TBOX_ADSP_MATCH_RESULT fct_cmd_is_match(UINT8 *data, UINT32 len)
+{
+#define FCT_MATCH_MIN_LEN 11U
+
+	if(data[len-1] != '\n' && len <= FCT_MATCH_MIN_LEN)
+	{
+		return TBOX_ADSP_NOT_MATCH;
+	}
+	if(0 == strncmp((char *)data, "dbg.bin fct", FCT_MATCH_MIN_LEN))
+	{
+		return TBOX_ADSP_MATCH_OK;
+	}
+	if(0 == strncmp((char *)data, "dbg.bin eol", FCT_MATCH_MIN_LEN))
+	{
+		return TBOX_ADSP_MATCH_OK;
+	}
+
+	return TBOX_ADSP_NOT_MATCH;
+}
+
+TBOX_ADSP_PROCESS_RESULT fct_cmd_callback(UINT8 *data, UINT32 len)
+{	
+	INT32 tmp_len = 0;
+	CHAR  tmp_buf[FCT_CMD_DATA_LEN_MAX]; 
+
+	memset(tmp_buf, 0, FCT_CMD_DATA_LEN_MAX);
+	if (data[len - 2] != '\r' || data[len - 1] != '\n')
+    {
+        return TBOX_ADSP_NOT_PROCESS;
+    }
+	data[len] = '\0';
+	tbox_log_print("~ #%s", data);
+	tmp_len = strlen("dbg.bin ");
+	if(0 == strncmp((char *)data, "dbg.bin fct", strlen("dbg.bin fct")))
+	{
+		data = data+tmp_len;
+		len  = len-tmp_len;
+		fct_fctcmd_process((char *)data, len, tmp_buf, FCT_CMD_DATA_LEN_MAX);
+	}
+	else if(0 == strncmp((char *)data, "dbg.bin eol", strlen("dbg.bin eol")))
+	{
+		data = data+tmp_len;
+		len  = len-tmp_len;
+		
+		fct_eolcmd_process((char *)data, len, tmp_buf, FCT_CMD_DATA_LEN_MAX);
+	}
+
+	tbox_log_print("%s", tmp_buf);
+
+	return TBOX_ADSP_PROCESS_OK;
+}
+
+BOOL fct_cmd_is_exit(UINT8 *data, UINT32 len)
+{
+	UNUSED(data);
+	UNUSED(len);
+	return TRUE;
+}
 
 

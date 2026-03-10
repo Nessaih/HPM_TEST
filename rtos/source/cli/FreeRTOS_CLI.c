@@ -354,7 +354,7 @@ static BaseType_t prvHelpCommand( char * pcWriteBuffer, size_t xWriteBufferLen, 
             }
         }
         /* Print a newline before printing the first command */
-        xWroteLength = snprintf(pcWriteBuffer, xWriteBufferLen, "\r\nshow command list:\r\n");
+        xWroteLength = snprintf(pcWriteBuffer, xWriteBufferLen, "\r\n~ #\r\nshow command list:\r\n");
     }
 
     /* Return the next command help string, before moving the pointer on to

@@ -261,7 +261,7 @@ static INT8 dv_diag_norflash_wr(CHAR *des, INT32 deslen)
     return 0;
 }
 
-static INT8 dv_diag_nandflash_wr(CHAR *des, INT32 deslen)
+static INT8 dv_diag_sdflash_wr(CHAR *des, INT32 deslen)
 {
 
 #define NAND_WRBUF_SIZE 512U
@@ -558,32 +558,32 @@ static INT8 dv_diag_mcu_reset(CHAR *des, INT32 deslen)
 }
 
 static DV_DIAG_INFO_T dv_diag_table[] = {
-    {"4gIccid",  2,  "", DV_DIAG_OK, dv_diag_4g_iccid    },
-    {"4gSig",    2,  "", DV_DIAG_OK, dv_diag_4g_signal   },
-    {"4gNat",    2,  "", DV_DIAG_OK, dv_diag_4g_nat      },
-    {"4gAnt",    2,  "", DV_DIAG_OK, dv_diag_4g_ant      },
-    {"4gCom",    10, "", DV_DIAG_OK, dv_diag_4g_com      },
-    {"4gTemp",   10, "", DV_DIAG_OK, dv_diag_4g_tmp      },
-    {"GnsFix",   2,  "", DV_DIAG_OK, dv_diag_gns_fix     },
-    {"GnsAnt",   2,  "", DV_DIAG_OK, dv_diag_gns_ant     },
+    {"4gIccid",  2,  "", DV_DIAG_OK, dv_diag_4g_iccid   },
+    {"4gSig",    2,  "", DV_DIAG_OK, dv_diag_4g_signal  },
+    {"4gNat",    2,  "", DV_DIAG_OK, dv_diag_4g_nat     },
+    {"4gAnt",    2,  "", DV_DIAG_OK, dv_diag_4g_ant     },
+    {"4gCom",    10, "", DV_DIAG_OK, dv_diag_4g_com     },
+    {"4gTemp",   10, "", DV_DIAG_OK, dv_diag_4g_tmp     },
+    {"GnsFix",   2,  "", DV_DIAG_OK, dv_diag_gns_fix    },
+    {"GnsAnt",   2,  "", DV_DIAG_OK, dv_diag_gns_ant    },
     //	{"BleSta",	2,	"", DV_DIAG_OK, dv_diag_ble_sta		},
     //	{"BleCom",	2,	"", DV_DIAG_OK, dv_diag_ble_com		},
-    {"AdcLit",   2,  "", DV_DIAG_OK, dv_diag_adc_light   },
-    {"NorFlash", 2,  "", DV_DIAG_OK, dv_diag_norflash_wr },
-    {"NanFlash", 2,  "", DV_DIAG_OK, dv_diag_nandflash_wr},
+    {"AdcLit",   2,  "", DV_DIAG_OK, dv_diag_adc_light  },
+    {"NorFlash", 2,  "", DV_DIAG_OK, dv_diag_norflash_wr},
+    {"SDFlash",  2,  "", DV_DIAG_OK, dv_diag_sdflash_wr },
     //	{"SeSpi",	2,	"", DV_DIAG_OK, dv_diag_se_spi		},
-    {"Rs485",    2,  "", DV_DIAG_OK, dv_diag_rs485       },
-    {"Can1Sta",  2,  "", DV_DIAG_OK, dv_diag_can1_sta    },
-    {"Can2Sta",  2,  "", DV_DIAG_OK, dv_diag_can2_sta    },
-    {"Can1Com",  2,  "", DV_DIAG_OK, dv_diag_can1_com    },
-    {"Can2Com",  2,  "", DV_DIAG_OK, dv_diag_can2_com    },
-    {"IOChk",    2,  "", DV_DIAG_OK, dv_diag_io_state    },
+    {"Rs485",    2,  "", DV_DIAG_OK, dv_diag_rs485      },
+    {"Can1Sta",  2,  "", DV_DIAG_OK, dv_diag_can1_sta   },
+    {"Can2Sta",  2,  "", DV_DIAG_OK, dv_diag_can2_sta   },
+    {"Can1Com",  2,  "", DV_DIAG_OK, dv_diag_can1_com   },
+    {"Can2Com",  2,  "", DV_DIAG_OK, dv_diag_can2_com   },
+    {"IOChk",    2,  "", DV_DIAG_OK, dv_diag_io_state   },
     //	{"IMUChk",	2,	"", DV_DIAG_OK, dv_diag_imu_sta		},
-    {"RtcTime",  2,  "", DV_DIAG_OK, dv_diag_rtc_time    },
-    {"MainVol",  10, "", DV_DIAG_OK, dv_diag_main_vol    },
-    {"BatVol",   10, "", DV_DIAG_OK, dv_diag_bat_vol     },
-    {"BatTmp",   10, "", DV_DIAG_OK, dv_diag_bat_tmp     },
-    {"McuRst",   10, "", DV_DIAG_OK, dv_diag_mcu_reset   },
+    {"RtcTime",  2,  "", DV_DIAG_OK, dv_diag_rtc_time   },
+    {"MainVol",  10, "", DV_DIAG_OK, dv_diag_main_vol   },
+    {"BatVol",   10, "", DV_DIAG_OK, dv_diag_bat_vol    },
+    {"BatTmp",   10, "", DV_DIAG_OK, dv_diag_bat_tmp    },
+    {"McuRst",   10, "", DV_DIAG_OK, dv_diag_mcu_reset  },
 };
 
 VOID dv_diag_timeout(VOID)

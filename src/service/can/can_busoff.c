@@ -31,7 +31,7 @@ static void can_busoff_timer_callback(TimerHandle_t xTimer)
     
     /* 检查是否仍在恢复中 */
     if (!can_busoff_ctl[port].is_recovering) {
-        MODULE_LOG_W(CAN, "CAN%u recovery skipped, not recovering", port + 1);
+        MODULE_LOG_W(CAN, "CAN%u recovery skipped, not recovering", port);
         return;
     }
     
@@ -46,7 +46,7 @@ static void can_busoff_timer_callback(TimerHandle_t xTimer)
             }
             xTimerStart(busoff_timer[port], 0);
         }
-        MODULE_LOG_I(CAN, "CAN%u recovery skipped, mainpower or acc not active, wait for recovery", port + 1);
+        MODULE_LOG_I(CAN, "CAN%u recovery skipped, mainpower or acc not active, wait for recovery", port);
         return;
     }
 
@@ -54,7 +54,7 @@ static void can_busoff_timer_callback(TimerHandle_t xTimer)
     
     /* 执行恢复：重新初始化 CAN */
     MODULE_LOG_I(CAN, "CAN%u recovery timeout, attempt:%u, re-init CAN", 
-          port + 1, can_busoff_ctl[port].cnt);
+          port, can_busoff_ctl[port].cnt);
 }
 
 void can_busoff_callback(uint8_t port, bool is_busoff)
@@ -74,7 +74,7 @@ void can_busoff_callback(uint8_t port, bool is_busoff)
         if (can_busoff_ctl[port].cnt < CAN_BUSOFF_THRD) {
             /* 快恢复：100ms */
             MODULE_LOG_I(CAN, "CAN%u bus off detected, start fast recovery (attempt:%u/%u)", 
-                  port + 1, can_busoff_ctl[port].cnt + 1, CAN_BUSOFF_THRD);
+                  port, can_busoff_ctl[port].cnt + 1, CAN_BUSOFF_THRD);
             
             if (busoff_timer[port] != NULL) {
                 xTimerChangePeriod(busoff_timer[port], pdMS_TO_TICKS(CAN_BUSOFF_RECOVER_FAST), 0);
@@ -83,7 +83,7 @@ void can_busoff_callback(uint8_t port, bool is_busoff)
         } else {
             /* 慢恢复：1000ms */
             MODULE_LOG_I(CAN, "CAN%u bus off detected, start slow recovery (attempt:%u)", 
-                  port + 1, can_busoff_ctl[port].cnt + 1);
+                  port, can_busoff_ctl[port].cnt + 1);
             
             if (busoff_timer[port] != NULL) {
                 xTimerChangePeriod(busoff_timer[port], pdMS_TO_TICKS(CAN_BUSOFF_RECOVER_SLOW), 0);
@@ -98,7 +98,7 @@ void can_busoff_callback(uint8_t port, bool is_busoff)
              * 只有在真正恢复时（收到数据或发送成功），才会执行到这里清除状态
              */
             MODULE_LOG_I(CAN, "CAN%u bus recovered to normal after %u attempts", 
-                  port + 1, can_busoff_ctl[port].cnt);
+                  port, can_busoff_ctl[port].cnt);
             
             if (busoff_timer[port] != NULL && pdTRUE == xTimerIsTimerActive(busoff_timer[port])) {
                 if(NULL != busoff_timer[port]) {

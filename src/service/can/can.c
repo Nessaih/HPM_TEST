@@ -9,7 +9,66 @@
 #include "can_shell.h"
 #include "tbox_cfg_if.h"
 #include "drv_can.h"
+#include "Can_Hal.h"
 #include "time_if.h"
+
+/*事件位说明：
+*1、低8位(0到8位）主要给任务事件使用
+*2、接收任务的事件位：每路CAN使用4位，其余24位可供6路CAN使用
+*3、发送任务的事件位：每路CAN使用2位
+*/
+#define CAN_TASK_EVENT_START    0x01U
+#define CAN_TASK_EVENT_STOP     0x02U
+#define CAN_TASK_EVENT_EXIT     0x04U
+#define CAN_TASK_EVENT_CHECK    0x08U
+#define CAN_TASK_EVENT_BITNUM   8U
+#define CAN_RX_EVENT_RECEIVE    0x01U
+#define CAN_RX_EVENT_BUSERROR   0x02U
+#define CAN_RX_EVENT_BUSOFF     0x04U
+#define CAN_RX_EVENT_BUSOK      0x08U
+#define CAN_RX_EVENT_BITNUM     4U
+#define CAN_TX_EVENT_START      0x01U
+#define CAN_TX_EVENT_DONE       0x02U
+#define CAN_TX_EVENT_BITNUM     2U
+
+#define CAN_CHECK_PERIOD        50U     /* 任务检查周期50MS */
+#define CAN_TX_CHECK_PERIOD     50U     /* 发送任务检查周期50MS */
+#define CAN_TX_SEND_TIMEOUT     100U    /* 发送超时时间100MS */
+#define CAN_RX_CECK_PERIOD      1000U   /* 接收任务检查周期1S */
+#define CAN_BUS_DEACTIVE_TIME   10000U  /* 总线空闲超时时间10S */
+#define CAN_CALLBACK_COUNT      5U      /* 回调表最大数量 */
+#define CAN_RX_PROCESS_ONCE_SIZE 5U     /* 单次接收处理最大数量 */
+#define CAN_RX_RETRY_COUNT      3U      /* 接收重试次数 */
+
+typedef struct
+{
+    UINT8 mode;
+    UINT32 tx_tick;
+    can_list_t rx_list;
+    can_list_t tx_list;
+}CAN_ITEM;
+
+typedef struct
+{
+    BOOL bus_active;
+    BOOL bus_sleep;
+    UINT32 active_tick;
+    CAN_ITEM items[DRV_CAN_INS_COUNT];
+}CAN_CONTEXT;
+
+static VOID can_check_timer_callback(TimerHandle_t xtimer);
+static VOID can_rx_handle_check(VOID);
+static VOID can_rx_handle_receive(UINT8 ins);
+static VOID can_rx_handle_buserror(UINT8 ins);
+static VOID can_rx_handle_busoff(UINT8 ins);
+static VOID can_rx_handle_busok(UINT8 ins);
+static VOID can_rx_clear_list(VOID);
+static VOID can_tx_handle_check(VOID);
+static VOID can_tx_handle_start(UINT8 ins);
+static VOID can_tx_handle_done(UINT8 ins);
+static VOID can_tx_clear_list(VOID);
+static VOID can_isr_callback(UINT8 ins, UINT32 event, VOID *para);
+inline static VOID can_event_do_callback(CAN_EVENT event, UINT32 arg1, UINT32 arg2);
 
 static INT32 can_init(UINT8 seq);
 static VOID  can_stop(VOID);
@@ -17,7 +76,7 @@ static VOID  can_start(VOID);
 static VOID  can_exit(VOID);
 static VOID  can_task(VOID *param);
 TBOX_MODULE_FUN(CAN, can_init, can_stop, can_start, NULL_PTR, can_exit, NULL_PTR);
-TBOX_RUNLOOP_MODULE(CAN, TBOX_TASK_PRIORITY_MID1, LOG_LEVEL_INFO, TBOX_TASK_MEDIUM_STACK_SIZE, can_task);
+TBOX_RUNLOOP_MODULE(CAN, TBOX_TASK_PRIORITY_MID, LOG_LEVEL_ERROR, TBOX_TASK_MEDIUM_STACK_SIZE, can_task);
 TBOX_MODULE_LOADER(CAN) {}
 
 static INT32 can_tx_init(UINT8 seq);
@@ -25,281 +84,373 @@ static VOID  can_tx_stop(VOID);
 static VOID  can_tx_start(VOID);
 static VOID  can_tx_exit(VOID);
 static VOID  can_tx_task(VOID *param);
-
 TBOX_MODULE_FUN(CAN_TX, can_tx_init, can_tx_stop, can_tx_start, NULL_PTR, can_tx_exit, NULL_PTR);
-TBOX_RUNLOOP_MODULE(CAN_TX, TBOX_TASK_PRIORITY_MID2, LOG_LEVEL_INFO, TBOX_TASK_MEDIUM_STACK_SIZE, can_tx_task);
+TBOX_RUNLOOP_MODULE(CAN_TX, TBOX_TASK_PRIORITY_MID3, LOG_LEVEL_ERROR, TBOX_TASK_SMALL_STACK_SIZE_1, can_tx_task);
 TBOX_MODULE_LOADER(CAN_TX) {}
 
-#define CAN_MAX_CALLBACK        16	   /* 最大回调数量 */
-#define CAN_PROCESS_BATCH_SIZE  32     /* 每批处理的最大消息数 */
-#define CAN_BUS_TIMEOUT_MS      10000  /* 10秒超时 */
-#define CAN_SEND_RETRY_MS       100    /* 发送重试周期 */
-
-static TBOX_ID can_module_id;
 static MODULE_HANDLE can_module_handle;
-static TBOX_ID can_tx_module_id;
 static MODULE_HANDLE can_tx_module_handle;
-static UINT8 tbox_can_mode[DRV_CAN_INS_COUNT] = {DRV_CAN_MODE_NORMAL};
-static TimerHandle_t xSendTimerHandle = NULL_PTR;
-static TimerHandle_t xBusTimerHandle = NULL_PTR;
-static can_callback_t can_internal_cb = NULL_PTR;
-static can_event_callback_t can_event_cb_tbl[CAN_MAX_CALLBACK];
-static can_list_t recv_list;
-static can_list_t send_list[DRV_CAN_INS_COUNT];  /* 每个CAN实例独立的发送队列 */
-static bool canbus_active = false;
-static bool canbus_sleep = false;
-static can_msg_t can_process_buffer[CAN_PROCESS_BATCH_SIZE];  /* 静态消息处理缓冲区 */
+static TimerHandle_t can_check_timer;
+static can_event_callback_t can_event_cb_tbl[CAN_CALLBACK_COUNT];
+static can_msg_t can_process_buffer[CAN_RX_PROCESS_ONCE_SIZE];  /* 静态消息处理缓冲区 */
+static CAN_CONTEXT can_context;
 
-/* 事件回调表管理 */
-static VOID can_event_do_callback(CAN_EVENT event, UINT32 arg1, UINT32 arg2)
+INT32 can_if_init(UINT8 ins, UINT32 rate, UINT8 mode)
 {
-    INT32 i;
-    for (i = 0; i < CAN_MAX_CALLBACK && can_event_cb_tbl[i]; i++) {
-        can_event_cb_tbl[i](event, arg1, arg2);
-    }
-}
-
-INT32 can_if_reg_cb(can_event_callback_t cb)
-{
-    INT32 i;
-    
-    if (NULL_PTR == cb) {
-        return -1;
-    }
-    
-    taskENTER_CRITICAL();
-    for (i = 0; i < CAN_MAX_CALLBACK; i++) {
-        if (NULL_PTR == can_event_cb_tbl[i]) {
-            can_event_cb_tbl[i] = cb;
-            taskEXIT_CRITICAL();
-            return 0;
-        }
-    }
-    taskEXIT_CRITICAL();
-    
-    return -1;  /* 回调表已满 */
-}
-
-INT32 can_if_unreg_cb(can_event_callback_t cb)
-{
-    INT32 i;
-    
-    if (NULL_PTR == cb) {
-        return -1;
-    }
-    
-    taskENTER_CRITICAL();
-    for (i = 0; i < CAN_MAX_CALLBACK; i++) {
-        if (can_event_cb_tbl[i] == cb) {
-            can_event_cb_tbl[i] = NULL_PTR;
-            taskEXIT_CRITICAL();
-            return 0;
-        }
-    }
-    taskEXIT_CRITICAL();
-    
-    return -1;  /* 未找到回调 */
-}
-
-/* 内部回调注册（用于 recovery） */
-static VOID can_if_regcb_internal(can_callback_t cb)
-{
-    can_internal_cb = cb;
-}
-/* recovery 回调函数 */
-static VOID can_recovery_callback(UINT32 event, VOID *para, UINT32 count)
-{
-    UINT32 ins_id;
-    can_msg_t *msg;
-
-    if (event & CAN_IF_EVENT_RECEIVED) {
-        msg = (can_msg_t *)para;
-        if (msg) {
-            can_buserr_callback(msg->ins, FALSE);
-            can_busoff_callback(msg->ins, FALSE);
-        }
-    } else if (event & CAN_IF_EVENT_SEND_DONE) {
-        ins_id = (UINT32)para;
-        can_buserr_callback(ins_id, FALSE);
-        can_busoff_callback(ins_id, FALSE);
-    } else if (event & CAN_IF_EVENT_BUS_ERROR) {
-        ins_id = (UINT32)para;
-        can_buserr_callback(ins_id, TRUE);
-    } else if (event & CAN_IF_EVENT_BUSOFF) {
-        ins_id = (UINT32)para;
-        can_busoff_callback(ins_id, TRUE);
-    } else if (event & CAN_IF_EVENT_BUSOK) {
-    }
-}
-
-static VOID can_recv_handle(can_msg_t *msg)
-{
-    can_node_t *node;
-    BaseType_t need_switch = pdFALSE;
-    UINT32 notify_value;
-
-    if (NULL_PTR == msg)
-        return;
-
-    UBaseType_t interruptstatus = taskENTER_CRITICAL_FROM_ISR();
+    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
     {
-        node = can_list_malloc();
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
+
+    INT32 ret = 0;
+    UINT32 baudrate = rate;
+    if (rate == 0U) 
+    {
+        TBOX_CFG_ID cfg_id;
+        if (ins == 0U) 
+        {
+            TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
+        } 
+        else if (ins == 1U) 
+        {
+            TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
+        } 
+        else if (ins == 2U) 
+        {
+            TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
+        } 
+        else 
+        {
+            cfg_id = CFG_ID_INVALID;
+        }
+        if (cfg_id == (TBOX_CFG_ID)CFG_ID_INVALID || cfg_id >= TBOX_CFG_ITEM_NUMBER) 
+        {
+            return (INT32)TBOX_E_INVALID_VALUE;
+        }
+        ret = tbox_cfg_read(cfg_id, &baudrate);
+        if (ret < 0) 
+        {
+            MODULE_LOG_E(CAN, "read baudrate failed, ret:%d", ret);
+            return (INT32)TBOX_E_FAILED;
+        }
+        if (baudrate == 0U) 
+        {
+            MODULE_LOG_W(CAN, "can[%d] not config", ins);
+            return (INT32)TBOX_E_FAILED;
+        }
+    }
+
+    /*不需要写入配置，上层业务来控制
+    tbox_cfg_write(cfg_id, &baudrate);*/
+
+    taskENTER_CRITICAL();
+    can_context.items[ins].mode = mode;
+    taskEXIT_CRITICAL();
+    drv_can_register(ins, can_isr_callback);
+    ret = drv_can_init(ins, baudrate, mode);
+    if (ret == 0) 
+    {
+        can_mgr_update_baudrate(ins, baudrate);
+        MODULE_LOG_I(CAN, "can[%d] init success", ins);
+        return (INT32)TBOX_E_OK;
+    }
+
+    MODULE_LOG_E(CAN, "can[%d] init failed, ret:%d", ins, ret);
+
+    return (INT32)TBOX_E_FAILED;
+}
+
+INT32 can_if_deinit(UINT8 ins)
+{
+    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
+    taskENTER_CRITICAL();
+    can_context.items[ins].mode = DRV_CAN_MODE_NORMAL;
+    taskEXIT_CRITICAL();
+    can_mgr_update_baudrate(ins, 0U);
+
+    MODULE_LOG_I(CAN, "can[%d] deinit success", ins);
+
+    return drv_can_deinit(ins);
+}
+
+INT32  can_if_setbaud(UINT8 ins, UINT32 baudrate, UINT8 reinit)
+{
+    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
+
+    /* 验证波特率 */
+    if (baudrate != 0U && baudrate != 250U && baudrate != 500U && baudrate != 1000U) 
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
+
+    /* 获取配置 ID */
+    TBOX_CFG_ID cfg_id;
+    if (ins == 0U) 
+    {
+        TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
+    } 
+    else if (ins == 1U) 
+    {
+        TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
+    } 
+    else if (ins == 2) 
+    {
+        TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
+    } 
+    else 
+    {
+        cfg_id = CFG_ID_INVALID;
+    }
+    if (cfg_id == (TBOX_CFG_ID)CFG_ID_INVALID || cfg_id >= TBOX_CFG_ITEM_NUMBER) 
+    {
+        return (INT32)TBOX_E_INVALID_VALUE;
+    }
+
+    /* 写入配置 */
+    INT32 ret = tbox_cfg_write(cfg_id, &baudrate);
+    if (ret != (INT32)TBOX_E_OK) 
+    {
+        MODULE_LOG_E(CAN, "write baudrate failed, ret:%d", ret);
+        return (INT32)TBOX_E_FAILED;
+    }
+
+    if (reinit != 0U) 
+    {
+        if (drv_can_has_init(ins)) 
+        {
+            can_if_deinit(ins);
+        }
+        if (baudrate != 0U) 
+        {
+            ret = can_if_init(ins, baudrate, DRV_CAN_MODE_NORMAL);
+            if (ret != (INT32)TBOX_E_OK) 
+            {
+                return (INT32)TBOX_E_FAILED_INIT;
+            }
+        }
+    }
+
+    return (INT32)TBOX_E_OK;
+}
+
+INT32  can_if_send(can_msg_t *msg)
+{
+    if(NULL_PTR == msg || 
+      (UINT8)msg->ins >= (UINT8)DRV_CAN_INS_COUNT)
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
+
+    if(!drv_can_has_init(msg->ins) || 
+      (DRV_CAN_MODE_NORMAL != can_context.items[msg->ins].mode))
+    {
+        return (INT32)TBOX_E_NOINIT;
+    }
+
+    if(0 != drv_can_send(msg))
+    {
+        taskENTER_CRITICAL();
+        can_node_t *node = can_list_malloc();
         if (NULL_PTR == node)
         {
-            taskEXIT_CRITICAL_FROM_ISR(interruptstatus);
-            return;
+            taskEXIT_CRITICAL();
+            can_mgr_stat_add_droptx_msg(msg->ins);
+            MODULE_LOG_E(CAN, "can[%d] malloc node failed", msg->ins);
+            return (INT32)TBOX_E_NOMEMORY;
         }
         memcpy(&node->msg, msg, sizeof(can_msg_t));
-        can_list_push(&recv_list, node);
+        can_list_push(&can_context.items[msg->ins].tx_list, node);
+        can_context.items[msg->ins].tx_tick = time_if_get_systick_ms();
+        taskEXIT_CRITICAL();
     }
-    taskEXIT_CRITICAL_FROM_ISR(interruptstatus);
-    
-    notify_value = msg->ins;
-    notify_value = (notify_value << CAN_IF_EVENT_INS_POS) | CAN_IF_EVENT_RECEIVED;
-    xTaskNotifyFromISR(can_module_handle, notify_value, eSetBits, &need_switch);
-    portYIELD_FROM_ISR(need_switch);
-}
+    else
+    {
+        taskENTER_CRITICAL();
+        can_context.items[msg->ins].tx_tick = time_if_get_systick_ms();
+        taskEXIT_CRITICAL();
+        can_mgr_stat_add_send_msg(msg->ins);
 
-static VOID can_send_handle(VOID *para)
-{
-    BaseType_t need_switch = pdFALSE;
-    UINT32 notify_value = (UINT32)para;
-
-    notify_value = (notify_value << CAN_IF_EVENT_INS_POS) | CAN_IF_EVENT_SEND_DONE;
-    xTaskNotifyFromISR(can_tx_module_handle, notify_value, eSetBits, &need_switch);
-    portYIELD_FROM_ISR(need_switch);
-}
-
-static VOID can_event_handle(VOID *para)
-{
-    BaseType_t need_switch = pdFALSE;
-    UINT32 notify_value = (UINT32)para;
-
-    xTaskNotifyFromISR(can_module_handle, notify_value, eSetBits, &need_switch);
-    portYIELD_FROM_ISR(need_switch);
-}
-
-static VOID can_isr_callback(UINT8 ins, UINT32 event, VOID *para)
-{
-    UINT32 ins_id = ins;
-
-    switch (event) {
-    case DRV_CAN_EVENT_RX_DONE:
-        can_recv_handle((can_msg_t *)para);
-        break;
-
-    case DRV_CAN_EVENT_TX_DONE:
-        can_send_handle((VOID *)ins_id);
-        break;
-
-    case DRV_CAN_EVENT_BUS_ERROR: {
-        UINT32 notify_value;
-        notify_value = (ins_id << CAN_IF_EVENT_INS_POS) | CAN_IF_EVENT_BUS_ERROR;
-        can_event_handle((VOID *)notify_value);
-        break;
+        MODULE_LOG_D(CAN, "can[%d] send success", msg->ins);
     }
 
-    case DRV_CAN_EVENT_BUS_OFF: {
-        UINT32 notify_value;
-        UINT32 error_code = (UINT32)para;
-
-        if (error_code)
-            notify_value = (ins_id << CAN_IF_EVENT_INS_POS) | CAN_IF_EVENT_BUSOFF;
-        else
-            notify_value = (ins_id << CAN_IF_EVENT_INS_POS) | CAN_IF_EVENT_BUSOK;
-        can_event_handle((VOID *)notify_value);
-        break;
-    }
-
-    case DRV_CAN_EVENT_WAKEUP:
-        break;
-
-    default:
-        break;
-    }
+    return (INT32)TBOX_E_OK;
 }
 
-/* 清除接收缓存 */
-static VOID can_clear_recv_buffer(VOID)
-{
-    can_node_t *node;
+INT32  can_if_reg_cb(can_event_callback_t cb)
+{    
+    if (NULL_PTR == cb) 
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
+    }
     
     taskENTER_CRITICAL();
-    while ((node = can_list_pop(&recv_list)) != NULL_PTR) {
-        can_list_free(node);
-    }
-    taskEXIT_CRITICAL();
-}
-
-/* 清除发送缓存 */
-static VOID can_clear_send_buffer(VOID)
-{
-    can_node_t *node;
-    
-    taskENTER_CRITICAL();
-    for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++) {
-        while ((node = can_list_pop(&send_list[i])) != NULL_PTR) {
-            can_list_free(node);
+    for (UINT32 i = 0U; i < CAN_CALLBACK_COUNT; i++) 
+    {
+        if (NULL_PTR == can_event_cb_tbl[i]) 
+        {
+            can_event_cb_tbl[i] = cb;
+            taskEXIT_CRITICAL();
+            return (INT32)TBOX_E_OK;
         }
     }
     taskEXIT_CRITICAL();
+    
+    MODULE_LOG_E(CAN, "can callback table full");
+    return (INT32)TBOX_E_NOMEMORY;
 }
 
-/* CAN总线超时回调 */
-static VOID can_bus_timeout_callback(TimerHandle_t xTimer)
-{
-    UINT32 uptime = time_if_get_systick_s();
-    
-    if (canbus_active) {
-        canbus_active = false;
-        MODULE_LOG_W(CAN, "CAN bus timeout");
-        can_clear_recv_buffer();
+INT32  can_if_unreg_cb(can_event_callback_t cb)
+{    
+    if (NULL_PTR == cb) 
+    {
+        return (INT32)TBOX_E_INVALID_PARAM;
     }
     
-    if (!canbus_sleep) {
-        can_event_do_callback(CAN_EVENT_INACTIVE, uptime, 0);
+    taskENTER_CRITICAL();
+    for (UINT32 i = 0; i < CAN_CALLBACK_COUNT; i++) 
+    {
+        if (can_event_cb_tbl[i] == cb) 
+        {
+            can_event_cb_tbl[i] = NULL_PTR;
+            taskEXIT_CRITICAL();
+            return (INT32)TBOX_E_OK;
+        }
+    }
+    taskEXIT_CRITICAL();
+
+    MODULE_LOG_E(CAN, "can callback not found");
+    return (INT32)TBOX_E_NOFOUND;   
+}
+
+BOOL   can_if_is_bus_active(VOID)
+{
+    BOOL active;
+    
+    taskENTER_CRITICAL();
+    active = can_context.bus_active;
+    taskEXIT_CRITICAL();
+
+    return active;
+}
+
+BOOL   can_if_is_bus_sleep(VOID)
+{
+    BOOL sleep;
+    
+    taskENTER_CRITICAL();
+    sleep = can_context.bus_sleep;
+    taskEXIT_CRITICAL();
+
+    return sleep;
+}
+
+static VOID can_check_timer_callback(TimerHandle_t xtimer)
+{
+    static UINT8 rx_check_count = 0U;
+    static UINT8 tx_check_count = 0U;
+
+    if(xtimer != can_check_timer)
+    {
+        return;
+    }
+
+    if(++rx_check_count >= CAN_RX_CECK_PERIOD/CAN_CHECK_PERIOD)
+    {
+        rx_check_count = 0U;
+        if(NULL_PTR != can_module_handle)
+        {
+            xTaskNotify(can_module_handle, CAN_TASK_EVENT_CHECK, eSetBits);
+        }
+    }
+    if(++tx_check_count >= CAN_TX_CHECK_PERIOD/CAN_CHECK_PERIOD)
+    {
+        tx_check_count = 0U;
+        if(NULL_PTR != can_tx_module_handle)
+        {
+            xTaskNotify(can_tx_module_handle, CAN_TASK_EVENT_CHECK, eSetBits);
+        }
     }
 }
 
-/* 处理接收到的CAN消息 */
-static VOID can_process_recv_messages(VOID)
+static VOID can_rx_handle_check(VOID)
 {
+    /*检测总线是否ACTIVE*/
+    BOOL bus_sleep;
+    BOOL is_deactive = FALSE;
+    UINT32 tick = time_if_get_systick_ms();
+
+    taskENTER_CRITICAL();
+    if(0U == can_context.active_tick ||
+       FALSE == can_context.bus_active)
+    {
+        taskEXIT_CRITICAL();
+        MODULE_LOG_I(CAN, "can rx not do check, active_tick:%d, bus_active:%d", 
+                           can_context.active_tick, can_context.bus_active);
+        return;
+    }
+    if(tick - can_context.active_tick >= CAN_BUS_DEACTIVE_TIME)
+    {
+        can_rx_clear_list();
+        bus_sleep = can_context.bus_sleep;
+        can_context.bus_active = FALSE;
+        is_deactive = TRUE;
+    }
+    taskEXIT_CRITICAL();
+
+    if(TRUE == is_deactive && FALSE == bus_sleep)
+    {
+        MODULE_LOG_W(CAN, "bus deactive");
+        can_event_do_callback(CAN_EVENT_INACTIVE, tick/1000U, 0U);
+    }
+}
+
+static VOID can_rx_handle_receive(UINT8 ins)
+{
+    UINT8 msg_count;
+    BOOL active_cb;
     can_node_t *node;
-    INT32 msg_count;
-    bool has_more;
-    
-    do {
-        msg_count = 0;
-        has_more = false;
-        
-        /* 批量取出消息（最多CAN_PROCESS_BATCH_SIZE条） */
+    UINT32 tick = time_if_get_systick_ms();
+
+    for(UINT8 retry_count = 0U; retry_count < CAN_RX_RETRY_COUNT; retry_count++)
+    {
+        node = NULL_PTR;
+        msg_count = 0U;
+        active_cb = FALSE;
+
         taskENTER_CRITICAL();
         {
-            while (msg_count < CAN_PROCESS_BATCH_SIZE && 
-                   (node = can_list_pop(&recv_list)) != NULL_PTR) {
+            while (msg_count < CAN_RX_PROCESS_ONCE_SIZE && 
+                   (node = can_list_pop(&can_context.items[ins].rx_list)) != NULL_PTR)
+            {
                 memcpy(&can_process_buffer[msg_count], &node->msg, sizeof(can_msg_t));
                 can_list_free(node);
                 msg_count++;
             }
-            
-            /* 检查是否还有更多消息 */
-            has_more = (recv_list.size > 0);
+            if(0U == msg_count)
+            {
+                taskEXIT_CRITICAL();
+                return;
+            }
+
+            can_context.active_tick = tick;
+            if(FALSE == can_context.bus_active)
+            {
+                can_context.bus_active = TRUE;
+                active_cb = TRUE;
+            }
         }
         taskEXIT_CRITICAL();
-        
-        if (msg_count <= 0) {
-            return;
-        }
-        
-        /* 重启总线超时定时器 */
-        if (xBusTimerHandle != NULL_PTR) {
-            xTimerReset(xBusTimerHandle, 0);
-        }
-        
+
         /* 检查总线状态变化 */
-        if (!canbus_active) {
-            canbus_active = true;
-            MODULE_LOG_I(CAN, "CAN bus active");
+        if (TRUE == active_cb) 
+        {
+            MODULE_LOG_I(CAN, "can bus active");
             can_event_do_callback(CAN_EVENT_ACTIVE, 0, 0);
         }
         
@@ -309,151 +460,293 @@ static VOID can_process_recv_messages(VOID)
         /* 批量更新统计信息 */
         can_mgr_stat_add_recv_msgs(can_process_buffer, msg_count);
         
-        /* 内部回调 */
-        if (can_internal_cb) {
-            can_internal_cb(CAN_IF_EVENT_RECEIVED, can_process_buffer, msg_count);
-        }
-    } while (has_more);
+        /* BUS OFF/ERROR 处理 */
+        can_buserr_callback(ins, FALSE);
+        can_busoff_callback(ins, FALSE);            
+    }
 }
 
-static VOID can_send_timer_callback(TimerHandle_t xTimer)
+static VOID can_rx_handle_buserror(UINT8 ins)
 {
-    xTaskNotify(can_tx_module_handle, CAN_IF_EVENT_SEND_START, eSetBits);
+    taskENTER_CRITICAL();
+    can_rx_clear_list();
+    can_tx_clear_list();
+    taskEXIT_CRITICAL();
+
+    can_buserr_callback(ins, TRUE);
+
+    MODULE_LOG_D(CAN, "can[%d] bus error", ins);
 }
 
-/* CAN TX任务 - 专门处理发送事件 */
-static VOID can_tx_task(VOID *param)
+static VOID can_rx_handle_busoff(UINT8 ins)
 {
-    UINT32 notify_value = 0;
-    UINT32 ins_id;
-    can_node_t *node;
-    can_msg_t msg;
-    
-    (VOID)param;
-    
-    for(;;) 
+    taskENTER_CRITICAL();
+    can_rx_clear_list();
+    taskEXIT_CRITICAL();
+
+    can_busoff_callback(ins, TRUE);
+
+    MODULE_LOG_E(CAN, "can[%d] bus off", ins);    
+}
+
+static VOID can_rx_handle_busok(UINT8 ins)
+{
+    UINT32 error = Can_Hal_GetErrorsInfo(ins);
+    MODULE_LOG_I(CAN, "can[%d] error:%d", ins, error); 
+    if(0 == error)
     {
-        /* 检查模块状态 */
-        if(tbox_module_get_state(can_tx_module_id) != TBOX_MODULE_STATE_START)
+        can_buserr_callback(ins, FALSE);
+        MODULE_LOG_I(CAN, "can[%d] bus ok", ins); 
+    }
+   /*can_buserr_callback(ins, FALSE);
+    can_busoff_callback(ins, FALSE);
+    MODULE_LOG_I(CAN, "can[%d] bus ok", ins);  */    
+}
+
+static VOID can_rx_clear_list(VOID)
+{
+    can_node_t *node;
+    for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++) 
+    {
+        can_mgr_stat_add_droprx_msgs(i, can_context.items[i].rx_list.size);
+        while ((node = can_list_pop(&can_context.items[i].rx_list)) != NULL_PTR) 
         {
-            vTaskDelay(pdMS_TO_TICKS(100));
+            can_list_free(node);
+        }
+    }    
+}
+
+static VOID can_tx_handle_check(VOID)
+{
+    UINT32 tick = time_if_get_systick_ms();
+
+    for (UINT8 i = 0U; i < DRV_CAN_INS_COUNT; i++) 
+    {
+        taskENTER_CRITICAL();
+        if(0U == can_context.items[i].tx_tick)
+        {
+            taskEXIT_CRITICAL();
             continue;
         }
-        
-        notify_value = 0;
-        node = NULL_PTR;
-        xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, portMAX_DELAY);
-        
-        /* 处理发送事件 */
-        if (notify_value & CAN_IF_EVENT_SEND_DONE || 
-            (notify_value & CAN_IF_EVENT_SEND_START))
+        if(tick - can_context.items[i].tx_tick >= CAN_TX_SEND_TIMEOUT)
         {
-            UINT8 start_ins = 0;
-            
-            /* 如果是发送完成事件，优先处理该通道 */
-            if (notify_value & CAN_IF_EVENT_SEND_DONE) {
-                start_ins = (notify_value & CAN_IF_EVENT_INS_MASK) >> CAN_IF_EVENT_INS_POS;
-            }
-            
-            /* 轮询所有通道（从刚完成的通道开始） */
-            for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++) {
-                UINT8 check_ins = (start_ins + i) % DRV_CAN_INS_COUNT;
-                
-                taskENTER_CRITICAL();
-                node = can_list_pop(&send_list[check_ins]);
-                if (NULL_PTR != node) {
-                    memcpy(&msg, &node->msg, sizeof(can_msg_t));
-                    can_list_free(node);
-                }
-                taskEXIT_CRITICAL();
-                
-                if (NULL_PTR != node) {
-                    if (pdTRUE == xTimerIsTimerActive(xSendTimerHandle)) {
-                        if (NULL_PTR != xSendTimerHandle) {
-                            xTimerStop(xSendTimerHandle, 0);
-                        }
-                    }
-                    
-                    if (0U == drv_can_send(&msg)) {
-                        xTimerStart(xSendTimerHandle, 0);
-                    }
-                    break;  /* 发送一条后退出 */
-                }
-            }
+            can_context.items[i].tx_tick = 0U;
+        }
+        taskEXIT_CRITICAL();
+        if(0U == can_context.items[i].tx_tick)
+        {
+            MODULE_LOG_W(CAN, "can[%d] tx timeout, tick:%d", i, tick);
 
-            if(notify_value & CAN_IF_EVENT_SEND_DONE)
+            if(NULL_PTR != can_tx_module_handle)
             {
-                ins_id = (notify_value & CAN_IF_EVENT_INS_MASK) >> CAN_IF_EVENT_INS_POS;
-                
-                /* 发送完成回调 */
-                if (can_internal_cb) {
-                    can_internal_cb(CAN_IF_EVENT_SEND_DONE, (VOID *)ins_id, 0);
-                }
-            }
+                xTaskNotify(can_tx_module_handle, CAN_TX_EVENT_START << (CAN_TASK_EVENT_BITNUM+i*CAN_TX_EVENT_BITNUM), eSetBits);
+            }            
         }
     }
 }
 
-static VOID can_task(VOID *param)
+static VOID can_tx_handle_start(UINT8 ins)
 {
-    UINT32 notify_value = 0;
-    UINT32 ins_id;
-    
-    (VOID)param;
-    
-    for(;;) 
-    {
-        /* 检查模块状态 */
-        if(tbox_module_get_state(can_module_id) != TBOX_MODULE_STATE_START)
-        {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
-        }
-        
-        notify_value = 0;
-        xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, portMAX_DELAY);
-        
-        /* 处理接收事件 */
-        if (notify_value & CAN_IF_EVENT_RECEIVED)
-        {
-            can_process_recv_messages();
-        }
-        
-        /* 处理异常事件 */
-        if (notify_value & CAN_IF_EVENT_BUSOFF) 
-        {
-            ins_id = (notify_value & CAN_IF_EVENT_INS_MASK) >> CAN_IF_EVENT_INS_POS;
-            if (can_internal_cb) {
-                can_internal_cb(CAN_IF_EVENT_BUSOFF, (VOID *)ins_id, 0);
-            }
-        }
+    can_node_t *node;
+    can_msg_t msg;
 
-        if (notify_value & CAN_IF_EVENT_BUS_ERROR) 
+    taskENTER_CRITICAL();
+    node = can_list_pop(&can_context.items[ins].tx_list);
+    if (NULL_PTR != node) 
+    {
+        memcpy(&msg, &node->msg, sizeof(can_msg_t));
+        can_list_free(node);
+    }
+    taskEXIT_CRITICAL();
+
+    if(NULL_PTR == node)
+    {
+        return;
+    }
+
+    if(0 == drv_can_send(&msg))
+    {
+        can_mgr_stat_add_send_msg(ins);
+        MODULE_LOG_I(CAN, "can[%d] send success", ins);
+    }
+    else
+    {
+        MODULE_LOG_E(CAN, "can[%d] tx send failed", ins);
+        can_mgr_stat_add_droptx_msg(ins);
+    }
+
+    taskENTER_CRITICAL();
+    can_context.items[ins].tx_tick =  time_if_get_systick_ms();
+    taskEXIT_CRITICAL();    
+}
+
+static VOID can_tx_handle_done(UINT8 ins)
+{
+    can_node_t *node;
+    can_msg_t msg;
+
+    MODULE_LOG_I(CAN, "can[%d] tx done", ins);
+
+    taskENTER_CRITICAL();
+    node = can_list_pop(&can_context.items[ins].tx_list);
+    if (NULL_PTR != node) 
+    {
+        memcpy(&msg, &node->msg, sizeof(can_msg_t));
+        can_list_free(node);
+    }
+    can_context.items[ins].tx_tick = 0U;
+    taskEXIT_CRITICAL();
+
+    can_buserr_callback(ins, FALSE);
+    can_busoff_callback(ins, FALSE); 
+
+    if(NULL_PTR == node)
+    {
+        return;
+    }
+
+    if(0 == drv_can_send(&msg))
+    {
+        can_mgr_stat_add_send_msg(ins);
+        MODULE_LOG_I(CAN, "can[%d] send success", ins);        
+    }
+    else
+    {
+        MODULE_LOG_E(CAN, "can[%d] tx send failed", ins);
+        can_mgr_stat_add_droptx_msg(ins);
+    }
+
+    taskENTER_CRITICAL();
+    can_context.items[ins].tx_tick =  time_if_get_systick_ms();
+    taskEXIT_CRITICAL();        
+}
+
+static VOID can_tx_clear_list(VOID)
+{
+    can_node_t *node;
+    for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++) 
+    {
+        while ((node = can_list_pop(&can_context.items[i].tx_list)) != NULL_PTR) 
         {
-            ins_id = (notify_value & CAN_IF_EVENT_INS_MASK) >> CAN_IF_EVENT_INS_POS;
-            if (can_internal_cb) {
-                can_internal_cb(CAN_IF_EVENT_BUS_ERROR, (VOID *)ins_id, 0);
-            }
+            can_list_free(node);
+            can_mgr_stat_add_droptx_msg(i);
         }
-        
-        if (notify_value & CAN_IF_EVENT_BUSOK)
-        {
-            ins_id = (notify_value & CAN_IF_EVENT_INS_MASK) >> CAN_IF_EVENT_INS_POS;
-            if (can_internal_cb) {
-                can_internal_cb(CAN_IF_EVENT_BUSOK, (VOID *)ins_id, 0);
+    }   
+}
+
+static VOID can_isr_callback(UINT8 ins, UINT32 event, VOID *para)
+{
+    UINT32 notify_value;
+
+    if(ins >= DRV_CAN_INS_COUNT)
+    {
+        return;
+    }
+
+    switch (event) 
+    {
+        case DRV_CAN_EVENT_RX_DONE:
+            {
+                can_node_t *node;
+                can_msg_t *msg = (can_msg_t *)para;
+                if(NULL_PTR == msg)
+                {
+                    break;
+                }
+
+                UBaseType_t interruptstatus = taskENTER_CRITICAL_FROM_ISR();
+                {
+                    node = can_list_malloc();
+                    if (NULL_PTR == node)
+                    {
+                        can_mgr_stat_add_droprx_msgs(ins, 1U);
+                    }
+                    else
+                    {
+                        memcpy(&node->msg, msg, sizeof(can_msg_t));
+                        can_list_push(&can_context.items[ins].rx_list, node);
+                    }
+                }
+                taskEXIT_CRITICAL_FROM_ISR(interruptstatus);
+                if(NULL_PTR != can_module_handle)
+                {
+                    notify_value = CAN_RX_EVENT_RECEIVE << (CAN_TASK_EVENT_BITNUM+ins*CAN_RX_EVENT_BITNUM);
+                    xTaskNotifyFromISR(can_module_handle, notify_value, eSetBits, NULL);
+                }
             }
-        }
+            break;
+
+        case DRV_CAN_EVENT_TX_DONE:
+            {
+                if(NULL_PTR != can_tx_module_handle)
+                {
+                    notify_value = CAN_TX_EVENT_DONE << (CAN_TASK_EVENT_BITNUM+ins*CAN_TX_EVENT_BITNUM);
+                    xTaskNotifyFromISR(can_tx_module_handle, notify_value, eSetBits, NULL);
+                }
+            }
+            break;
+
+        case DRV_CAN_EVENT_BUS_ERROR:
+            {
+                if(NULL_PTR != can_module_handle)
+                {
+                    notify_value = CAN_RX_EVENT_BUSERROR << (CAN_TASK_EVENT_BITNUM+ins*CAN_RX_EVENT_BITNUM);
+                    xTaskNotifyFromISR(can_module_handle, notify_value, eSetBits, NULL);
+                }
+            }
+            break;
+
+        case DRV_CAN_EVENT_BUS_OFF:
+            {
+                UINT32 error_code = (UINT32)para;
+                if(NULL_PTR != can_module_handle)
+                {
+                    if(error_code)
+                    {
+                        notify_value = CAN_RX_EVENT_BUSOFF << (CAN_TASK_EVENT_BITNUM+ins*CAN_RX_EVENT_BITNUM);
+                    }
+                    else
+                    {
+                        notify_value = CAN_RX_EVENT_BUSOK << (CAN_TASK_EVENT_BITNUM+ins*CAN_RX_EVENT_BITNUM);
+                    }
+                    xTaskNotifyFromISR(can_module_handle, notify_value, eSetBits, NULL);
+                }
+            }
+            break;
+
+        case DRV_CAN_EVENT_WAKEUP:
+            break;
+
+        default:
+            break;
+    }
+}
+
+/* 事件回调表管理 */
+inline static VOID can_event_do_callback(CAN_EVENT event, UINT32 arg1, UINT32 arg2)
+{
+    for (UINT8 i = 0; i < CAN_CALLBACK_COUNT && can_event_cb_tbl[i]; i++) 
+    {
+        can_event_cb_tbl[i](event, arg1, arg2);
     }
 }
 
 static INT32 can_init(UINT8 seq)
 {
-    INT32 ret = (INT32)TBOX_E_OK;
-    
     switch (seq)
     {
         case MODULE_INIT_SEQ_OS:
-            GET_TBOX_MODULE_ID(CAN, can_module_id);
+            can_context.active_tick = 0U;
+            can_context.bus_active = FALSE;
+            can_context.bus_sleep = FALSE;
+            for(UINT8 i = 0U; i < DRV_CAN_INS_COUNT; i++)
+            {
+                can_context.items[i].mode = DRV_CAN_MODE_NORMAL;
+                can_context.items[i].tx_tick = 0U;
+                can_list_init(&can_context.items[i].rx_list);
+                can_list_init(&can_context.items[i].tx_list);
+            }
+            memset(can_event_cb_tbl, 0, sizeof(can_event_cb_tbl));
             GET_TBOX_MODULE_HANDLE(CAN, can_module_handle);
             break;
 
@@ -461,108 +754,208 @@ static INT32 can_init(UINT8 seq)
             break;
 
         case MODULE_INIT_SEQ_MODULE:
-            can_list_init(&recv_list);
-            
-            /* 初始化回调表 */
-            memset(can_event_cb_tbl, 0, sizeof(can_event_cb_tbl));
-            
-            /* 创建总线超时定时器 */
-            xBusTimerHandle = xTimerCreate(
-                "CanBTmr",                      /* 定时器名称 */
-                pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS), /* 10秒超时 */
-                pdFALSE,                        /* 自动重载 */
-                (VOID *)0,                      /* 定时器ID */
-                can_bus_timeout_callback);      /* 回调函数 */
-            
-            if (NULL_PTR == xBusTimerHandle) {
+            can_check_timer = xTimerCreate(
+                "CANCHECK",                      /* 定时器名称 */
+                pdMS_TO_TICKS(CAN_CHECK_PERIOD), /* 50MS超时 */
+                pdTRUE,                          /* 自动重载 */
+                (VOID *)0,                       /* 定时器ID */
+                can_check_timer_callback);       /* 回调函数 */
+            if (NULL_PTR == can_check_timer) 
+            {
                 MODULE_LOG_E(CAN, "create bus timer failed");
                 return (INT32)TBOX_E_FAILED_INIT;
             }
 
             can_buserr_init();
             can_busoff_init();
-            
-            can_if_regcb_internal(can_recovery_callback);
-            
             can_mgr_init();
-            
             can_shell_init();
-            
+
+            TBOX_ID can_module_id;
+            GET_TBOX_MODULE_ID(CAN, can_module_id);
             tbox_module_set_state(can_module_id, TBOX_MODULE_STATE_START);
             
-            MODULE_LOG_D(CAN, "CAN module initialized");
+            xTimerStart(can_check_timer, 0U);
+
+            MODULE_LOG_D(CAN, "can module initialized");
             break;
             
         default:
             break;
     }
 
-    MODULE_LOG_D(CAN, "init seq:%d, ret:%d", seq, ret);
-    return ret;
+    return (INT32)TBOX_E_OK;    
 }
 
-static VOID can_stop(VOID)
+static VOID  can_start(VOID)
 {
-    ulTaskNotifyValueClear(can_module_handle, 0xFFFFFFFFU);
-    
-    /* 停止定时器 */
-    if (xBusTimerHandle != NULL_PTR && pdTRUE == xTimerIsTimerActive(xBusTimerHandle)) {
-        xTimerStop(xBusTimerHandle, 0);
-    }
-    
-    /* 设置休眠标志 */
-    canbus_sleep = true;
-    canbus_active = false;
-    
-    /* 触发休眠事件 */
-    can_event_do_callback(CAN_EVENT_SLEEP, 0, 0);
-    
-    can_buserr_sleep();
-    can_busoff_sleep();
-    
-    /* 清除接收缓存 */
-    can_clear_recv_buffer();
-    
-    can_mgr_deinit();
-    
-    tbox_module_set_state(can_module_id, TBOX_MODULE_STATE_STOP);
-    
-    MODULE_LOG_I(CAN, "CAN module stopped");
-}
-
-static VOID can_start(VOID)
-{
-    /* 清除休眠标志 */
-    canbus_sleep = false;
-    
-    /* 触发唤醒事件 */
-    can_event_do_callback(CAN_EVENT_WAKEUP, 0, 0);
+    taskENTER_CRITICAL();
+    can_context.active_tick = 0U;
+    can_context.bus_active = FALSE;
+    can_context.bus_sleep = FALSE;
+    taskEXIT_CRITICAL();
     
     can_mgr_init();
-    
-    tbox_module_set_state(can_module_id, TBOX_MODULE_STATE_START);
-    
-    MODULE_LOG_I(CAN, "CAN module started");
-}
 
-static VOID can_exit(VOID)
-{
-    if (NULL_PTR != xBusTimerHandle) {
-        xTimerDelete(xBusTimerHandle, 0);
-        xBusTimerHandle = NULL_PTR;
+    if(pdFALSE == xTimerIsTimerActive(can_check_timer))
+    {
+        xTimerStart(can_check_timer, 0U);
     }
     
-    MODULE_LOG_I(CAN, "CAN module exited");
+    can_event_do_callback(CAN_EVENT_WAKEUP, 0U, 0U);
+
+    TBOX_ID can_module_id;
+    GET_TBOX_MODULE_ID(CAN, can_module_id);   
+    tbox_module_set_state(can_module_id, TBOX_MODULE_STATE_START);
+    
+    if(NULL_PTR != can_module_handle)
+    {
+        xTaskNotify(can_module_handle, CAN_TASK_EVENT_START, eSetBits);
+    }
+
+    MODULE_LOG_D(CAN, "can module started");    
+}
+
+static VOID  can_stop(VOID)
+{
+    if(NULL_PTR != can_module_handle)
+    {
+        ulTaskNotifyValueClear(can_module_handle, 0xFFFFFFFFU);
+    }
+    if (pdTRUE == xTimerIsTimerActive(can_check_timer)) 
+    {
+        xTimerStop(can_check_timer, 0U);
+    }
+    
+    taskENTER_CRITICAL();
+    can_context.active_tick = 0U;
+    can_context.bus_active = FALSE;
+    can_context.bus_sleep = TRUE;
+    can_rx_clear_list();
+    taskEXIT_CRITICAL();
+
+    can_buserr_sleep();
+    can_busoff_sleep();
+    can_mgr_deinit();
+
+    /* 触发休眠事件 */
+    can_event_do_callback(CAN_EVENT_SLEEP, 0U, 0U);
+    
+    TBOX_ID can_module_id;
+    GET_TBOX_MODULE_ID(CAN, can_module_id); 
+    tbox_module_set_state(can_module_id, TBOX_MODULE_STATE_STOP);
+
+    if(NULL_PTR != can_module_handle)
+    {
+        xTaskNotify(can_module_handle, CAN_TASK_EVENT_STOP, eSetBits);
+    }
+    
+    MODULE_LOG_D(CAN, "can module stopped");
+}
+
+static VOID  can_exit(VOID)
+{
+    if(NULL_PTR != can_module_handle)
+    {
+        ulTaskNotifyValueClear(can_module_handle, 0xFFFFFFFFU);
+    }
+    if (pdTRUE == xTimerIsTimerActive(can_check_timer)) 
+    {
+        xTimerStop(can_check_timer, 0U);
+    }
+    
+    taskENTER_CRITICAL();
+    can_context.active_tick = 0U;
+    can_context.bus_active = FALSE;
+    can_context.bus_sleep = TRUE;
+    can_rx_clear_list();
+    taskEXIT_CRITICAL();
+
+    can_buserr_sleep();
+    can_busoff_sleep();
+    can_mgr_deinit();
+
+    if(NULL_PTR != can_module_handle)
+    {
+        xTaskNotify(can_module_handle, CAN_TASK_EVENT_EXIT, eSetBits);
+    }
+    
+    MODULE_LOG_D(CAN, "can module exited");
+}
+
+static VOID  can_task(VOID *param)
+{
+    (VOID)param;
+
+    UINT32 notify_value = 0;
+    UINT32 event_bits;
+    UINT8 int_id;
+    
+    for(;;) 
+    {
+        notify_value = 0;
+        xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, portMAX_DELAY);
+
+        if (notify_value & CAN_TASK_EVENT_EXIT)
+        {
+            break;
+        }
+
+        if(TRUE == can_context.bus_sleep)
+        {
+            continue;
+        }
+
+        if (notify_value & CAN_TASK_EVENT_CHECK)
+        {
+            can_rx_handle_check();
+        }
+        for(int_id = 0U; int_id < DRV_CAN_INS_COUNT; int_id++)
+        {
+            event_bits = notify_value;
+            event_bits >>= (CAN_TASK_EVENT_BITNUM+int_id*CAN_RX_EVENT_BITNUM);
+            if(event_bits & CAN_RX_EVENT_RECEIVE)
+            {
+                can_rx_handle_receive(int_id);
+            }
+            if(event_bits & CAN_RX_EVENT_BUSERROR)
+            {
+                can_rx_handle_buserror(int_id);
+            }
+            if(event_bits & CAN_RX_EVENT_BUSOFF)
+            {
+                can_rx_handle_busoff(int_id);
+            }
+            if(event_bits & CAN_RX_EVENT_BUSOK)
+            {
+                can_rx_handle_busok(int_id);
+            }
+        }
+    }
+
+    MODULE_LOG_F(CAN, "can task exited");
+
+    if(NULL_PTR != can_check_timer)
+    {
+        xTimerDelete(can_check_timer, 0U);
+    }
+    if(NULL_PTR != can_module_handle)
+    {
+        can_module_handle = NULL_PTR;
+    }
+    vTaskDelete(NULL);
 }
 
 static INT32 can_tx_init(UINT8 seq)
 {
-    INT32 ret = (INT32)TBOX_E_OK;
-    
     switch (seq)
     {
         case MODULE_INIT_SEQ_OS:
-            GET_TBOX_MODULE_ID(CAN_TX, can_tx_module_id);
+            for(UINT8 i = 0U; i < DRV_CAN_INS_COUNT; i++)
+            {
+                can_context.items[i].tx_tick = 0U;
+                can_list_init(&can_context.items[i].tx_list);
+            }
             GET_TBOX_MODULE_HANDLE(CAN_TX, can_tx_module_handle);
             break;
 
@@ -570,241 +963,129 @@ static INT32 can_tx_init(UINT8 seq)
             break;
 
         case MODULE_INIT_SEQ_MODULE:
-            for (UINT8 i = 0; i < DRV_CAN_INS_COUNT; i++) {
-                can_list_init(&send_list[i]);
+            {
+              TBOX_ID can_tx_module_id;
+              GET_TBOX_MODULE_ID(CAN_TX, can_tx_module_id); 
+              tbox_module_set_state(can_tx_module_id, TBOX_MODULE_STATE_START);            
             }
-            
-            /* 创建发送定时器 */
-            xSendTimerHandle = xTimerCreate(
-                "CanSTmr",                      /* 定时器名称 */
-                pdMS_TO_TICKS(CAN_SEND_RETRY_MS), /* 周期（ms） */
-                pdFALSE,                        /* 自动重载（一次性定时器） */
-                (VOID *)0,                      /* 定时器ID */
-                can_send_timer_callback);       /* 回调函数 */
-            
-            if (NULL_PTR == xSendTimerHandle) {
-                MODULE_LOG_E(CAN, "create send timer failed");
-                return (INT32)TBOX_E_FAILED_INIT;
-            }
-            
-            tbox_module_set_state(can_tx_module_id, TBOX_MODULE_STATE_START);
-            
-            MODULE_LOG_D(CAN, "CAN TX module initialized");
+            MODULE_LOG_D(CAN_TX, "CAN TX module initialized");
             break;
             
         default:
             break;
     }
     
-    return ret;
+    return (INT32)TBOX_E_OK;
 }
 
-static VOID can_tx_stop(VOID)
+static VOID  can_tx_start(VOID)
 {
-    if (xSendTimerHandle != NULL_PTR && pdTRUE == xTimerIsTimerActive(xSendTimerHandle)) {
-        xTimerStop(xSendTimerHandle, 0);
+    taskENTER_CRITICAL();
+    for(UINT8 i = 0U; i < DRV_CAN_INS_COUNT; i++)
+    {
+        can_context.items[i].tx_tick = 0U;
     }
+    taskEXIT_CRITICAL();
     
-	can_clear_send_buffer();
+    TBOX_ID can_tx_module_id;
+    GET_TBOX_MODULE_ID(CAN_TX, can_tx_module_id);   
+    tbox_module_set_state(can_tx_module_id, TBOX_MODULE_STATE_START);
     
-    ulTaskNotifyValueClear(can_tx_module_handle, 0xFFFFFFFFU);
-    
+    if(NULL_PTR != can_tx_module_handle)
+    {
+        xTaskNotify(can_tx_module_handle, CAN_TASK_EVENT_START, eSetBits);
+    }
+
+    MODULE_LOG_D(CAN_TX, "CAN TX module started");    
+}
+
+static VOID  can_tx_stop(VOID)
+{
+    if(NULL_PTR != can_tx_module_handle)
+    {
+        ulTaskNotifyValueClear(can_tx_module_handle, 0xFFFFFFFFU);
+    }
+
+    taskENTER_CRITICAL();
+    can_tx_clear_list();
+    taskEXIT_CRITICAL();
+
+    TBOX_ID can_tx_module_id;
+    GET_TBOX_MODULE_ID(CAN_TX, can_tx_module_id);       
     tbox_module_set_state(can_tx_module_id, TBOX_MODULE_STATE_STOP);
-}
 
-static VOID can_tx_start(VOID)
-{
-}
-
-static VOID can_tx_exit(VOID)
-{
-    if (NULL_PTR != xSendTimerHandle) {
-        xTimerDelete(xSendTimerHandle, 0);
-        xSendTimerHandle = NULL_PTR;
+    if(NULL_PTR != can_tx_module_handle)
+    {
+        xTaskNotify(can_tx_module_handle, CAN_TASK_EVENT_STOP, eSetBits);
     }
+
+    MODULE_LOG_D(CAN_TX, "CAN TX module stoped");   
+}
+
+static VOID  can_tx_exit(VOID)
+{
+    if(NULL_PTR != can_tx_module_handle)
+    {
+        ulTaskNotifyValueClear(can_tx_module_handle, 0xFFFFFFFFU);
+    }
+
+    taskENTER_CRITICAL();
+    can_tx_clear_list();
+    taskEXIT_CRITICAL();
+
+    if(NULL_PTR != can_tx_module_handle)
+    {
+        xTaskNotify(can_tx_module_handle, CAN_TASK_EVENT_EXIT, eSetBits);
+    } 
+}
+
+static VOID  can_tx_task(VOID *param)
+{
+    (VOID)param;
+
+    UINT32 notify_value = 0;
+    UINT32 event_bits;
+    UINT8 int_id;
     
-    MODULE_LOG_I(CAN, "CAN TX module exited");
-}
-
-INT32 can_if_init(UINT8 ins, UINT32 rate, UINT8 mode)
-{
-    INT32 ret = 0;
-    UINT32 baudrate = rate;
-    TBOX_CFG_ID cfg_id = CFG_ID_INVALID;
-
-    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
+    for(;;) 
     {
-        return -1;
-    }
+        notify_value = 0;
+        xTaskNotifyWait(0U, 0xFFFFFFFFU, &notify_value, portMAX_DELAY);
 
-    /* 如果 rate 为 0，则从配置中读取 */
-    if (rate == 0) {
-        if (ins == 0) {
-            TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
-        } else if (ins == 1) {
-            TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
-        } else if (ins == 2) {
-            TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
-        } else {
-            return -1;
+        if (notify_value & CAN_TASK_EVENT_EXIT)
+        {
+            break;
         }
 
-        if (cfg_id == (TBOX_CFG_ID)CFG_ID_INVALID || cfg_id >= TBOX_CFG_ITEM_NUMBER) {
-            return -1;
+        if(TRUE == can_context.bus_sleep)
+        {
+            continue;
         }
 
-        ret = tbox_cfg_read(cfg_id, &baudrate);
-        if (ret < 0) {
-            return -1;
+        if (notify_value & CAN_TASK_EVENT_CHECK)
+        {
+            can_tx_handle_check();
         }
-
-        if (baudrate == 0) {
-            return -1;
-        }
-    } else {
-        /* 如果 rate 不为 0，更新配置 */
-        if (ins == 0) {
-            TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
-        } else if (ins == 1) {
-            TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
-        } else if (ins == 2) {
-            TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
-        } else {
-            return -1;
-        }
-
-        if (cfg_id != (TBOX_CFG_ID)CFG_ID_INVALID && cfg_id < TBOX_CFG_ITEM_NUMBER) {
-            ret = tbox_cfg_write(cfg_id, &baudrate);
-            if (ret < 0) {
-                /* 配置写入失败，但不影响初始化，继续执行 */
+        for(int_id = 0U; int_id < DRV_CAN_INS_COUNT; int_id++)
+        {
+            event_bits = notify_value;
+            event_bits >>= (CAN_TASK_EVENT_BITNUM+int_id*CAN_TX_EVENT_BITNUM);
+            if(event_bits & CAN_TX_EVENT_START)
+            {
+                can_tx_handle_start(int_id);
+            }
+            if(event_bits & CAN_TX_EVENT_DONE)
+            {
+                can_tx_handle_done(int_id);
             }
         }
     }
 
-    tbox_can_mode[ins] = mode;
-    drv_can_register(ins, can_isr_callback);
-    ret = drv_can_init(ins, baudrate, mode);
-    if (ret == 0) {
-        can_mgr_update_baudrate(ins, baudrate);
-    }
-    return ret;
-}
+    MODULE_LOG_F(CAN_TX, "can tx task exited");
 
-INT32 can_if_deinit(UINT8 ins)
-{
-    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
+    if(NULL_PTR != can_tx_module_handle)
     {
-        return -1;
+        can_tx_module_handle = NULL_PTR;
     }
-    tbox_can_mode[ins] = DRV_CAN_MODE_NORMAL;
-    can_mgr_update_baudrate(ins, 0);
-    return drv_can_deinit(ins);
-}
-
-INT32 can_if_setbaud(UINT8 ins, UINT32 baudrate, UINT8 reinit)
-{
-    TBOX_CFG_ID cfg_id = CFG_ID_INVALID;
-    INT32 ret;
-
-    if ((UINT8)ins >= (UINT8)DRV_CAN_INS_COUNT) 
-    {
-        return -1;
-    }
-
-    /* 验证波特率 */
-    if (baudrate != 0 && baudrate != 250 && baudrate != 500 && baudrate != 1000) {
-        return -2;
-    }
-
-    /* 获取配置 ID */
-    if (ins == 0) {
-        TBOX_CFG_ID_GET(CAN1BAUD, cfg_id);
-    } else if (ins == 1) {
-        TBOX_CFG_ID_GET(CAN2BAUD, cfg_id);
-    } else if (ins == 2) {
-        TBOX_CFG_ID_GET(CAN3BAUD, cfg_id);
-    } else {
-        return -1;
-    }
-
-    if (cfg_id == (TBOX_CFG_ID)CFG_ID_INVALID || cfg_id >= TBOX_CFG_ITEM_NUMBER) {
-        return -3;
-    }
-
-    /* 写入配置 */
-    ret = tbox_cfg_write(cfg_id, &baudrate);
-    if (ret != 0) {
-        return -4;
-    }
-
-    if (reinit != 0) {
-        if (drv_can_has_init(ins)) {
-            can_if_deinit(ins);
-        }
-        
-        if (baudrate != 0) {
-            ret = can_if_init(ins, baudrate, DRV_CAN_MODE_NORMAL);
-            if (ret != 0) {
-                return -5;
-            }
-        }
-    }
-
-    return 0;
-}
-
-INT32 can_if_send(can_msg_t *msg)
-{
-    if(NULL_PTR == msg || 
-      (UINT8)msg->ins >= (UINT8)DRV_CAN_INS_COUNT)
-    {
-        return -1;
-    }
-
-    if(!drv_can_has_init(msg->ins) || 
-      (DRV_CAN_MODE_NORMAL != tbox_can_mode[msg->ins]))
-    {
-        return -1;
-    }
-
-    if(0 != drv_can_send(msg))
-    {
-        taskENTER_CRITICAL();
-        can_node_t *node = can_list_malloc();
-        if (NULL_PTR != node)
-        {
-            memcpy(&node->msg, msg, sizeof(can_msg_t));
-            can_list_push(&send_list[msg->ins], node);
-            taskEXIT_CRITICAL();
-            
-            can_mgr_stat_add_send_msg(msg->ins);
-        }
-        else
-        {
-            taskEXIT_CRITICAL();
-            /* 队列满，发送失败 */
-            return -1;
-        }
-    }
-    else
-    {
-        can_mgr_stat_add_send_msg(msg->ins);
-        
-        if(pdFALSE == xTimerIsTimerActive(xSendTimerHandle))
-        {
-            xTimerStart(xSendTimerHandle, 0);
-        }
-    }
-
-    return 0;
-}
-
-BOOL can_if_is_bus_active(VOID)
-{
-    return canbus_active;
-}
-
-BOOL can_if_is_bus_sleep(VOID)
-{
-    return canbus_sleep;
+    vTaskDelete(NULL);
 }

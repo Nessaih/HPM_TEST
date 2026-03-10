@@ -41,6 +41,17 @@ static VOID gnss_com_datain_callback(VOID)
 	xTaskNotifyFromISR(gnss_task_handle, GNSS_COM_MSG_DATAIN, eSetBits, &task_switch);
 }
 
+static VOID gnss_com_drv_init(VOID)
+{
+	drv_eio_init(9600,gnss_com_datain_callback);
+}
+
+static VOID gnss_com_drv_reinit(VOID)
+{
+	drv_eio_deinit();
+	drv_eio_init(9600,gnss_com_datain_callback);
+}
+
 INT32 gnss_com_init(UINT8 seq)
 {
     switch (seq)
@@ -54,7 +65,7 @@ INT32 gnss_com_init(UINT8 seq)
 
         case MODULE_INIT_SEQ_MODULE:
 			GET_TBOX_MODULE_HANDLE(GNSS, gnss_task_handle);
-			drv_eio_init(9600,gnss_com_datain_callback);
+			gnss_com_drv_init();
             break;
 
         default:
@@ -64,4 +75,13 @@ INT32 gnss_com_init(UINT8 seq)
 	return 0;
 }
 
+VOID gnss_com_wake(VOID)
+{
+    drv_eio_wake();
+}
+
+VOID gnss_com_sleep(VOID)
+{
+    drv_eio_sleep();
+}
 

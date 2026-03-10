@@ -11,11 +11,19 @@ void can_mgr_deinit(void);
 
 void can_mgr_stat_add_recv_msgs(can_msg_t *msgs, uint32_t count);
 
+void can_mgr_stat_add_droprx_msgs(uint8_t ins, uint32_t count);
+
 void can_mgr_stat_add_send_msg(uint8_t ins);
+
+void can_mgr_stat_add_droptx_msg(uint8_t ins);
 
 uint32_t can_mgr_stat_get_recv_count(uint8_t ins);
 
+uint32_t can_mgr_stat_get_droprx_count(uint8_t ins);
+
 uint32_t can_mgr_stat_get_send_count(uint8_t ins);
+
+uint32_t can_mgr_stat_get_droptx_count(uint8_t ins);
 
 double can_mgr_stat_get_recv_rate(uint8_t ins);
 

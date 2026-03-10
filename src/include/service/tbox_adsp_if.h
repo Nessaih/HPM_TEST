@@ -15,13 +15,27 @@ typedef enum
     TBOX_ADSP_TYPE_MAX
 }TBOX_ADSP_TYPE;
 
-typedef BOOL (*TBOX_ADSP_IS_MATCH_FUNC)(UINT8 *data, UINT32 len);
-typedef VOID (*TBOX_ADSP_CB_FUNC)(UINT8 *data, UINT32 len);
+typedef enum
+{
+    TBOX_ADSP_MATCH_OK   = 0,
+    TBOX_ADSP_NOT_MATCH,
+    TBOX_ADSP_MATCH_NEED_MORE_DATA
+}TBOX_ADSP_MATCH_RESULT;
+
+typedef enum
+{
+    TBOX_ADSP_PROCESS_OK = 0,
+    TBOX_ADSP_NOT_PROCESS,
+    TBOX_ADSP_PROCESS_NEED_MORE_DATA
+}TBOX_ADSP_PROCESS_RESULT;
+
+typedef TBOX_ADSP_MATCH_RESULT (*TBOX_ADSP_MATCH_FUNC)(UINT8 *data, UINT32 len);
+typedef TBOX_ADSP_PROCESS_RESULT (*TBOX_ADSP_PROCESS_FUNC)(UINT8 *data, UINT32 len);
 typedef BOOL (*TBOX_ADSP_IS_EXIT_FUNC)(UINT8 *data, UINT32 len);
 
 INT32 tbox_adsp_register(TBOX_ADSP_TYPE type, 
-                         TBOX_ADSP_IS_MATCH_FUNC is_match_func, 
-                         TBOX_ADSP_CB_FUNC cb_func, 
+                         TBOX_ADSP_MATCH_FUNC match_func, 
+                         TBOX_ADSP_PROCESS_FUNC process_func, 
                          TBOX_ADSP_IS_EXIT_FUNC is_exit_func);
 
 #ifdef __cplusplus

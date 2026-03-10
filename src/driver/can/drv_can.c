@@ -293,7 +293,7 @@ int32_t drv_can_init(uint8_t ins, uint32_t rate, uint8_t mode)
     can_state[ins].is_busoff = FALSE;
     can_state[ins].tx_buzy   = FALSE;
     can_state[ins].rx_buzy   = FALSE;
-    can_state[ins].rx_tick   = xTaskGetTickCount();
+    can_state[ins].rx_tick   = 0U;
 
     return 0;
 }

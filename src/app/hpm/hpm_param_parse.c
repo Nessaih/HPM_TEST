@@ -215,7 +215,7 @@ static INT32 hpm_param_parse_co(hpm_fetch_config_t *config, const char *line)
         MODULE_LOG_E(HPM, "parse sequence error.");
         return -1;
     }
-    tbox_string_get_num_bylen((UINT8*)buf, sizeof(buf), &val);
+    tbox_string_get_num_bylen((UINT8 *)buf, sizeof(buf), &val);
     config->sequence = val;
 
     /* interval */
@@ -276,24 +276,16 @@ static INT32 hpm_param_parse_co(hpm_fetch_config_t *config, const char *line)
     return 0;
 }
 
-static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
+INT32 hpm_param_parse_node(hpm_fetch_node_t *node, const char *line)
 {
-    if (NULL_PTR == config || NULL_PTR == line)
+    if (NULL_PTR == node || NULL_PTR == line)
     {
-        return -1;
-    }
-
-    if (config->count >= HPM_FETCH_NODE_COUNT)
-    {
-        MODULE_LOG_E(HPM, "node count overflow");
         return -1;
     }
 
     const char *p = line;
     char buf[32] = {0};
     UINT32 val = 0;
-
-    hpm_fetch_node_t *node = &config->node[config->count];
 
     if (0 != hpm_param_split_str(&p, buf, sizeof(buf), ','))
     {
@@ -308,7 +300,14 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         return -1;
     }
     tbox_string_get_num_bylen((UINT8 *)buf, sizeof(buf), &val);
-    node->channel = (val - 1) & DRV_CAN_INS_COUNT;
+    if (val > 0)
+    {
+        node->channel = (val - 1) & DRV_CAN_INS_COUNT;
+    }
+    else
+    {
+        node->channel = 0;
+    }
 
     switch (node->type)
     {
@@ -320,7 +319,6 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         }
         hpm_fetch_param_hex_to_uint32(buf, &val);
         node->canid = val;
-        config->count++;
         break;
     case HPM_FETCH_NODE_CONSECTIVE:
         if (0 != hpm_param_split_str(&p, buf, sizeof(buf), ','))
@@ -346,10 +344,9 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         }
         hpm_fetch_param_hex_to_uint32(buf, &val);
         node->offset = val;
-        config->count++;
         break;
 
-    case HPM_FETCH_NODE_MULTI:
+    case HPM_FETCH_NODE_BDPGN:
         if (0 != hpm_param_split_str(&p, buf, sizeof(buf), ','))
         {
             MODULE_LOG_E(HPM, "parse es error.");
@@ -365,7 +362,6 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         }
         hpm_fetch_param_hex_to_uint32(buf, &val);
         node->pgn = val;
-        config->count++;
         break;
 
     case HPM_FETCH_NODE_PGN:
@@ -392,7 +388,6 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         }
         hpm_fetch_param_hex_to_uint32(buf, &val);
         node->pgn = val;
-        config->count++;
         break;
 
     case HPM_FETCH_NODE_UDS:
@@ -419,12 +414,34 @@ static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
         }
         hpm_fetch_param_hex_to_uint32(buf, &val);
         node->did = val;
-        config->count++;
         break;
     default:
         break;
     }
+    return 0;
+}
 
+static INT32 hpm_param_parse_es(hpm_fetch_config_t *config, const char *line)
+{
+    if (NULL_PTR == config || NULL_PTR == line)
+    {
+        return -1;
+    }
+
+    if (config->count >= HPM_FETCH_NODE_COUNT)
+    {
+        MODULE_LOG_E(HPM, "node count overflow");
+        return -1;
+    }
+
+    hpm_fetch_node_t *node = &config->node[config->count];
+
+    if (0 != hpm_param_parse_node(node, line))
+    {
+        return -1;
+    }
+
+    config->count++;
     return 0;
 }
 

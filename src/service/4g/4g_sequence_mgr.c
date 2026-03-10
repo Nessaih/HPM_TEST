@@ -115,10 +115,10 @@ uint8 seqmgr_4g_doseq(uint8 pri, SEQ_4G *seq, uint8 conflict_type)
     }
     if(1 == low_pri_has_run)
     {
-        MODULE_LOG_E(TBOX4G, "the low priority has run");
+        MODULE_LOG_W(TBOX4G, "the low priority has run");
         return 1;
     }
-    
+
     seq_4g[pri] = seq;
 
     if(NULL != seq_4g[pri]->begin)

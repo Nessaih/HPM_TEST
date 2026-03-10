@@ -9,8 +9,8 @@
 
 typedef struct 
 {
-    TBOX_ADSP_IS_MATCH_FUNC match_func;
-    TBOX_ADSP_CB_FUNC cb_func;
+    TBOX_ADSP_MATCH_FUNC match_func;
+    TBOX_ADSP_PROCESS_FUNC process_func;
     TBOX_ADSP_IS_EXIT_FUNC exit_func;
 }TBOX_ADSP_CB_INFO;
 
@@ -33,8 +33,8 @@ TBOX_MODULE_LOADER(TBOXADSP)
 }
 
 INT32 tbox_adsp_register(TBOX_ADSP_TYPE type, 
-                         TBOX_ADSP_IS_MATCH_FUNC is_match_func, 
-                         TBOX_ADSP_CB_FUNC cb_func, 
+                         TBOX_ADSP_MATCH_FUNC match_func, 
+                         TBOX_ADSP_PROCESS_FUNC process_func, 
                          TBOX_ADSP_IS_EXIT_FUNC is_exit_func)
 {
     if(type <= TBOX_ADSP_TYPE_NONE ||
@@ -43,8 +43,8 @@ INT32 tbox_adsp_register(TBOX_ADSP_TYPE type,
         return (INT32)TBOX_E_INVALID_PARAM;
     }
 
-    tbox_adsp_cb_info[type].match_func = is_match_func;
-    tbox_adsp_cb_info[type].cb_func = cb_func;
+    tbox_adsp_cb_info[type].match_func = match_func;
+    tbox_adsp_cb_info[type].process_func = process_func;
     tbox_adsp_cb_info[type].exit_func = is_exit_func;
     return (INT32)TBOX_E_OK;
 }
@@ -59,7 +59,7 @@ static INT32 tbox_adsp_init(UINT8 seq)
                 for(UINT8 i = 0U; i < TBOX_ADSP_TYPE_MAX; i++)
                 {
                     tbox_adsp_cb_info[i].match_func = NULL_PTR;
-                    tbox_adsp_cb_info[i].cb_func = NULL_PTR;
+                    tbox_adsp_cb_info[i].process_func = NULL_PTR;
                     tbox_adsp_cb_info[i].exit_func = NULL_PTR;
                 }
 
@@ -127,6 +127,9 @@ static VOID tbox_adsp_exit(VOID)
 static VOID tbox_adsp_task(VOID *param)
 {
 #define TBOX_ADPS_ONCE_READ_LEN  (256U)
+#define TBOX_ADPS_RETRY_COUNT    (10U)
+
+    UINT8 result;
     UINT32 event_bits;
     INT32 read_len;
     UINT8 *read_buffer = (UINT8 *)mempool_alloc(TBOX_ADPS_ONCE_READ_LEN);
@@ -158,41 +161,67 @@ static VOID tbox_adsp_task(VOID *param)
             continue;
         }
 
-        read_len = drv_uart_rx(read_buffer, TBOX_ADPS_ONCE_READ_LEN);
-        if(read_len <= 0)
+        for(UINT8 i = 0U; i < TBOX_ADPS_RETRY_COUNT; i++)
         {
-            continue;
-        }
-        if((UINT8)TBOX_ADSP_TYPE_NONE != tbox_adsp_curret_type)
-        {
-            if(NULL_PTR != tbox_adsp_cb_info[tbox_adsp_curret_type].cb_func)
+            read_len = drv_uart_get_data(read_buffer, TBOX_ADPS_ONCE_READ_LEN);
+            if(read_len <= 0)
             {
-                tbox_adsp_cb_info[tbox_adsp_curret_type].cb_func(read_buffer, (UINT32)read_len);
+                break;
             }
-        }
-        else
-        {
-            for(UINT8 i = 0U; i < TBOX_ADSP_TYPE_MAX; i++)
+            
+            MODULE_LOG_DUMP(TBOXADSP, "uart input data", read_buffer, read_len)
+
+            if((UINT8)TBOX_ADSP_TYPE_NONE != tbox_adsp_curret_type)
             {
-                if(NULL_PTR != tbox_adsp_cb_info[i].match_func && 
-                   TRUE == tbox_adsp_cb_info[i].match_func(read_buffer, (UINT32)read_len))
+                if(NULL_PTR != tbox_adsp_cb_info[tbox_adsp_curret_type].process_func)
                 {
-                    tbox_adsp_curret_type = i;
-                    if(NULL_PTR != tbox_adsp_cb_info[i].cb_func)
+                    result = (UINT8)tbox_adsp_cb_info[tbox_adsp_curret_type].process_func(read_buffer, (UINT32)read_len);
+                    if((UINT8)TBOX_ADSP_PROCESS_NEED_MORE_DATA == result)
                     {
-                        tbox_adsp_cb_info[i].cb_func(read_buffer, (UINT32)read_len);
+                        if(read_len >= TBOX_ADPS_ONCE_READ_LEN)
+                        {
+                            drv_uart_discard_data(read_len);
+                        }
+                        continue;
                     }
-                    break;
+                    drv_uart_discard_data(read_len);
+                }
+
+                if(NULL_PTR != tbox_adsp_cb_info[tbox_adsp_curret_type].exit_func)
+                {
+                    if(TRUE == tbox_adsp_cb_info[tbox_adsp_curret_type].exit_func(read_buffer, (UINT32)read_len))
+                    {
+                        tbox_adsp_curret_type = (UINT8)TBOX_ADSP_TYPE_NONE;
+                        break;
+                    }
                 }
             }
-        }
-        if((UINT8)TBOX_ADSP_TYPE_NONE != tbox_adsp_curret_type)
-        {
-            if(NULL_PTR != tbox_adsp_cb_info[tbox_adsp_curret_type].exit_func)
+            else
             {
-                if(TRUE == tbox_adsp_cb_info[tbox_adsp_curret_type].exit_func(read_buffer, (UINT32)read_len))
+                for(UINT8 i = 0U; i < TBOX_ADSP_TYPE_MAX; i++)
                 {
-                    tbox_adsp_curret_type = (UINT8)TBOX_ADSP_TYPE_NONE;
+                    if(NULL_PTR != tbox_adsp_cb_info[i].match_func)
+                    {
+                        result = (UINT8)tbox_adsp_cb_info[i].match_func(read_buffer, (UINT32)read_len);
+                        if((UINT8)TBOX_ADSP_MATCH_OK == result)
+                        {
+                             tbox_adsp_curret_type = i;
+                             MODULE_LOG_I(TBOXADSP, "tbox adsp match type:%d", tbox_adsp_curret_type);
+                             break;
+                        }
+                        else if((UINT8)TBOX_ADSP_MATCH_NEED_MORE_DATA == result)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            /*TODO:*/
+                        }
+                    }
+                }
+                if((UINT8)TBOX_ADSP_TYPE_NONE == tbox_adsp_curret_type && i == (TBOX_ADPS_RETRY_COUNT-1U))
+                {
+                    drv_uart_discard_data(read_len);
                 }
             }
         }

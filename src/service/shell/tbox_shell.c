@@ -9,8 +9,8 @@
 
 static INT32        tbox_shell_init(UINT8 seq);
 static inline INT32 tbox_shell_rstip(CHAR *str, UINT16 len);
-static BOOL         tbox_shell_is_match(UINT8 *data, UINT32 len);
-static VOID         tbox_shell_callback(UINT8 *data, UINT32 len);
+static TBOX_ADSP_MATCH_RESULT tbox_shell_is_match(UINT8 *data, UINT32 len);
+static TBOX_ADSP_PROCESS_RESULT tbox_shell_callback(UINT8 *data, UINT32 len);
 static BOOL         tbox_shell_is_exit(UINT8 *data, UINT32 len);
 
 TBOX_MODULE_FUN(TBOXSHELL, tbox_shell_init, NULL_PTR, NULL_PTR, NULL_PTR, NULL_PTR, NULL_PTR);
@@ -74,25 +74,25 @@ static inline INT32 tbox_shell_rstip(CHAR *str, UINT16 len)
     return (INT32)org_len;
 }
 
-static BOOL tbox_shell_is_match(UINT8 *data, UINT32 len)
+static TBOX_ADSP_MATCH_RESULT tbox_shell_is_match(UINT8 *data, UINT32 len)
 {
 #define TBOX_SHELL_MIN_BYTENUM (2U)
 #define TBOX_SHELL_MIN_CHARNUM (3U)
     if (len < TBOX_SHELL_MIN_BYTENUM)
     {
-        return FALSE;
+        return TBOX_ADSP_MATCH_NEED_MORE_DATA;
     }
     else if (len <= TBOX_SHELL_MIN_CHARNUM)
     {
         len = len - 1U;
         if (data[len] != '\r' && data[len] != '\n' && data[len] != '\0')
         {
-            return FALSE;
+            return TBOX_ADSP_NOT_MATCH;
         }
         len = len - 1U;
         if (data[len] != '\r' && data[len] != '\n')
         {
-            return FALSE;
+            return TBOX_ADSP_NOT_MATCH;
         }
     }
     else
@@ -102,15 +102,15 @@ static BOOL tbox_shell_is_match(UINT8 *data, UINT32 len)
         {
             if (!isprint(data[i]))
             {
-                return FALSE;
+                return TBOX_ADSP_NOT_MATCH;
             }
         }
     }
 
-    return TRUE;
+    return TBOX_ADSP_MATCH_OK;
 }
 
-static VOID tbox_shell_callback(UINT8 *data, UINT32 len)
+static TBOX_ADSP_PROCESS_RESULT tbox_shell_callback(UINT8 *data, UINT32 len)
 {
     BaseType_t continued;
     INT32      ret_len;
@@ -119,7 +119,7 @@ static VOID tbox_shell_callback(UINT8 *data, UINT32 len)
     ret_len = tbox_shell_rstip((CHAR *)data, (UINT16)len);
     if (ret_len < 0)
     {
-        return;
+        return TBOX_ADSP_NOT_PROCESS;
     }
 
     do
@@ -128,6 +128,8 @@ static VOID tbox_shell_callback(UINT8 *data, UINT32 len)
         continued = FreeRTOS_CLIProcessCommand((CHAR *)data, output, configCOMMAND_INT_MAX_OUTPUT_SIZE);
         tbox_log_raw_output(output, strlen(output));
     } while (continued);
+
+    return TBOX_ADSP_PROCESS_OK;
 }
 
 static BOOL tbox_shell_is_exit(UINT8 *data, UINT32 len)

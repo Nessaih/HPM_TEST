@@ -57,7 +57,7 @@ static void rx_callback(uint8 instance, Uart_EventType event)
         l = UART_DBG_RX_SIZE;
         break;
 
-    case UART_EVENT_DATA_MATCH:
+    case UART_EVENT_IDLE_LINE:
         status = Uart_Hal_GetReceiveStatus(UART_DBG_INSTANCE, &l);
         l      = UART_DBG_RX_SIZE - l;
         if (STATUS_BUSY == status) {
@@ -66,7 +66,6 @@ static void rx_callback(uint8 instance, Uart_EventType event)
         break;
 
     case UART_EVENT_ERROR:
-        Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
         break;
 
     default:
@@ -75,8 +74,8 @@ static void rx_callback(uint8 instance, Uart_EventType event)
 
     if (l > 0U) {
         l = cqueue_put(&dev->rx.queue, uart_rx_buf, l);
-        Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
     }
+    Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
     NVIC_EnableIRQ(UART_DBG_IRQN);
 
     if ((l > 0U) && (dev->rx.callback != NULL)) {
@@ -141,9 +140,10 @@ int32_t drv_uart_init(void)
     cqueue_init(&uart_device.tx.queue, uart_tq_buf, UART_DBG_TQ_SIZE);
 
     Uart_Hal_Init(UART_DBG_INSTANCE, &uart_config);
-    Uart_Hal_SetDataMatch(UART_DBG_INSTANCE, 0x0AU, true);
+    /*Uart_Hal_SetDataMatch(UART_DBG_INSTANCE, 0x0AU, true);
     Uart_Hal_SetMatchInterrupt(UART_DBG_INSTANCE, true);
-    Uart_Hal_ReceiveDataBlocking(UART_DBG_INSTANCE, uart_rx_buf, 2, 1000U);
+    Uart_Hal_ReceiveDataBlocking(UART_DBG_INSTANCE, uart_rx_buf, 2, 1000U);*/
+    Uart_Hal_SetIdleInterrupt(UART_DBG_INSTANCE, true);
     status = Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
 
     if (STATUS_SUCCESS != status) {
@@ -171,8 +171,13 @@ int32_t drv_uart_sleep(void)
 
 int32_t drv_uart_wake(void)
 {
-    if (!uart_device.init) {
+    if (!uart_device.init) 
+    {
         drv_uart_init();
+    }
+    else
+    {
+        Uart_Hal_ReceiveData(UART_DBG_INSTANCE, uart_rx_buf, UART_DBG_RX_SIZE);
     }
     return 0;
 }
@@ -223,6 +228,27 @@ int32_t drv_uart_rx(uint8_t *data, uint32_t len)
     l = cqueue_get(&uart_device.rx.queue, data, len);
     NVIC_EnableIRQ(UART_DBG_IRQN);
     return (int32_t)l;
+}
+
+int32_t drv_uart_get_data(uint8_t *data, uint32_t len)
+{
+    uint32_t l;
+
+    if (0U == uart_device.rx.queue.size) {
+        return -1;
+    }
+
+    NVIC_DisableIRQ(UART_DBG_IRQN);
+    l = cqueue_read(&uart_device.rx.queue, data, len);
+    NVIC_EnableIRQ(UART_DBG_IRQN);
+    return (int32_t)l;    
+}
+
+void drv_uart_discard_data(uint32_t len)
+{
+    NVIC_DisableIRQ(UART_DBG_IRQN);
+    cqueue_discard(&uart_device.rx.queue, len);
+    NVIC_EnableIRQ(UART_DBG_IRQN);
 }
 
 int32_t drv_uart_register(uart_cb_t cb)

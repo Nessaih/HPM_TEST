@@ -791,7 +791,7 @@ static void socket_4g_periodic_in_idle(void)
         socket_4g_seq.timeout = SOCKET_4G_SEND_TIMEOUT;
         if (0 != seqmgr_4g_doseq(SEQ_4G_PRI_HIGH, &socket_4g_seq, SEQ_4G_ABORT))
         {
-            MODULE_LOG_E(TBOX4G, "failed to do sequence");
+            MODULE_LOG_W(TBOX4G, "failed to do sequence");
             socket_4g_mgr.info[sel_index].period = SOCKET_4G_FAILED_PERIOD;
             return;
         }

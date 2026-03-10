@@ -22,12 +22,12 @@ static void can_buserr_timer_callback(TimerHandle_t xTimer)
     if (port >= DRV_CAN_INS_COUNT) {
         return;
     }
-    
-    MODULE_LOG_D(CAN, "CAN%u error recovery timeout, re-enable error interrupt", port + 1);
+
+    MODULE_LOG_D(CAN, "CAN%u error recovery timeout, re-enable error interrupt", port);
     if (drv_can_has_init(port)) {
         drv_can_enable_error_report(port, true);
     }
-    can_buserr_ctl[port].is_recovering = false;
+    //can_buserr_ctl[port].is_recovering = false;
     can_buserr_ctl[port].cnt = 0;
 }
 
@@ -41,7 +41,7 @@ void can_buserr_callback(uint8_t port, bool is_error)
         if (can_buserr_ctl[port].cnt > CAN_BUSERR_THRD) {
             if (!can_buserr_ctl[port].is_recovering) {
                 MODULE_LOG_D(CAN, "CAN%u error count:%u > threshold:%u, disable error interrupt for %ums", 
-                      port + 1, can_buserr_ctl[port].cnt, CAN_BUSERR_THRD, CAN_BUSERR_RECOVER_TIME);
+                      port, can_buserr_ctl[port].cnt, CAN_BUSERR_THRD, CAN_BUSERR_RECOVER_TIME);
                 
                 /* 关闭错误中断 */
                 drv_can_enable_error_report(port, false);
@@ -59,7 +59,7 @@ void can_buserr_callback(uint8_t port, bool is_error)
         /* 总线恢复正常 */
         if (can_buserr_ctl[port].is_recovering || can_buserr_ctl[port].cnt > 0) {
             MODULE_LOG_D(CAN, "CAN%u bus recovered to normal (error count was %u)", 
-                  port + 1, can_buserr_ctl[port].cnt);
+                  port, can_buserr_ctl[port].cnt);
         }
         
         if (buserr_timer[port] != NULL && pdTRUE == xTimerIsTimerActive(buserr_timer[port])) {

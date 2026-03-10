@@ -90,7 +90,7 @@ static BOOL hpm_mgr_allowed_start(VOID)
     {
         UINT32 wake_source = tbox_pm_io_get_wakesrc();
 
-        MODULE_LOG_E(HPM, "wake src = 0X%08X", wake_source);
+        MODULE_LOG_W(HPM, "wake src = 0X%08X", wake_source);
 
         /*RTC唤醒*/
         if (0 != (wake_source & (1U << PM_WAKE_SOURCE_RTC)))

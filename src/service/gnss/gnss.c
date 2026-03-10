@@ -123,7 +123,7 @@ static VOID gnss_stop(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_STOP);
 	gnss_control_sleep();
-    drv_eio_sleep();
+	gnss_com_sleep();
 	gnss_parse_sleep();
 	gnss_timer_stop();
 
@@ -133,7 +133,7 @@ static VOID  gnss_start(VOID)
 {
 	tbox_module_set_state(gnss_module_id, TBOX_MODULE_STATE_START);
 	gnss_control_wake();
-    drv_eio_wake();
+	gnss_com_wake();
 	gnss_parse_wake();
 	gnss_timer_start();
 }

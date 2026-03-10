@@ -13,9 +13,11 @@ INT32 fct_cmd_init(UINT8 seq);
 
 VOID fct_cmd_timeout(VOID);
 
-VOID fct_fctcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize);
+TBOX_ADSP_MATCH_RESULT fct_cmd_is_match(UINT8 *data, UINT32 len);
 
-VOID fct_eolcmd_process(const CHAR *indata, UINT16 inlen, CHAR *outdata, UINT32 outsize);
+TBOX_ADSP_PROCESS_RESULT fct_cmd_callback(UINT8 *data, UINT32 len);
+
+BOOL fct_cmd_is_exit(UINT8 *data, UINT32 len);
 
 #endif
 

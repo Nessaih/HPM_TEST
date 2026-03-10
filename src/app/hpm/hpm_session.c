@@ -89,7 +89,6 @@ static INT32 hpm_session_send_logout(UINT8 resp);
 static INT32 hpm_session_send_heartbeat(UINT8 resp);
 static INT32 hpm_session_send_report(UINT8 resp);
 
-static UINT8 hpm_session_send_buffer[HPM_SESSION_MAX_SEND_LEN];
 static HPM_SESSION_RUN_INFO_T hpm_session_run_info;
 static HPM_SESSION_STEP_E hpm_session_step;
 static hpm_session_run_e hpm_session_run_status;
@@ -196,7 +195,7 @@ INT32 hpm_sesion_get_data_seq(UINT8 *buf)
 static VOID hpm_session_step_set(HPM_SESSION_STEP_E status)
 {
     hpm_session_step = status;
-    MODULE_LOG_E(HPM, "hpm session status: %d", status);
+    MODULE_LOG_W(HPM, "hpm session status: %d", status);
 }
 
 UINT32 hpm_session_init(UINT8 seq)
@@ -284,24 +283,34 @@ static INT32 hpm_session_com_report(VOID)
         return -1;
     }
 
-    memset(hpm_session_send_buffer, 0, sizeof(hpm_session_send_buffer));
+    UINT8* buf = mempool_alloc(HPM_SESSION_MAX_SEND_LEN);
+    if (NULL_PTR == buf)
+    {
+        hpm_data_put_back_report_pack(pack);
+        MODULE_LOG_E(HPM, "alloc buf error");
+        return -1;
+    }
+    memset(buf, 0, HPM_SESSION_MAX_SEND_LEN);
 
-    INT32 len = hpm_pack_report_data(pack, hpm_session_send_buffer);
+    INT32 len = hpm_pack_report_data(pack, buf);
     if (len <= 0)
     {
+        mempool_free(buf);
         hpm_data_put_back_report_pack(pack);
         return -1;
     }
 
-    if (0 != hpm_net_send(hpm_session_send_buffer, len))
+    if (0 != hpm_net_send(buf, len))
     {
         hpm_data_put_back_report_pack(pack);
     }
     else
     {
         hpm_data_put_trans_list(pack);
-        MODULE_LOG_DUMP(HPM, "report data", hpm_session_send_buffer, len);
+        MODULE_LOG_DUMP(HPM, "report data", buf, len);
     }
+
+    mempool_free(buf);
 
     return 0;
 }
@@ -414,7 +423,7 @@ static INT32 hpm_session_send_login(UINT8 resp)
         {
             if (current_tick - sender->wait_time >= server_timeout)
             {
-                MODULE_LOG_E(HPM, "login timeout");
+                MODULE_LOG_W(HPM, "login timeout");
                 sender->state = HPM_SESSION_SEND_SUCCESS;
                 hpm_session_step_set(HPM_SESSION_STEP_INIT);
                 break;
@@ -594,7 +603,7 @@ static INT32 hpm_session_send_report(UINT8 resp)
             sender->retry_count = 0;
             sender->wait_time = 0;
             hpm_data_flush_trans_list();
-            MODULE_LOG_E(HPM, "tsp nack");
+            MODULE_LOG_W(HPM, "tsp nack");
             break;
         }
 
@@ -604,7 +613,7 @@ static INT32 hpm_session_send_report(UINT8 resp)
             sender->retry_count = 0;
             sender->wait_time = 0;
             hpm_data_flush_trans_list();
-            MODULE_LOG_E(HPM, "tsp timeout");
+            MODULE_LOG_W(HPM, "tsp timeout");
             hpm_socket_force_stop();
         }
 
@@ -655,7 +664,7 @@ static VOID hpm_session_proc_login(VOID)
         else
         {
             resp = HPM_SESSION_LOGIN_NACK;
-            MODULE_LOG_E(HPM, "login reject");
+            MODULE_LOG_W(HPM, "login reject");
         }
     }
     hpm_session_send_info[HPM_SESSION_EVENT_LOGIN].handle(resp);
@@ -747,7 +756,7 @@ VOID hpm_session_start(VOID)
 {
     if (HPM_SESSION_START == hpm_session_run_status)
     {
-        MODULE_LOG_E(HPM, "session already start");
+        MODULE_LOG_W(HPM, "session already start");
         return;
     }
     hpm_session_run_status = HPM_SESSION_START;
@@ -757,7 +766,7 @@ VOID hpm_session_stop(VOID)
 {
     if (HPM_SESSION_STOP == hpm_session_run_status)
     {
-        MODULE_LOG_E(HPM, "session already stop");
+        MODULE_LOG_W(HPM, "session already stop");
         return;
     }
     hpm_session_run_status = HPM_SESSION_STOP;

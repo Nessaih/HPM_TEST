@@ -116,6 +116,7 @@
 #define GPIO_LEVEL_NONE       2U
 // ====================================== GPIO CONFIGURATION DEFINITIONS END  ====================================== //
 
+
 typedef void (*drv_pin_cb_t)(uint32_t context);
 
 typedef struct

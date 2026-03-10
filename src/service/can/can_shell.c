@@ -34,18 +34,18 @@ static BaseType_t show_can_cmd(CHAR *buf, UINT32 bufsz, const CHAR *cmd)
         
         if (state < sizeof(state_str) / sizeof(state_str[0])) {
             len += snprintf(buf + len, bufsz - len, 
-                "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu(%.1f fps), send=%lu(%.1f fps)\r\n", 
+                "CAN%u: state=%s, baudrate=%lu kbps, recv=%lu(%.1f fps), drop_recv=%lu, send=%lu(%.1f fps), drop_send=%lu\r\n", 
                 i + 1, state_str[state],
                 can_mgr_get_baudrate(i), 
-                can_mgr_stat_get_recv_count(i), recv_rate,
-                can_mgr_stat_get_send_count(i), send_rate);
+                can_mgr_stat_get_recv_count(i), recv_rate, can_mgr_stat_get_droprx_count(i),
+                can_mgr_stat_get_send_count(i), send_rate, can_mgr_stat_get_droptx_count(i));
         } else {
             len += snprintf(buf + len, bufsz - len, 
-                "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu(%.1f fps), send=%lu(%.1f fps)\r\n", 
+                "CAN%u: state=UNKNOWN, baudrate=%lu kbps, recv=%lu(%.1f fps), drop_recv=%lu, send=%lu(%.1f fps), drop_send=%lu\r\n", 
                 i + 1, 
                 can_mgr_get_baudrate(i),
-                can_mgr_stat_get_recv_count(i), recv_rate,
-                can_mgr_stat_get_send_count(i), send_rate);
+                can_mgr_stat_get_recv_count(i), recv_rate, can_mgr_stat_get_droprx_count(i),
+                can_mgr_stat_get_send_count(i), send_rate, can_mgr_stat_get_droptx_count(i));
         }
     }
 

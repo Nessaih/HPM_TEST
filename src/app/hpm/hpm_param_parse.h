@@ -24,7 +24,7 @@ typedef enum
     HPM_FETCH_NODE_INVALID = 0,
     HPM_FETCH_NODE_SINGLE = 1,     // 车辆主动广播单帧数据
     HPM_FETCH_NODE_CONSECTIVE = 2, // 车辆主动广播多帧企业自定义广播
-    HPM_FETCH_NODE_MULTI = 3,      // 车辆主动广播多帧按照J1939 BAM广播
+    HPM_FETCH_NODE_BDPGN = 3,      // 车辆主动广播多帧按照J1939 BAM广播
     HPM_FETCH_NODE_PGN = 4,        // 终端按照J1939协议请求
     HPM_FETCH_NODE_UDS = 5,        // 终端按照UDS协议请求
 } hpm_fetch_node_type_e;
@@ -52,9 +52,9 @@ typedef struct
         UINT32 canid;
         struct
         {
-            UINT32 sa : 8;
-            UINT32 pgn : 16;
             UINT32 ta : 8;
+            UINT32 pgn : 16;
+            UINT32 sa : 8;
         };
     };
     UINT32 respid;
@@ -67,7 +67,7 @@ typedef struct
     UINT32 len : 16;
 } hpm_fetch_node_t;
 
-#define HPM_FETCH_SINGLE_COUNT (32UL)
+#define HPM_FETCH_SINGLE_COUNT (64UL)
 #define HPM_FETCH_MULTI_COUNT (10UL)
 
 #define HPM_FETCH_NODE_COUNT (HPM_FETCH_SINGLE_COUNT + HPM_FETCH_MULTI_COUNT)
@@ -113,5 +113,6 @@ UINT16 hpm_param_get_line(const char **p, char *line, UINT16 len);
 INT32 hpm_param_split_str(const char **src, char *dst, UINT16 len, char delim);
 hpm_fetch_line_type_e hpm_param_get_line_type(const char *line);
 INT32 hpm_param_parse_config(hpm_fetch_config_t *config, const char *line, hpm_fetch_line_type_e type);
+INT32 hpm_param_parse_node(hpm_fetch_node_t *node, const char *line);
 
 #endif

@@ -16,6 +16,8 @@ extern int32_t drv_uart_sleep(void);
 extern int32_t drv_uart_wake(void);
 extern int32_t drv_uart_tx(const uint8_t *data, uint32_t len);
 extern int32_t drv_uart_rx(uint8_t *data, uint32_t len);
+extern int32_t drv_uart_get_data(uint8_t *data, uint32_t len);
+extern void drv_uart_discard_data(uint32_t len);
 extern int32_t drv_uart_register(uart_cb_t cb);
 extern void drv_uart_flush(void);
 
