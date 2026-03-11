@@ -78,7 +78,7 @@ static BaseType_t se_shell_cmd(char *buf, size_t bufsz, const char *cmd)
 		} 
 		else 
 		{
-			tbox_log_print("Get SE Public Key failed, ret=%d, len=%d", ret);
+			tbox_log_print("Get SE version failed, ret=%d, len=%d", ret, data_len);
 		}
 		
 	}

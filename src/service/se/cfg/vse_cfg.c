@@ -6,6 +6,7 @@
 #include "drv_pin.h"
 #include "drv_spi.h"
 #include "vse_cfg.h"
+#include "OsIf_Time.h"
 
 #define VSE_DEBUG_ENABLE 1
 
@@ -15,9 +16,8 @@ static drv_spi_config_t vse_spi_config = {
     .mode     = DRV_SPI_MODE_0,
     .cs_mode  = DRV_SPI_CS_MODE_AUTO,
     .cs_index = DRV_SPI_CS_INDEX_0,
-    .speed    = 1000000UL,
+    .speed    = 500000UL,
 };
-
 
 void vse_gpio_reset(void)
 {
@@ -46,22 +46,23 @@ void vse_delay_ms(uint16_t msec)
 
 int32_t vse_get_time(vse_time_t *time)
 {
-    uint32_t tick;
+    uint32_t tick = xTaskGetTickCount();
 
-    tick       = (xTaskGetTickCount() / 10) - time_if_get_basetime_tick();
-    time->sec  = time_if_get_basetime_utc_s() + tick / 100;
-    time->msec = (tick % 100) * 10;
+    time->sec  = time_if_get_basetime_utc_s() + tick / 1000;
+    time->msec = tick % 1000;
     return 0;
 }
 
 int32_t vse_init(void)
 {
-    return drv_spi_init(&vse_spi_config, &vse_spi_handle);
+    drv_spi_init(&vse_spi_config, &vse_spi_handle);
+    return 0;
 }
 
 int32_t vse_deinit(void)
 {
-    return drv_spi_deinit(&vse_spi_handle);
+    drv_spi_deinit(&vse_spi_handle);
+    return 0;
 }
 
 int32_t vse_send(uint8_t *data, uint16_t length)
@@ -105,6 +106,7 @@ void vse_printf(const char *fmt, ...)
     va_start(args, fmt);
     vsnprintf(vse_log, sizeof(vse_log) - 1, fmt, args);
     va_end(args);
+    tbox_log_raw_output(vse_log, strlen(vse_log));
     tbox_log_flush();
 #endif
 }

@@ -80,7 +80,7 @@ bool time_if_is_set(void)
  *@date   2021-11-12
  *@author vic
  */
-void                dev_time_set(const DEV_TIME *time)
+void dev_time_set(const DEV_TIME *time)
 {
     struct tm cur_time;
 

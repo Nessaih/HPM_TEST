@@ -98,7 +98,7 @@ int32_t drv_spi_nor_flash_transfer(uint8_t *tx_buf, uint8_t *rx_buf, uint32_t le
 
     if (SPI_TRANSCEIVE_SUCCESS != status)
     {
-        DRV_LOG_E(DRVFLASH, "efs spi transfer get status error, status = %d", status);
+        DRV_LOG_E(NorFlash, "efs spi transfer get status error, status = %d", status);
         drv_spi_nor_flash_is_busy = false;
         return -3;
     }

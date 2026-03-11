@@ -14,18 +14,13 @@ struct spi_config
 
 struct spi_handle
 {
-    uint8_t          instance;
-    uint8_t          mode;
-    uint8_t          cs_mode;
-    uint8_t          cs_index;
-    uint32_t         speed;
-    volatile uint8_t is_init;
-    volatile uint8_t is_buzy;
+    struct spi_config *config;
+    volatile uint8_t   is_init;
+    volatile uint8_t   is_buzy;
 };
 
 typedef struct spi_config drv_spi_config_t;
 typedef struct spi_handle drv_spi_handle_t;
-
 
 #define DRV_SPI_INSTANCE_COUNT 3
 
@@ -42,8 +37,6 @@ typedef struct spi_handle drv_spi_handle_t;
 #define DRV_SPI_CS_INDEX_2     2
 #define DRV_SPI_CS_INDEX_3     3
 #define DRV_SPI_CS_INDEX_GPIO  4
-
-
 
 int32_t drv_spi_init(drv_spi_config_t *config, drv_spi_handle_t *handle);
 int32_t drv_spi_deinit(drv_spi_handle_t *handle);

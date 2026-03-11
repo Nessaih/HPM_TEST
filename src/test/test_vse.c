@@ -7,6 +7,9 @@
 #include "vse_cfg.h"
 
 
+static char log_buf[1024] = {0};
+
+#define log_print(fmt, ...) snprintf(log_buf, sizeof(log_buf), fmt, ##__VA_ARGS__);tbox_log_raw_output(log_buf,strlen(log_buf))
 
 #define TEST_FUNC_PERFORMANCE(func, times)                                                                                                           \
     do                                                                                                                                               \
@@ -19,10 +22,10 @@
         uint32_t   max_ticks     = 0;                                                                                                                \
         uint32_t   current_ticks;                                                                                                                    \
         int        ret;                                                                                                                              \
-        LOG_PRINT("========================================\n");                                                                                     \
-        LOG_PRINT("Function Test: %s\n", #func);                                                                                                     \
-        LOG_PRINT("Iterations: %lu\n", (uint32_t)(times));                                                                                           \
-        LOG_PRINT("----------------------------------------\n");                                                                                     \
+        log_print("========================================\n");                                                                                     \
+        log_print("Function Test: %s\n", #func);                                                                                                     \
+        log_print("Iterations: %lu\n", (uint32_t)(times));                                                                                           \
+        log_print("----------------------------------------\n");                                                                                     \
         for (uint32_t i = 0; i < (times); i++)                                                                                                       \
         {                                                                                                                                            \
             start_ticks = xTaskGetTickCount();                                                                                                       \
@@ -58,23 +61,23 @@
                 fail_count++;                                                                                                                        \
             }                                                                                                                                        \
         }                                                                                                                                            \
-        LOG_PRINT("----------------------------------------\n");                                                                                     \
-        LOG_PRINT("Performance Results:\n");                                                                                                         \
-        LOG_PRINT("  Total ticks: %lu\n", total_ticks);                                                                                              \
-        LOG_PRINT("  Average ticks per execution: %.2f\n", (float)total_ticks / (times));                                                            \
-        LOG_PRINT("  Min ticks: %lu (%.2f ms)\n", min_ticks, (float)min_ticks *portTICK_PERIOD_MS);                                                  \
-        LOG_PRINT("  Max ticks: %lu (%.2f ms)\n", max_ticks, (float)max_ticks *portTICK_PERIOD_MS);                                                  \
-        LOG_PRINT("  Total time: %.2f ms\n", (float)total_ticks *portTICK_PERIOD_MS);                                                                \
-        LOG_PRINT("  Average time per execution: %.2f ms\n", (float)total_ticks *portTICK_PERIOD_MS / (times));                                      \
-        LOG_PRINT("\nSuccess/Failure Statistics:\n");                                                                                                \
-        LOG_PRINT("  Success: %lu\n", success_count);                                                                                                \
-        LOG_PRINT("  Fail: %lu\n", fail_count);                                                                                                      \
-        LOG_PRINT("  Success rate: %.2f%%\n", (float)success_count * 100.0f / (times));                                                              \
-        LOG_PRINT("========================================\n\n");                                                                                   \
+        log_print("----------------------------------------\n");                                                                                     \
+        log_print("Performance Results:\n");                                                                                                         \
+        log_print("  Total ticks: %lu\n", total_ticks);                                                                                              \
+        log_print("  Average ticks per execution: %.2f\n", (double)total_ticks / (times));                                                            \
+        log_print("  Min ticks: %lu (%.2f ms)\n", min_ticks, (double)min_ticks *portTICK_PERIOD_MS);                                                  \
+        log_print("  Max ticks: %lu (%.2f ms)\n", max_ticks, (double)max_ticks *portTICK_PERIOD_MS);                                                  \
+        log_print("  Total time: %.2f ms\n", (double)total_ticks *portTICK_PERIOD_MS);                                                                \
+        log_print("  Average time per execution: %.2f ms\n", (double)total_ticks *portTICK_PERIOD_MS / (times));                                      \
+        log_print("\nSuccess/Failure Statistics:\n");                                                                                                \
+        log_print("  Success: %lu\n", success_count);                                                                                                \
+        log_print("  Fail: %lu\n", fail_count);                                                                                                      \
+        log_print("  Success rate: %.2f%%\n", (double)success_count * 100.0f / (times));                                                              \
+        log_print("========================================\n\n");                                                                                   \
     } while (0)
 
 #define FUNC_MSG_PRINT(...)
-// #define FUNC_MSG_PRINT(...)  LOG_PRINT(__VA_ARGS__)
+// #define FUNC_MSG_PRINT(...)  log_print(__VA_ARGS__)
 
 #define MSG_MAX_SIZE (1024)
 
@@ -171,7 +174,6 @@ int32_t test_vse_crypt(void)
     sm2_cipher_t cipher;
     uint16_t     msg_len = SM2_CIPHER_C2_SIZE;
     uint16_t     i;
-    int32_t      ret = -1;
 
     for (i = 0; i < msg_len; ++i)
     {
@@ -265,6 +267,6 @@ exit:
 void vse_test(void)
 {
     TEST_FUNC_PERFORMANCE(test_vse_init, 1);
-    TEST_FUNC_PERFORMANCE(test_vse_version, 10);
-    TEST_FUNC_PERFORMANCE(test_vse_sm2key, 10);
+    TEST_FUNC_PERFORMANCE(test_vse_version, 1000);
+    TEST_FUNC_PERFORMANCE(test_vse_sm2key, 100);
 }

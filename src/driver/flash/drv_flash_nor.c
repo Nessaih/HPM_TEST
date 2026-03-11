@@ -4,6 +4,7 @@
 #include "drv_pin.h"
 #include "drv_spi.h"
 
+
 #define EFS_CMD_JEDEC_ID               (0X9F)
 #define EFS_CMD_WRITE_ENABLE           (0X06)
 #define EFS_CMD_WRITE_DISABLE          (0X04)
@@ -50,8 +51,6 @@ typedef union
 static efs_data_t efs_txbuf;
 static efs_data_t efs_rxbuf;
 
-#define VSE_DEBUG_ENABLE 1
-
 static drv_spi_handle_t nor_spi_handle;
 static drv_spi_config_t nor_spi_config = {
     .instance = 1,
@@ -66,19 +65,17 @@ static void drv_flash_nor_write_enable(void)
     efs_txbuf.cmd = EFS_CMD_WRITE_ENABLE;
     if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 1))
     {
-        DRV_LOG_E(DRVFLASH, "efs write enable error");
+        DRV_LOG_E(NorFlash, "efs write enable error");
     }
 }
 
 static void drv_flash_nor_write_disable(void)
 {
-#if 0
     efs_txbuf.cmd = EFS_CMD_WRITE_DISABLE;
-    if (0 != drv_spi_nor_flash_transfer(efs_txbuf.buffer, efs_rxbuf.buffer, 1,SPI_PCS_3))
+    if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 1))
     {
-        DRV_LOG_E(DRVFLASH, "write disable error");
+        DRV_LOG_E(NorFlash, "write disable error");
     }
-#endif
 }
 
 static int32_t drv_flash_nor_read_status_reg1(void)
@@ -87,7 +84,7 @@ static int32_t drv_flash_nor_read_status_reg1(void)
     efs_txbuf.cmd = EFS_CMD_READ_STATUS_REG1;
     if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 2))
     {
-        DRV_LOG_E(DRVFLASH, "read reg1 error");
+        DRV_LOG_E(NorFlash, "read reg1 error");
     }
     return efs_rxbuf.buffer[1];
 }
@@ -115,7 +112,7 @@ int32_t drv_flash_nor_get_id(uint32_t *id)
     efs_txbuf.addr = 0;
     if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 4))
     {
-        DRV_LOG_E(DRVFLASH, "ease sector error");
+        DRV_LOG_E(NorFlash, "ease sector error");
     }
     *id = 0;
     memcpy(id, &efs_rxbuf.buffer[1], 3);
@@ -132,7 +129,7 @@ int32_t drv_flash_nor_init(void)
     efs_txbuf.cmd = EFS_CMD_4BYTES_ADDR;
     if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 1))
     {
-        DRV_LOG_E(DRVFLASH, "enter 4bytes mode fail");
+        DRV_LOG_E(NorFlash, "enter 4bytes mode fail");
     }
     drv_flash_nor_write_disable();
     return 0;
@@ -193,7 +190,7 @@ int32_t drv_flash_nor_erase(uint32_t addr, uint16_t n_4KB)
         efs_txbuf.addr = EFS_INVERT32(erase_addr);
         if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, 5))
         {
-            DRV_LOG_E(DRVFLASH, "ease sector error");
+            DRV_LOG_E(NorFlash, "ease sector error");
         }
         drv_flash_nor_write_disable();
     }
@@ -219,7 +216,7 @@ int32_t drv_flash_nor_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         efs_txbuf.addr = EFS_INVERT32(addr);
         if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + rlen))
         {
-            DRV_LOG_E(DRVFLASH, "ease sector error");
+            DRV_LOG_E(NorFlash, "ease sector error");
         }
         drv_flash_nor_write_disable();
 
@@ -253,7 +250,7 @@ int32_t drv_flash_nor_write(uint32_t addr, uint8_t *data, uint32_t data_len)
 
         if (0 != drv_spi_transfer(&nor_spi_handle, efs_txbuf.buffer, efs_rxbuf.buffer, EFS_TRANSFER_HEAD_SIZE + wlen))
         {
-            DRV_LOG_E(DRVFLASH, "efs write data error");
+            DRV_LOG_E(NorFlash, "efs write data error");
             return 1;
         }
         drv_flash_nor_write_disable();

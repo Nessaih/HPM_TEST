@@ -3,9 +3,8 @@
 #include "drv_log.h"
 #include "drv_spi.h"
 
-#define DRV_SPI_NAME "SPI"
 
-static Spi_HalConfigType *spi_init_hal_config(drv_spi_config_t *config)
+static Spi_HalConfigType *hal_init_struct(drv_spi_config_t *config)
 {
     static Spi_HalConfigType hal_cfg;
 
@@ -18,7 +17,6 @@ static Spi_HalConfigType *spi_init_hal_config(drv_spi_config_t *config)
     hal_cfg.Mode     = SPI_MASTER;
     hal_cfg.Cpol     = SPI_CPOL_LOW;
     hal_cfg.Cpha     = SPI_CPHA_0;
-    hal_cfg.PcsCfg   = SPI_PCS_0;
     hal_cfg.PcsPol   = SPI_PCS_POLARITY_LOW;
     hal_cfg.HreqPol  = SPI_HREQ_POLARITY_HIGH;
     hal_cfg.Width    = SPI_DATA_WIDTH_1BIT;
@@ -26,6 +24,7 @@ static Spi_HalConfigType *spi_init_hal_config(drv_spi_config_t *config)
     hal_cfg.Callback = NULL_PTR;
 
     hal_cfg.BaudRate = config->speed;
+    hal_cfg.PcsCfg   = (Spi_PcsType)config->cs_index;
 
     if (config->cs_mode == DRV_SPI_CS_MODE_AUTO)
     {
@@ -64,16 +63,18 @@ static Spi_HalConfigType *spi_init_hal_config(drv_spi_config_t *config)
     return &hal_cfg;
 }
 
-static int32_t check_instance_valid(drv_spi_handle_t *handle)
+static int32_t handle_is_invalid(drv_spi_handle_t *handle)
 {
     if (handle == NULL)
         return -1;
-    if (handle->instance >= DRV_SPI_INSTANCE_COUNT)
+    if (handle->config == NULL)
         return -2;
-    if (handle->is_init == FALSE)
+    if (handle->config->instance >= DRV_SPI_INSTANCE_COUNT)
         return -3;
-    if (handle->is_buzy)
+    if (handle->is_init == FALSE)
         return -4;
+    if (handle->is_buzy)
+        return -5;
 
     return 0;
 }
@@ -82,22 +83,15 @@ int32_t drv_spi_init(drv_spi_config_t *config, drv_spi_handle_t *handle)
 {
     if (config == NULL || handle == NULL)
         return -1;
-
     if (config->instance >= DRV_SPI_INSTANCE_COUNT)
         return -2;
 
-    handle->instance = config->instance;
-    handle->mode     = config->mode;
-    handle->cs_mode  = config->cs_mode;
-    handle->cs_index = config->cs_index;
-    handle->speed    = config->speed;
-    handle->is_init  = FALSE;
-    handle->is_buzy  = FALSE;
-
-    Spi_HalConfigType *hal_cfg = spi_init_hal_config(config);
-
+    Spi_Hal_DeInit(config->instance);
+    handle->config             = config;
+    handle->is_init            = FALSE;
+    handle->is_buzy            = FALSE;
+    Spi_HalConfigType *hal_cfg = hal_init_struct(config);
     Spi_Hal_Init(config->instance, hal_cfg);
-
     handle->is_init = TRUE;
     handle->is_buzy = FALSE;
 
@@ -106,14 +100,14 @@ int32_t drv_spi_init(drv_spi_config_t *config, drv_spi_handle_t *handle)
 
 int32_t drv_spi_deinit(drv_spi_handle_t *handle)
 {
-    if (handle == NULL)
-        return -1;
+    int32_t status = handle_is_invalid(handle);
 
-    if (handle->is_init == FALSE)
-        return -2;
-
-    Spi_Hal_DeInit(handle->instance);
-
+    if (status)
+    {
+        DRV_LOG_E(DRVSPI, "spi%d invalid:%d", handle->config->instance, status);
+        return status;
+    }
+    Spi_Hal_DeInit(handle->config->instance);
     handle->is_init = FALSE;
     handle->is_buzy = FALSE;
 
@@ -132,39 +126,33 @@ int32_t drv_spi_write(drv_spi_handle_t *handle, uint8_t *buf, uint32_t length)
 
 int32_t drv_spi_transfer(drv_spi_handle_t *handle, uint8_t *tx_buf, uint8_t *rx_buf, uint32_t length)
 {
-    int32_t status  = check_instance_valid(handle);
-    int32_t timeout = 100;
+    int32_t status  = handle_is_invalid(handle);
+    int32_t timeout = 10000;
 
     if (status)
     {
-        DRV_LOG_E(DRV_SPI_NAME, "spi%d invalid:%d", handle->instance, status);
+        DRV_LOG_E(DRVSPI, "spi%d invalid:%d", handle->config->instance, status);
         return status;
     }
 
     handle->is_buzy = TRUE;
 
-    if (handle->cs_mode == DRV_SPI_CS_MODE_AUTO)
-    {
-        Spi_Hal_SetCsPin(handle->instance, (Spi_PcsType)handle->cs_index, SPI_PCS_POLARITY_LOW);
-    }
-    status = Spi_Hal_TransceivePoll(handle->instance, tx_buf, rx_buf, length, 50000UL);
+    status = Spi_Hal_TransceivePoll(handle->config->instance, tx_buf, rx_buf, length, 50000UL);
     if (STATUS_SUCCESS != status)
     {
-        DRV_LOG_E(DRV_SPI_NAME, "spi%d error:%d", handle->instance, status);
+        DRV_LOG_E(DRVSPI, "spi%d error:%d", handle->config->instance, status);
         handle->is_buzy = FALSE;
         return -5;
     }
 
     do
     {
-        status = Spi_Hal_GetTransceiveStatus(handle->instance);
+        status = Spi_Hal_GetTransceiveStatus(handle->config->instance);
+        delay_us(200);
         if (SPI_TRANSCEIVE_SUCCESS == status)
         {
             break;
         }
-
-        vTaskDelay(pdMS_TO_TICKS(1));
-
         timeout--;
     } while (timeout > 0);
 
@@ -172,9 +160,7 @@ int32_t drv_spi_transfer(drv_spi_handle_t *handle, uint8_t *tx_buf, uint8_t *rx_
 
     if (SPI_TRANSCEIVE_SUCCESS != status)
     {
-
-        DRV_LOG_E(DRV_SPI_NAME, "spi%d error:%d", handle->instance, status);
-
+        DRV_LOG_E(DRVSPI, "spi%d error:%d", handle->config->instance, status);
         return -6;
     }
 
