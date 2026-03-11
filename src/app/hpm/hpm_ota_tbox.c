@@ -148,9 +148,9 @@ static VOID hpm_ota_tbox_send_resp(VOID)
 	}
 
 	res = mempool_alloc(16);
-	if(NULL == buf)
+	if(NULL == res)
 	{
-		MODULE_LOG_E(HPM, "hpm control buf memalloc failed");
+		MODULE_LOG_E(HPM, "hpm control res memalloc failed");
 		mempool_free(buf);
 		return;
 	}

@@ -65,8 +65,8 @@ extern "C" {
 #ifdef FDB_DEBUG_ENABLE
 
 #ifndef FDB_PRINT
-#include "main.h"
-#define FDB_PRINT(...) log_print(__VA_ARGS__)
+#include "tbox_log.h"
+#define FDB_PRINT(...) LOG_PRINT(__VA_ARGS__)
 #endif
 #else
 #define FDB_PRINT(...) while(0)

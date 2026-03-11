@@ -33,8 +33,8 @@
  * └────────┴──────────────────────────┴──────────────┴───────────────────────────────────────────────────────┘
  */
 
-#define FLASH_PPAGE_SIZE       0x00002000
-#define FLASH_DPAGE_SIZE       0x00000800
+#define FLASH_PPAGE_SIZE       0x00002000U
+#define FLASH_DPAGE_SIZE       0x00000800U
 
 #define FLASH_BOOT_ADDR        0x00000000U
 #define FLASH_BOOT_LEN         0x00018000U
@@ -52,7 +52,7 @@
 
 /* =============================================  MCU Flash Memory Map ============================================= */
 
-/* =============================================  NOR Flash Memory Map ============================================= */
+/* =============================================  Extern Flash Memory Map ============================================= */
 /*
  * ┌────────┬──────────────────────────┬──────────────┬───────────────────────────────────────────────────────┐
  * │ Block  │Address                   │ Size(byte)   │ Description                                           │
@@ -68,68 +68,32 @@
  * │   5    │0x01D8 0000 ~ 0x01F7 FFFF │ 2    M       │ Important runing parameters (backup area 2)           │
  * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
  * │   6    │0x01F8 0000 ~ 0x01FF FFFF │ 0.5  M       │ Reserved for drivers                                  │
+ * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
+ * │   7    │0x0200 0000 ~ 0x0767 FFFF │ 86.5 M       │ Reserved Only SD Flash Supported                      │
  * └────────┴──────────────────────────┴──────────────┴───────────────────────────────────────────────────────┘
  */
-#define FLASH_NOR_ERASE_SIZE   (0x00001000)
 
-#define FLASH_NOR_ADDR_BLOCK1  (0x00000000)
-#define FLASH_NOR_SIZE_BLOCK1  (0x00080000)
+#define FLASH_NOR_ERASE_SIZE   (0x00001000U)
+#define FLASH_NAND_ERASE_SIZE  (0x00020000U)
 
-#define FLASH_NOR_ADDR_BLOCK2  (0x00080000)
-#define FLASH_NOR_SIZE_BLOCK2  (0x00400000)
+#define FLASH_EXT_ADDR_BLOCK1  (0x00000000U)
+#define FLASH_EXT_SIZE_BLOCK1  (0x00080000U)
 
-#define FLASH_NOR_ADDR_BLOCK3  (0x00480000)
-#define FLASH_NOR_SIZE_BLOCK3  (0x00200000)
+#define FLASH_EXT_ADDR_BLOCK2  (0x00080000U)
+#define FLASH_EXT_SIZE_BLOCK2  (0x00400000U)
 
-#define FLASH_NOR_ADDR_BLOCK4  (0x00680000)
-#define FLASH_NOR_SIZE_BLOCK4  (0x01700000)
+#define FLASH_EXT_ADDR_BLOCK3  (0x00480000U)
+#define FLASH_EXT_SIZE_BLOCK3  (0x00200000U)
 
-#define FLASH_NOR_ADDR_BLOCK5  (0x01D80000)
-#define FLASH_NOR_SIZE_BLOCK5  (0x00200000)
+#define FLASH_EXT_ADDR_BLOCK4  (0x00680000U)
+#define FLASH_EXT_SIZE_BLOCK4  (0x01700000U)
 
-#define FLASH_NOR_ADDR_BLOCK6  (0x01F80000)
-#define FLASH_NOR_SIZE_BLOCK6  (0x00080000)
+#define FLASH_EXT_ADDR_BLOCK5  (0x01D80000U)
+#define FLASH_EXT_SIZE_BLOCK5  (0x00200000U)
 
-/* =============================================  NOR Flash Memory Map ============================================= */
+#define FLASH_EXT_ADDR_BLOCK6  (0x01F80000U)
+#define FLASH_EXT_SIZE_BLOCK6  (0x00080000U)
 
-/* =============================================  Nand Flash Memory Map ============================================= */
-/*
- * ┌────────┬──────────────────────────┬──────────────┬───────────────────────────────────────────────────────┐
- * │ Block  │Address                   │ Size(byte)   │ Description                                           │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   1    │0x0000 0000 ~ 0x0007 FFFF │ 0.5  M       │ Upgrade file storage                                  │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   2    │0x0008 0000 ~ 0x0047 FFFF │ 4    M       │ Runing parameters                                     │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   3    │0x0048 0000 ~ 0x0067 FFFF │ 2    M       │ Important runing parameters (backup area 1)           │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   4    │0x0068 0000 ~ 0x01D7 FFFF │ 23   M       │ Reissue data                                          │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   5    │0x01D8 0000 ~ 0x01F7 FFFF │ 2    M       │ Important runing parameters (backup area 2)           │
- * ├────────┼──────────────────────────┼──────────────┼───────────────────────────────────────────────────────┤
- * │   6    │0x01F8 0000 ~ 0x01FF FFFF │ 0.5  M       │ Reserved for drivers                                  │
- * └────────┴──────────────────────────┴──────────────┴───────────────────────────────────────────────────────┘
- */
-#define FLASH_NAND_ERASE_SIZE  (0x00020000)
-
-#define FLASH_NAND_ADDR_BLOCK1 (0x00000000)
-#define FLASH_NAND_SIZE_BLOCK1 (0x00080000)
-
-#define FLASH_NAND_ADDR_BLOCK2 (0x00080000)
-#define FLASH_NAND_SIZE_BLOCK2 (0x00400000)
-
-#define FLASH_NAND_ADDR_BLOCK3 (0x00480000)
-#define FLASH_NAND_SIZE_BLOCK3 (0x00200000)
-
-#define FLASH_NAND_ADDR_BLOCK4 (0x00680000)
-#define FLASH_NAND_SIZE_BLOCK4 (0x01700000)
-
-#define FLASH_NAND_ADDR_BLOCK5 (0x01D80000)
-#define FLASH_NAND_SIZE_BLOCK5 (0x00200000)
-
-#define FLASH_NAND_ADDR_BLOCK6 (0x01F80000)
-#define FLASH_NAND_SIZE_BLOCK6 (0x00080000)
-
-/* =============================================  Nand Flash Memory Map ============================================= */
+/* =============================================  Extern Flash Memory Map ============================================= */
 
 #endif //__MEM_DEF_H__

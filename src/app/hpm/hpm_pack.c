@@ -10,7 +10,7 @@
 #include "hpm_pack.h"
 #include "hpm_cfg.h"
 
-#define HPM_PROTOCOL_VERSION 0x13
+#define HPM_PROTOCOL_VERSION 0x14
 #define HPM_UNIQUE_CODE_LENGTH 20
 #define HPM_DATA_BUFF_LENGTH 512
 
@@ -41,7 +41,7 @@ typedef enum
     HPM_PARSE_STEP_CHECKSUM = 5,
 } hpm_parse_recv_step_e;
 
-static INT32 hpm_get_imei(UINT8 *buf)
+INT32 hpm_get_imei(UINT8 *buf)
 {
     UINT8 imei[IF_4G_MAX_IMEI_LEN] = {0};
     UINT8 len = IF_4G_MAX_IMEI_LEN;
@@ -75,7 +75,7 @@ INT32 hpm_get_time(UINT8 *buf)
     return 6;
 }
 
-static INT32 hpm_get_iccid(UINT8 *buf)
+INT32 hpm_get_iccid(UINT8 *buf)
 {
     UINT8 iccid[IF_4G_MAX_ICCID_LEN] = {0};
     UINT8 len = IF_4G_MAX_ICCID_LEN;
@@ -86,7 +86,7 @@ static INT32 hpm_get_iccid(UINT8 *buf)
     return 20;
 }
 
-static INT32 hpm_get_vin(UINT8 *buf)
+INT32 hpm_get_vin(UINT8 *buf)
 {
     INT32 ret = 0;
     UINT8 vin[TBOX_CFG_VIN_LEN] = {0};
@@ -99,6 +99,29 @@ static INT32 hpm_get_vin(UINT8 *buf)
     }
 
     return (TBOX_CFG_VIN_LEN - 1);
+}
+
+UINT8 hpm_get_delay_cmdid(UINT8 cmd)
+{
+    UINT8 delay = 0;
+    switch (cmd)
+    {
+    case HPM_CMD_LIVE_DATA:
+        delay = HPM_CMD_REISSUE_DATA;
+        break;
+    case HPM_CMD_REISSUE_DATA:
+        delay = HPM_CMD_REISSUE_DATA;
+        break;
+    case HPM_CMD_TBOX_STATUS:
+        delay = HPM_CMD_TBOX_STATUS;
+        break;
+    case HPM_CMD_TBOX_COMMON_ACK:
+        delay = HPM_CMD_TBOX_COMMON_ACK;
+        break;
+    default:
+        break;
+    }
+    return delay;
 }
 
 static INT32 hpm_pack(HPM_CMD_TYPE cmd, HPM_COMPRESS_E cps, HPM_ENCRYPT_E ecp, UINT16 datalen, UINT8 *data, UINT8 *buf)

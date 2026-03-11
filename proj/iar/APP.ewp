@@ -381,6 +381,10 @@
                     <state>$PROJ_DIR$\..\..\src\service\se\inc</state>
                     <state>$PROJ_DIR$\..\..\src\service\program</state>
                     <state>$PROJ_DIR$\..\..\src\service\j1939</state>
+                    <state>$PROJ_DIR$\..\..\src\service\uds</state>
+                    <state>$PROJ_DIR$\..\..\src\service\uds\iso14229</state>
+                    <state>$PROJ_DIR$\..\..\src\service\uds\iso14229\tp</state>
+                    <state>$PROJ_DIR$\..\..\src\service\uds\iso14229\tp\isotp-c</state>
                     <state>$PROJ_DIR$\..\..\src\test</state>
                 </option>
                 <option>
@@ -2717,6 +2721,12 @@
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash_adapter.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_flash_adapter.h</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_mgr.c</name>
                 </file>
                 <file>
@@ -2775,6 +2785,12 @@
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_socket.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_status.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_status.h</name>
                 </file>
             </group>
         </group>
@@ -2898,6 +2914,9 @@
                 <name>flash</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_mcu.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nand.c</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\driver\flash\drv_flash_nor.c</name>
@@ -3285,6 +3304,27 @@
                 </file>
             </group>
             <group>
+                <name>iso14229</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\client.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\tp\isotp-c\isotp.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\tp\isotp_c.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\log.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\tp.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\iso14229\util.c</name>
+                </file>
+            </group>
+            <group>
                 <name>j1939</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\j1939\j1939.c</name>
@@ -3525,6 +3565,21 @@
                 <name>timer</name>
                 <file>
                     <name>$PROJ_DIR$\..\..\src\service\timer\stimer.c</name>
+                </file>
+            </group>
+            <group>
+                <name>uds</name>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\uds_adapter.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\uds_client_api.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\uds_service.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\..\src\service\uds\uds_shell.c</name>
                 </file>
             </group>
             <group>

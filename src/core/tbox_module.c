@@ -117,6 +117,7 @@ VOID tbox_module_init_all_regmodule(VOID)
 {
     MODULE_INIT_FUN init_fun;
     UBaseType_t critical;
+    BOOL is_interface;
 
     if(FALSE == tbox_module_is_init)
     {
@@ -142,26 +143,30 @@ VOID tbox_module_init_all_regmodule(VOID)
                     continue;
                 }
                 init_fun = tbox_modules[i].module_info.init_fun;
+                is_interface = tbox_modules[i].module_info.is_interface;
             }
             tbox_module_exit_critical(critical);
 
             if((INT32)TBOX_E_OK != (*init_fun)(seq))
             {
-                TBOX_ID task_id;
-                critical = tbox_module_enter_critical();
+                if(FALSE == is_interface)
                 {
-                    task_id = tbox_modules[i].task_id;
-                    tbox_modules[i].task_id = TBOX_ID_INVALID;
-                    tbox_modules[i].is_enabled = FALSE;
-                    tbox_modules[i].state = TBOX_MODULE_STATE_NOINIT;
-                }
-                tbox_module_exit_critical(critical);
+                    TBOX_ID task_id;
+                    critical = tbox_module_enter_critical();
+                    {
+                        task_id = tbox_modules[i].task_id;
+                        tbox_modules[i].task_id = TBOX_ID_INVALID;
+                        tbox_modules[i].is_enabled = FALSE;
+                        tbox_modules[i].state = TBOX_MODULE_STATE_NOINIT;
+                    }
+                    tbox_module_exit_critical(critical);
 
-                if(TBOX_ID_INVALID != task_id)
-                {
-                    tbox_task_detach(task_id);
+                    if(TBOX_ID_INVALID != task_id)
+                    {
+                        tbox_task_detach(task_id);
+                    }
                 }
-                MODULE_LOG_E(ICORE, "init module:%s failed", tbox_modules[i].module_info.name);
+                MODULE_LOG_E(ICORE, "init module:%s seq:%d failed", tbox_modules[i].module_info.name, seq);
             }
         } 
     }

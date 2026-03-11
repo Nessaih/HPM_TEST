@@ -89,37 +89,6 @@ static INT8  fct_cmd_iccid_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
     return 0;
 }
 
-static INT8  fct_cmd_imei_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
-{
-	UINT8 imei[IF_4G_MAX_IMEI_LEN] = {0};
-	UINT8 len = IF_4G_MAX_IMEI_LEN;
-	CHAR *temp_ptr = res;
-	UINT8 index;
-
-	*out_len = 0;
-	
-	if(FALSE == if_4g_get_imei(imei, &len))
-	{
-		return -1;
-	}
-
-	strcpy(temp_ptr, "+imei:");
-	*out_len = strlen("+imei:");
-	temp_ptr += *out_len;
-
-	for(index = 0; index < len; index++)
-	{
-		*temp_ptr = imei[index] + '0';
-		temp_ptr += 1;
-		*out_len += 1;
-	}
-
-	strcpy(temp_ptr, "\r\n");
-	*out_len += strlen("\r\n");
-
-	return 0;
-}
-
 static INT8  fct_cmd_set_telno_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
 	UINT8  index = 0;
@@ -346,18 +315,18 @@ static INT8  fct_cmd_sleep_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
     return 0;
 }
 
-static INT8  fct_cmd_setsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+static INT8  fct_cmd_set_tsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
 	TBOX_CFG_ID cfg_id;
     UINT8 sn[TBOX_CFG_DEVICEID_LEN] = {0};
-	UINT16 len = strlen("fctsetsn:sn=\r\n")+TBOX_CFG_DEVICEID_LEN;
+	UINT16 len = strlen("fctsettsn:code=\r\n")+TBOX_CFG_DEVICEID_LEN;
 
 	if(strlen(msg) > len)
 	{
 		return -1;
 	}
 
-	if(-1 == sscanf(msg, "fctsetsn:sn=%s\r\n", (CHAR *)sn))
+	if(-1 == sscanf(msg, "fctsettsn:code=%s\r\n", (CHAR *)sn))
 	{
 		return -1;
 	}
@@ -371,7 +340,7 @@ static INT8  fct_cmd_setsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
     return 0;
 }
 
-static INT8  fct_cmd_getsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+static INT8  fct_cmd_get_tsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
 	TBOX_CFG_ID cfg_id;
     UINT8 sn[TBOX_CFG_DEVICEID_LEN] = {0};
@@ -383,7 +352,7 @@ static INT8  fct_cmd_getsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT
 		return -1;
 	}
 
-	*out_len = snprintf(res, res_len, "+sn:%s\r\n", sn);
+	*out_len = snprintf(res, res_len, "+tsn:%s\r\n", sn);
     return 0;
 }
 
@@ -454,7 +423,6 @@ static INT8  fct_cmd_get_trace_code_proc(const CHAR *msg, CHAR *res, UINT16 res_
 
 static INT8  fct_cmd_nand_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-#if 0
 #define EXFLASH_NAND_ADDR_FCT_TEST 0x00000000
 	
 	UINT8 ret = 0;
@@ -487,7 +455,7 @@ static INT8  fct_cmd_nand_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT1
 		tbox_log_print("fct cmp nand flash data failed\r\n");
 		return -1;
 	}
-#endif
+
 	return 0;
 }
 
@@ -543,7 +511,6 @@ static FCT_CMD_CMD fct_cmd_table[] = {
     {"fctstartup",     fct_cmd_startup_proc       },
     {"fct4gsignal",    fct_cmd_4gsignal_proc      },
     {"fcticcid",       fct_cmd_iccid_proc         },
-    {"fctimei",        fct_cmd_imei_proc          },
     {"fctsettelno",    fct_cmd_set_telno_proc     },
     {"fctgettelno",    fct_cmd_get_telno_proc     },
     {"fct4gant",       fct_cmd_4gant_proc         },    
@@ -560,8 +527,8 @@ static FCT_CMD_CMD fct_cmd_table[] = {
     {"fctrmainpm",     fct_cmd_mainpm_proc        },
     {"fctbatpm",	   fct_cmd_batpm_proc         },
     {"fctbattmp",      fct_cmd_battmp_proc        },
-    {"fctsetsn",       fct_cmd_setsn_proc         },
-    {"fctgetsn",       fct_cmd_getsn_proc         },
+    {"fctsettsn",      fct_cmd_set_tsn_proc       },
+    {"fctgettsn",      fct_cmd_get_tsn_proc       },
     {"fctsettcode",    fct_cmd_set_trace_code_proc},
     {"fctgettcode",    fct_cmd_get_trace_code_proc},
     {"fctio",          fct_cmd_io_proc            },
@@ -886,18 +853,18 @@ static INT8 fct_eol_set_can3baud_proc(const CHAR *msg, CHAR *res, UINT16 res_len
     return 0;
 }
 
-static INT8 fct_eol_setsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+static INT8 fct_eol_set_tsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
     TBOX_CFG_ID cfg_id;
     UINT8 sn[TBOX_CFG_DEVICEID_LEN] = {0};
-	UINT16 len = strlen("eolsetsn:sn=\r\n")+TBOX_CFG_DEVICEID_LEN;
+	UINT16 len = strlen("eolsettsn:tsn=\r\n")+TBOX_CFG_DEVICEID_LEN;
 
 	if(strlen(msg) > len)
 	{
 		return -1;
 	}
 
-	if(-1 == sscanf(msg, "eolsetsn:sn=%s\r\n", (CHAR *)sn))
+	if(-1 == sscanf(msg, "eolsettsn:tsn=%s\r\n", (CHAR *)sn))
 	{
 		return -1;
 	}
@@ -916,7 +883,7 @@ static INT8 fct_eol_setsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT1
     return 0;
 }
 
-static INT8 fct_eol_getsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
+static INT8 fct_eol_get_tsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
     TBOX_CFG_ID cfg_id;
     UINT8 sn[TBOX_CFG_DEVICEID_LEN] = {0};
@@ -933,7 +900,7 @@ static INT8 fct_eol_getsn_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT1
 		return -1;
 	}
 
-	*out_len = snprintf(res, res_len, "+sn:%s\r\n", sn);
+	*out_len = snprintf(res, res_len, "+tsn:%s\r\n", sn);
     return 0;
 }
 
@@ -1537,12 +1504,36 @@ static INT8 fct_eol_set_battype_proc(const CHAR *msg, CHAR *res, UINT16 res_len,
 
 static INT8 fct_eol_get_pm_mode_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {	
-    return -1;
+    TBOX_CFG_ID cfg_id;
+    UINT8 mode = 0;
+
+	TBOX_CFG_ID_GET(SLEEPMODE, cfg_id);
+	if(0 != tbox_cfg_read(cfg_id, &mode))
+	{
+		return -1;
+	}
+
+	*out_len = snprintf(res, res_len, "+Mode:%d\r\n", mode);
+	return 0;
 }
 
 static INT8 fct_eol_set_pm_mode_proc(const CHAR *msg, CHAR *res, UINT16 res_len, UINT16 *out_len)
 {
-    return -1;
+    TBOX_CFG_ID cfg_id;
+	UINT8 mode = 0;
+
+	if(-1 == sscanf((char *)msg, "eolsetpmmode:mode=%hhu\r\n", &mode))
+	{
+		return -1;
+	}
+
+	TBOX_CFG_ID_GET(SLEEPMODE, cfg_id);	
+	if(0 != tbox_cfg_write(cfg_id, &mode))
+	{
+		return -1;
+	}
+	
+    return 0;
 }
 
 static FCT_CMD_CMD eol_cmd_table[] = {
@@ -1566,8 +1557,8 @@ static FCT_CMD_CMD eol_cmd_table[] = {
     {"eolsetcan1baud", 		fct_eol_set_can1baud_proc      	},
     {"eolsetcan2baud", 		fct_eol_set_can2baud_proc      	},    
     {"eolsetcan3baud", 		fct_eol_set_can3baud_proc      	},    
-    {"eolsetsn",       		fct_eol_setsn_proc         		},
-    {"eolgetsn",       		fct_eol_getsn_proc         		},
+    {"eolsettsn",       	fct_eol_set_tsn_proc         	},
+    {"eolgettsn",       	fct_eol_get_tsn_proc         	},
     {"eolsettcode",    		fct_eol_set_trace_code_proc		},
     {"eolgettcode",         fct_eol_get_trace_code_proc		},     
     {"eolsettimezone",      fct_eol_set_time_zone_proc		},    

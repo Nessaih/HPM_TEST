@@ -12,6 +12,7 @@
 #include "hpm_param_fetch.h"
 #include "tbox_cfg_if.h"
 #include "hpm_cfg.h"
+#include "tbox_mode_if.h"
 
 #define HPM_DEV_WAIT_FIX (50U) // 50s
 
@@ -292,6 +293,17 @@ static INT32 hpm_make_report_pack(UINT8 *data)
 
 VOID hpm_dev_report(VOID)
 {
+	TBOX_MODE_TYPE mode = TBOX_MODE_NORMAL;
+    if(0 != tbox_mode_get(&mode))
+    {
+    	return;
+	}
+
+	if(TBOX_MODE_FACTORY == mode)
+	{
+		return;
+	}
+		
     uint8_t *buf = mempool_alloc(HPM_PACK_BUFF_LEN);
     if (NULL_PTR == buf)
     {

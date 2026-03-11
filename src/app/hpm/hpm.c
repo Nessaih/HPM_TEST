@@ -9,6 +9,7 @@
 #include "hpm_net.h"
 #include "hpm_mgr.h"
 #include "hpm_cfg.h"
+#include "hpm_flash.h"
 #include "hpm_data.h"
 #include "hpm_can.h"
 #include "hpm_data_recv.h"
@@ -17,6 +18,7 @@
 #include "hpm_param_fetch.h"
 #include "hpm_dev.h"
 #include "hpm_ota_tbox.h"
+#include "hpm_status.h"
 #include "hpm_shell.h"
 
 static INT32 hpm_init(UINT8 seq);
@@ -52,6 +54,8 @@ static VOID hpm_handle_message_event(const CHAR *name, TBOX_MSG_DATA *data)
             hpm_cfg_process();
             hpm_control_process();
             hpm_param_fetch_process();
+            hpm_status_process();
+            hpm_flash_period();
         }
         hpm_dev_process();
         hpm_session_process();
@@ -133,6 +137,7 @@ static INT32 hpm_init(UINT8 seq)
         hpm_timer_creat();
         hpm_timer_start();
         tbox_module_set_state(hpm_module_id, TBOX_MODULE_STATE_START);
+        hpm_flash_init();
         break;
 
     default:
@@ -150,6 +155,7 @@ static INT32 hpm_init(UINT8 seq)
     hpm_shell_init(seq);
     hpm_ota_tbox_init(seq);
     hpm_param_fetch_init(seq);
+    hpm_status_init(seq);
     MODULE_LOG_D(HPM, "init seq:%d, ret:%d", seq, ret);
     return ret;
 }
@@ -162,6 +168,8 @@ static VOID hpm_stop(VOID)
     hpm_timer_stop();
     hpm_ota_tbox_sleep();
     hpm_param_fetch_sleep();
+    hpm_status_sleep();
+    hpm_flash_sleep();
     tbox_module_set_state(hpm_module_id, TBOX_MODULE_STATE_STOP);
 }
 
@@ -173,6 +181,7 @@ static VOID hpm_start(VOID)
     hpm_session_wake();
     hpm_dev_wakeup();
     hpm_param_fetch_wakeup();
+    hpm_status_wakeup();
     hpm_timer_start();
     hpm_ota_tbox_wake();
     tbox_module_set_state(hpm_module_id, TBOX_MODULE_STATE_START);

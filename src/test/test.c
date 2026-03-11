@@ -18,14 +18,14 @@ void test_init_task(void *param)
     // log_init();
     // log_register(MODULE_ID_SVR, "SVR", LOG_LVL_INFO);
     // test_led_init(NULL);
-    // test_can_init(NULL);
+    test_can_init(NULL);
     // test_timer_init(NULL);
     // test_rtc_init(NULL);
     // test_adc_init(NULL);
     // test_log_init(NULL);
     // test_flash_init(NULL);
     // test_j1939_init();
-    vse_test();
+    // vse_test();
     test_dv_init(NULL);
     vTaskDelete(NULL);
 }

@@ -17,7 +17,7 @@
 #define UART_DBG_RATE            115200U
 #define UART_DBG_TX_SIZE         128U
 #define UART_DBG_RX_SIZE         128U
-#define UART_DBG_TQ_SIZE         8192U
+#define UART_DBG_TQ_SIZE         4*1024U
 #define UART_DBG_RQ_SIZE         256U
 
 #define UART_DBG_RX_STATE_IDLE   0

@@ -1,24 +1,24 @@
 #include "tbox_common.h"
-#include "drv_flash_nor.h"
 #include "checksum.h"
 #include "tbox_log.h"
 #include "tbox_memory.h"
 #include "flash_common.h"
 
 #include "hpm_flash.h"
+#include "hpm_flash_adapter.h"
 
-#define HPM_REPO_FLASH_MAGICNO    (0x0304)
-#define HPM_REPO_FLASH_VER        (0x1003)
-#define HPM_REPO_FLASH_MAX_SECTOR (3840)   /*3072*4K*/
+#define HPM_REPO_FLASH_MAGICNO    (0x0305)
+#define HPM_REPO_FLASH_VER        (0x1004)
+#define HPM_REPO_FLASH_MAX_SECTOR (4096)   /*4096*4K*/
 #define HPM_REPO_FLASH_PACKET_LEN (1024)    /*header+data*/
 #define HPM_REPO_FLASH_DATA_LEN   (HPM_REPO_FLASH_PACKET_LEN-sizeof(HPM_REPO_FLASH_HEADER))
 #define HPM_REPO_FLASH_MAX_PACKET (4)      /*4K=4(PACKET)*1024*/
-#define HPM_REPO_FLASH_SECTOR_BIT (480)      /*3840*8=384, 0:no erase 1:erased*/
-#define HPM_REPO_CALC_ADDR(SECTOR, PACKET) (FLASH_NOR_ADDR_HPM_DATA+SECTOR*4*1024+PACKET*1024)
+#define HPM_REPO_FLASH_SECTOR_BIT (512)      /*512*8=4096, 0:no erase 1:erased*/
+#define HPM_REPO_CALC_ADDR(SECTOR, PACKET) (FLASH_ADDR_HPM_DATA+SECTOR*4*1024+PACKET*1024)
 #define HPM_REPO_GET_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] & (1 << (SECTOR%8)))
 #define HPM_REPO_SET_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] |= (1 << (SECTOR%8)))
 #define HPM_REPO_CLEAR_SECTOR_BIT(SECTOR) (hpm_flash_mgrinfo.sector_bit[SECTOR/8] &= ~(1 << (SECTOR%8)))
-#define HPM_REPO_CALC_SECTOR_ADDR(SECTOR) (FLASH_NOR_ADDR_HPM_DATA+SECTOR*4*1024)
+#define HPM_REPO_CALC_SECTOR_ADDR(SECTOR) (FLASH_ADDR_HPM_DATA+SECTOR*4*1024)
 
 typedef struct
 {
@@ -58,7 +58,7 @@ static UINT8 hpm_flash_load_mgrinfo(VOID)
     UINT8* data = (UINT8*)&hpm_flash_mgrinfo;
     UINT16 len = sizeof(hpm_flash_mgrinfo);
 
-    if (HPM_FLASH_ERR_OK != drv_flash_nor_read(FLASH_NOR_ADDR_HPM_MGR, data, len))
+    if (HPM_FLASH_ERR_OK != hpm_flash_adapter_read(FLASH_ADDR_HPM_MGR, data, len))
     {
         MODULE_LOG_E(HPM, "read flash info error ");
         return HPM_FLASH_ERR_NG;
@@ -79,13 +79,13 @@ static UINT8 hpm_flash_save_mgrinfo(VOID)
     UINT8* data = (UINT8*)&hpm_flash_mgrinfo;
     UINT16 len = sizeof(hpm_flash_mgrinfo);
 
-    if (0 != drv_flash_nor_erase(FLASH_NOR_ADDR_HPM_MGR, 1))
+    if (0 != hpm_flash_adapter_erase(FLASH_ADDR_HPM_MGR, 1))
     {
         MODULE_LOG_E(HPM, "failed erase sector");
         return HPM_FLASH_ERR_NG;
     }
 
-    if (HPM_FLASH_ERR_OK != drv_flash_nor_write(FLASH_NOR_ADDR_HPM_MGR, data, len))
+    if (HPM_FLASH_ERR_OK != hpm_flash_adapter_write(FLASH_ADDR_HPM_MGR, data, len))
     {
         MODULE_LOG_E(HPM, "hpm flash write info error ");
         return HPM_FLASH_ERR_NG;
@@ -143,7 +143,7 @@ static UINT8 hpm_flash_read(UINT8* data, UINT16 len)
 {
     uint32 addr = HPM_REPO_CALC_ADDR(hpm_flash_mgrinfo.read_pos.sector_num, hpm_flash_mgrinfo.read_pos.packet_num);
 
-    if (addr >= (FLASH_NOR_ADDR_HPM_DATA + FLASH_NOR_SIZE_HPM_DATA))
+    if (addr >= (FLASH_ADDR_HPM_DATA + FLASH_SIZE_HPM_DATA))
     {
         MODULE_LOG_E(HPM, "the upmsg manager is overflow, read data from (0 sector_num, 0 packet_num)");
         hpm_flash_mgrinfo.read_pos.packet_num = 0;
@@ -151,7 +151,7 @@ static UINT8 hpm_flash_read(UINT8* data, UINT16 len)
         addr = HPM_REPO_CALC_ADDR(hpm_flash_mgrinfo.read_pos.sector_num, hpm_flash_mgrinfo.read_pos.packet_num);
     }
 
-    if (0 != drv_flash_nor_read(addr, data, len))
+    if (0 != hpm_flash_adapter_read(addr, data, len))
     {
         MODULE_LOG_E(HPM, "failed to read data from flash");
         return 1;
@@ -165,7 +165,7 @@ static UINT8 hpm_flash_write(UINT8* data, UINT16 len)
     uint32 addr = HPM_REPO_CALC_ADDR(hpm_flash_mgrinfo.write_pos.sector_num, hpm_flash_mgrinfo.write_pos.packet_num);
     UINT8 secort_bit = HPM_REPO_GET_SECTOR_BIT(hpm_flash_mgrinfo.write_pos.sector_num);
 
-    if (addr >= (FLASH_NOR_ADDR_HPM_DATA + FLASH_NOR_SIZE_HPM_DATA))
+    if (addr >= (FLASH_ADDR_HPM_DATA + FLASH_SIZE_HPM_DATA))
     {
         MODULE_LOG_I(HPM, "the upmsg manager is overflow, write data from (0 sector_num, 0 packet_num)");
         hpm_flash_mgrinfo.write_pos.packet_num = 0;
@@ -176,7 +176,7 @@ static UINT8 hpm_flash_write(UINT8* data, UINT16 len)
 
     if (0 == secort_bit && 0 == hpm_flash_mgrinfo.write_pos.packet_num)
     {
-        if (0 != drv_flash_nor_erase(HPM_REPO_CALC_SECTOR_ADDR(hpm_flash_mgrinfo.write_pos.sector_num), 1))
+        if (0 != hpm_flash_adapter_erase(HPM_REPO_CALC_SECTOR_ADDR(hpm_flash_mgrinfo.write_pos.sector_num), 1))
         {
             MODULE_LOG_E(HPM, "failed erase sector");
             return 1;
@@ -190,7 +190,7 @@ static UINT8 hpm_flash_write(UINT8* data, UINT16 len)
         }
     }
 
-    if (0 != drv_flash_nor_write(addr, data, len))
+    if (0 != hpm_flash_adapter_write(addr, data, len))
     {
         MODULE_LOG_E(HPM, "failed to write data to flash");
         return 1;
@@ -212,7 +212,7 @@ static UINT8 hpm_flash_write(UINT8* data, UINT16 len)
     return 0;
 }
 
-VOID hpm_flash_deinit(VOID)
+VOID hpm_flash_sleep(VOID)
 {
     hpm_flash_save_mgrinfo();
     hpm_flash_tick = 0;
@@ -335,6 +335,8 @@ VOID hpm_flash_init(VOID)
 {
     hpm_flash_write_flag = 0;
 
+    hpm_flash_adapter_init();
+
     if(HPM_FLASH_ERR_OK == hpm_flash_load_mgrinfo())
     {
         if (HPM_REPO_FLASH_MAGICNO != hpm_flash_mgrinfo.magic_no
@@ -408,8 +410,11 @@ VOID hpm_flash_print_info(VOID)
     UINT8 read_pack_index = hpm_flash_mgrinfo.read_pos.packet_num;
     uint32 read_pos = read_sect_index * HPM_REPO_FLASH_MAX_PACKET + read_pack_index;
 
-    tbox_log_print("hpm_flash_write_pos  : %u\r\n", write_pos);
-    tbox_log_print("hpm_flash_read_pos   : %u\r\n", read_pos);
+    tbox_log_print("\r\n-------------------------------------------------------------\r\n");
+    hpm_flash_adapter_show();
+    tbox_log_print("hpm flash read postion: %u\r\n", read_pos);
+    tbox_log_print("hpm flash write postion : %u\r\n", write_pos);
+    tbox_log_print("\r\n-------------------------------------------------------------\r\n");
 
     return;
 }

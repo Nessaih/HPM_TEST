@@ -321,7 +321,7 @@ static UINT8 hpm_fetch_ftp_callback(UINT8 notify, UINT8 *data, UINT16 len)
         }
         else
         {
-            MODULE_LOG_E(HPM, "download finish");
+            MODULE_LOG_W(HPM, "download finish");
             hpm_fetch_ftp_state_set(HPM_FETCH_FTP_FINISH);
         }
         break;
@@ -1119,6 +1119,7 @@ static INT32 hpm_param_fetch_report_pgn(UINT8 *data, INT32 remain_size, hpm_fetc
             len += p->node->len;
             remain_size -= (p->node->len + 5);
         }
+        HPM_PARAM_UNLOCK();
     }
 
     if (TRUE == no_data)

@@ -15,7 +15,7 @@ extern "C" {
 typedef UINT32 TBOX_CFG_ID;
 
 /*定义默认配置项的长度*/
-#define TBOX_CFG_DEVICEID_LEN           12U
+#define TBOX_CFG_DEVICEID_LEN           20U
 #define TBOX_CFG_TRACECODE_LEN          32U
 #define TBOX_CFG_SEID_LEN               20U
 #define TBOX_CFG_BATTYPE_LEN            1U
@@ -36,6 +36,7 @@ typedef UINT32 TBOX_CFG_ID;
 #define TBOX_CFG_PORT_LEN            	2U
 #define TBOX_CFG_REPOT_INTV_LEN         2U
 #define TBOX_CFG_RTCPOR_LEN             4U  /*RTC上电标志*/
+
 typedef enum
 {
     CFG_TYPE_NUMBER = 0,     /*10机制数字类型，定义默认值是10进展数字字符串*/

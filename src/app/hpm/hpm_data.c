@@ -97,10 +97,10 @@ static VOID hpm_data_flush_one_realtm_data(VOID)
     while(count > 0 && (node = dlist_pop_first_node(&hpm_realtm_list)) != NULL)
     {
         pack = TBOX_CONTAINER(node, HPM_PACKET, link);
-        delay_cmdid = HPM_CMD_REISSUE_DATA;//hpm_cv_com_get_delay_cmdid(pack->type);
+        delay_cmdid = hpm_get_delay_cmdid(pack->type);
         if (delay_cmdid)
         {
-            MODULE_LOG_E(HPM, "need to reissue, save it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
+            MODULE_LOG_I(HPM, "need to reissue, save it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
             pack->list = &hpm_delay_list;
             pack->type = delay_cmdid;
             dlist_add_tail(&pack->link, &hpm_delay_list);
@@ -108,7 +108,7 @@ static VOID hpm_data_flush_one_realtm_data(VOID)
         }
         else
         {
-            MODULE_LOG_E(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
+            MODULE_LOG_I(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
             dlist_add_tail(node, &hpm_realtm_list);
         }
         count--;
@@ -204,7 +204,7 @@ VOID hpm_data_flush_realtm_data(VOID)
     while(count > 0 && (node = dlist_pop_first_node(&hpm_realtm_list)) != NULL)
     {
         pack = TBOX_CONTAINER(node, HPM_PACKET, link);
-        delay_cmdid = HPM_CMD_REISSUE_DATA;//hpm_cv_com_get_delay_cmdid(pack->type);
+        delay_cmdid = hpm_get_delay_cmdid(pack->type);
         if (delay_cmdid)
         {
             MODULE_LOG_W(HPM, "need to reissue, save it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);

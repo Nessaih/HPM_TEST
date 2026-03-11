@@ -11,7 +11,7 @@ typedef enum
 
 VOID hpm_flash_init(VOID);
 
-VOID hpm_flash_deinit(VOID);
+VOID hpm_flash_sleep(VOID);
 
 UINT8 hpm_flash_save_pack(UINT8* data, UINT16 len, UINT8 cmd);
 

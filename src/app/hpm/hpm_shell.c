@@ -6,16 +6,19 @@
 #include "hpm_param_fetch.h"
 #include "hpm_cfg.h"
 #include "hpm_control.h"
+#include "hpm_flash.h"
 #include "hpm_ota_tbox.h"
 
 static VOID hpm_shell_tips(VOID)
 {
     tbox_log_print("hpmcmd -h: help\r\n");
-    tbox_log_print("hpmcmd param \r\n");
     tbox_log_print("hpmcmd odometer \r\n");
     tbox_log_print("hpmcmd otainfo \r\n");
+    tbox_log_print("hpmcmd showcan \r\n");
     tbox_log_print("hpmcmd regcan [line]\r\n");
     tbox_log_print("hpmcmd unregcan canid\r\n");
+    tbox_log_print("hpmcmd dumpflash\r\n");
+    tbox_log_print("hpmcmd clearflash\r\n");
     tbox_log_print("Usage: hpmcmd <command> [parameters]\r\n");
 }
 
@@ -44,11 +47,6 @@ static BaseType_t hpm_shell_cmd(char *buf, size_t bufsz, const char *cmd)
         hpm_shell_tips();
         return pdFALSE;
     }
-    else if (0 == strncmp(param_ptr, "param", param_len))
-    {
-        hpm_param_show_cfg();
-        return pdFALSE;
-    }
     else if (0 == strncmp(param_ptr, "odometer", param_len))
     {
         hpm_cfg_show_odomter();
@@ -57,6 +55,11 @@ static BaseType_t hpm_shell_cmd(char *buf, size_t bufsz, const char *cmd)
     else if (0 == strncmp(param_ptr, "otainfo", param_len))
     {
         hpm_ota_tbox_info_dump();
+    }
+    else if (0 == strncmp(param_ptr, "showcan", param_len))
+    {
+        hpm_param_show_cfg();
+        return pdFALSE;
     }
     else if (0 == strncmp(param_ptr, "regcan", param_len))
     {
@@ -79,6 +82,15 @@ static BaseType_t hpm_shell_cmd(char *buf, size_t bufsz, const char *cmd)
         }
         hpm_param_unregister(param_ptr, (INT32)param_len);
         return pdFALSE;
+    }
+    else if (0 == strncmp(param_ptr, "dumpflash", param_len))
+    {
+        hpm_flash_print_info();
+    }
+    else if (0 == strncmp(param_ptr, "clearflash", param_len))
+    {
+        hpm_flash_clear_info();
+        tbox_log_print("clear flash info success.\r\n");
     }
     else
     {

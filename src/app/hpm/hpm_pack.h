@@ -13,6 +13,7 @@ typedef enum
     HPM_CMD_LOGOUT = 0x04,
     HPM_CMD_HEART_BEAT = 0x05,
     HPM_CMD_TBOX_COMMON_ACK = 0x06,
+    HPM_CMD_TBOX_STATUS = 0x07,
     HPM_CMD_CONTROL = 0x81,
     HPM_CMD_TSP_COMMON_ACK = 0x82,
     HPM_CMD_CONTROL_CAR = 0x83,
@@ -63,6 +64,16 @@ typedef enum
     HPM_RECV_RESP_SUCCESS = 1,
     HPM_RECV_RESP_MAX
 } HPM_RECV_RESP_FLAG;
+
+INT32 hpm_get_imei(UINT8* buf);
+
+INT32 hpm_get_time(UINT8* buf);
+
+INT32 hpm_get_iccid(UINT8* buf);
+
+INT32 hpm_get_vin(UINT8* buf);
+
+UINT8 hpm_get_delay_cmdid(UINT8 cmd);
 
 INT32 hpm_pack_login(UINT8 *buf);
 

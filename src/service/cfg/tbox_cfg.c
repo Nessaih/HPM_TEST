@@ -22,6 +22,7 @@ static INT32 tbox_cfg_inner_init(VOID);
 static VOID tbox_cfg_lock(fdb_kvdb_t db);
 static VOID tbox_cfg_unlock(fdb_kvdb_t db);
 static INT32 tbox_cfg_init_kvdb(VOID);
+static INT32 tbox_cfg_init_cfgdb(VOID);
 INT32 tbox_cfg_inner_set_default(TBOX_CFG_ID id);
 static BaseType_t tbox_cfg_shell_lscfg(CHAR *buf, UINT32 bufsz, const CHAR *cmd);
 static BaseType_t tbox_cfg_shell_setdefault(CHAR *buf, UINT32 bufsz, const CHAR *cmd);
@@ -66,7 +67,7 @@ TBOX_CFG_DEFINE(CAN1AUTO, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "0", TBOX_CFG_CANBAUD_
 TBOX_CFG_DEFINE(CAN2AUTO, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "0", TBOX_CFG_CANBAUD_LEN);
 TBOX_CFG_DEFINE(CAN3AUTO, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "0", TBOX_CFG_CANBAUD_LEN);
 TBOX_CFG_DEFINE(TIMEZONE, CFG_TYPE_NUMBER, CFG_CAN_ERASE, "8", TBOX_CFG_TIMEZONE_LEN); //bit7:[+,-]
-TBOX_CFG_DEFINE(PUBAPN, CFG_TYPE_STRING, CFG_CAN_ERASE, "cmnet", TBOX_CFG_APN_LEN);
+TBOX_CFG_DEFINE(PUBAPN, CFG_TYPE_STRING, CFG_CAN_ERASE, "inetd.vodafone.iot", TBOX_CFG_APN_LEN);
 TBOX_CFG_DEFINE(PRIAPN, CFG_TYPE_STRING, CFG_CAN_ERASE, "", TBOX_CFG_APN_LEN);
 TBOX_CFG_DEFINE(OTAAPN, CFG_TYPE_STRING, CFG_CAN_ERASE, "", TBOX_CFG_APN_LEN);
 TBOX_CFG_DEFINE(SMSCENTER, CFG_TYPE_STRING, CFG_CAN_ERASE, "", TBOX_CFG_SMSCENTER_LEN);
@@ -314,7 +315,7 @@ INT32 tbox_cfg_setkv(CHAR *key, VOID *value, UINT16 value_len)
     ret = (INT32)fdb_kv_set_blob(&kv_fdb, key, fdb_blob_make(&blob, value, value_len));
     if (0 != ret) 
     {
-        MODULE_LOG_E(TBOXCFG, "failed to set kvdb value");
+        MODULE_LOG_E(TBOXCFG, "failed to set kvdb value, key:%s, len:%d", key, value_len);
         return (INT32) TBOX_E_FAILED;
     }
 
@@ -338,7 +339,7 @@ INT32 tbox_cfg_getkv(CHAR *key, VOID *value, UINT16 value_len)
     ret = (int32_t)fdb_kv_get_blob(&kv_fdb, key, fdb_blob_make(&blob, value, value_len));
     if (ret <= 0 || ret > (int32_t)value_len) 
     {
-        MODULE_LOG_E(TBOXCFG, "failed to get kvdb value");
+        MODULE_LOG_E(TBOXCFG, "failed to get kvdb value, key:%s", key);
         return (INT32) TBOX_E_FAILED;
     }
     return (INT32)TBOX_E_OK;     
@@ -350,6 +351,7 @@ static INT32 tbox_cfg_init(UINT8 seq)
     switch (seq)
     {
         case MODULE_INIT_SEQ_OS:
+            tbox_cfg_init_kvdb();
             ret = tbox_cfg_inner_init();
             if((INT32)TBOX_E_OK != ret)
             {
@@ -397,21 +399,6 @@ static INT32 tbox_cfg_init_kvdb(VOID)
     UINT32 fdb_size = sec_size * 16U;
     INT32  ret;
 
-    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_MAX_SIZE, (VOID *)(&fdb_size));
-    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_LOCK, (VOID *)(&tbox_cfg_lock));
-    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_UNLOCK, (VOID *)(&tbox_cfg_unlock));
-    ret = (INT32)fdb_kvdb_init(&cfg_fdb, "cfg", "cfg");
-    if (0 != ret)
-    {
-        return (INT32)TBOX_E_FAILED_INIT;
-    }
-
-    ret = (INT32)fdb_kvdb_check(&cfg_fdb);
-    if (0 != ret) 
-    {
-        return (INT32)TBOX_E_FAILED;
-    }
-
     fdb_kvdb_control(&kv_fdb, FDB_KVDB_CTRL_SET_MAX_SIZE, (VOID *)(&fdb_size));
     fdb_kvdb_control(&kv_fdb, FDB_KVDB_CTRL_SET_LOCK, (VOID *)(&tbox_cfg_lock));
     fdb_kvdb_control(&kv_fdb, FDB_KVDB_CTRL_SET_UNLOCK, (VOID *)(&tbox_cfg_unlock));
@@ -423,10 +410,45 @@ static INT32 tbox_cfg_init_kvdb(VOID)
     ret = (INT32)fdb_kvdb_check(&kv_fdb);
     if (0 != ret) 
     {
-        return (INT32)TBOX_E_FAILED;
+        fdb_kv_set_default(&kv_fdb);
     }
 
     return (INT32)TBOX_E_OK;
+}
+
+static INT32 tbox_cfg_init_cfgdb(VOID)
+{
+    UINT32 sec_size = 2048U;
+    UINT32 fdb_size = sec_size * 16U;
+    INT32  ret;
+    struct fdb_kv kvobj;
+
+    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_MAX_SIZE, (VOID *)(&fdb_size));
+    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_LOCK, (VOID *)(&tbox_cfg_lock));
+    fdb_kvdb_control(&cfg_fdb, FDB_KVDB_CTRL_SET_UNLOCK, (VOID *)(&tbox_cfg_unlock));
+    ret = (INT32)fdb_kvdb_init(&cfg_fdb, "cfg", "cfg");
+    if (0 != ret)
+    {
+        return (INT32)TBOX_E_FAILED_INIT;
+    }
+
+    /*检测配置项*/
+    for (UINT8 i = 0U;  i < TBOX_CFG_ITEM_NUMBER; i++) 
+    {
+        if(FALSE == cfg_items[i].used)
+        {
+            continue;
+        }
+        fdb_kv_get_obj(&cfg_fdb, cfg_items[i].info.name, &kvobj);
+        /*如果配置项CRC校验失败，则删除该配置项*/
+        if(false == kvobj.crc_is_ok)
+        {
+            MODULE_LOG_W(TBOXCFG, "crc check failed for %s", cfg_items[i].info.name);
+            fdb_kv_del(&cfg_fdb, cfg_items[i].info.name);
+        }
+    }
+
+    return (INT32)TBOX_E_OK;    
 }
 
 INT32 tbox_cfg_inner_set_default(TBOX_CFG_ID id)
@@ -793,7 +815,7 @@ static VOID cfg_reg_all_define_item(VOID)
     TBOX_CFG_REG(HPMCYCON);
     TBOX_CFG_REG(HPMCYCOFF);
     TBOX_CFG_REG(HPMSLPDY);
-    TBOX_CFG_REG(HPMSVRINTV);
+    TBOX_CFG_REG(HPMSVRINTV);   
 }
 
 static INT32 tbox_cfg_inner_init(VOID)
@@ -811,7 +833,7 @@ static INT32 tbox_cfg_inner_init(VOID)
     cfg_reg_all_define_item();
 
     /*初始化KVDB*/
-    INT32 ret = tbox_cfg_init_kvdb();
+    INT32 ret = tbox_cfg_init_cfgdb();
     if ((INT32)TBOX_E_OK != ret) 
     {
         MODULE_LOG_E(TBOXCFG, "init failed");

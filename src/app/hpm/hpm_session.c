@@ -276,6 +276,13 @@ static INT32 hpm_session_com_report(VOID)
         return -1;
     }
 
+    if (0 == pack->type)
+    {
+        MODULE_LOG_E(HPM, "invalid cmd %X", pack->type);
+        hpm_data_put_to_list(HPM_FREE_LIST, pack);
+        return -1;
+    }
+
     if ((pack->len + HPM_PARSE_POS_DATA) >= HPM_SESSION_MAX_SEND_LEN)
     {
         hpm_data_put_to_list(HPM_FREE_LIST, pack);
@@ -604,6 +611,7 @@ static INT32 hpm_session_send_report(UINT8 resp)
             sender->wait_time = 0;
             hpm_data_flush_trans_list();
             MODULE_LOG_W(HPM, "tsp nack");
+            hpm_socket_force_stop();
             break;
         }
 
@@ -681,9 +689,7 @@ static VOID hpm_session_proc_session(VOID)
     hpm_pack_recv_t *recv_info = hpm_data_recv_info_get();
 
     UINT8 resp = 0;
-    if (HPM_CMD_TSP_COMMON_ACK == recv_info->cmd &&
-        (HPM_CMD_LIVE_DATA == recv_info->common_resp.cmd ||
-         HPM_CMD_REISSUE_DATA == recv_info->common_resp.cmd))
+    if (HPM_CMD_TSP_COMMON_ACK == recv_info->cmd)
     {
         if (HPM_RECV_RESP_SUCCESS == recv_info->common_resp.result)
         {

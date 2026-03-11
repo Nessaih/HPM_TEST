@@ -1,7 +1,7 @@
 #include "tbox_common.h"
 #include "tbox_config.h"
 #include "tbox_core.h"
-#include "mcu_resource_map.h"
+#include "flash_common.h"
 #include "version.h"
 
 #ifdef __BOOTLOADER__

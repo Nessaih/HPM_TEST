@@ -1528,6 +1528,10 @@ static uint8 net_4g_open_socket_resp(void *context, uint8 *data, uint16 *len)
        AT_4G_RESP_OK == resp->resp_code)
     {
         temp_len = *len;
+        if(*len < 20U)
+        {
+            return AT_4G_DECODE_CONTINUE;
+        }
         token = tbox_string_get_substring(data, temp_len, "+QIOPEN: ");
         if(NULL == token)
         {
