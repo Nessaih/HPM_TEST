@@ -47,7 +47,6 @@ typedef struct spi_handle drv_spi_handle_t;
 
 int32_t drv_spi_init(drv_spi_config_t *config, drv_spi_handle_t *handle);
 int32_t drv_spi_deinit(drv_spi_handle_t *handle);
-int32_t drv_spi_set_speed(drv_spi_handle_t *handle, uint32_t baud_rate);
 int32_t drv_spi_read(drv_spi_handle_t *handle, uint8_t *buf, uint32_t length);
 int32_t drv_spi_write(drv_spi_handle_t *handle, uint8_t *buf, uint32_t length);
 int32_t drv_spi_transfer(drv_spi_handle_t *handle, uint8_t *tx_buf, uint8_t *rx_buf, uint32_t length);

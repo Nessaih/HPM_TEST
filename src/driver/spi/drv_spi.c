@@ -120,32 +120,6 @@ int32_t drv_spi_deinit(drv_spi_handle_t *handle)
     return 0;
 }
 
-int32_t drv_spi_set_speed(drv_spi_handle_t *handle, uint32_t baud_rate)
-{
-    if (handle == NULL)
-        return -1;
-
-    if (handle->is_init == FALSE)
-        return -2;
-
-    drv_spi_config_t   config;
-    Spi_HalConfigType *hal_cfg;
-
-    Spi_Hal_DeInit(handle->instance);
-
-    config.instance = handle->instance;
-    config.mode     = handle->mode;
-    config.cs_mode  = handle->cs_mode;
-    config.cs_index = handle->cs_index;
-    config.speed    = baud_rate;
-
-    hal_cfg = spi_init_hal_config(&config);
-
-    Spi_Hal_Init(config.instance, hal_cfg);
-
-    return 0;
-}
-
 int32_t drv_spi_read(drv_spi_handle_t *handle, uint8_t *buf, uint32_t length)
 {
     return drv_spi_transfer(handle, NULL, buf, length);
