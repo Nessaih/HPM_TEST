@@ -80,22 +80,22 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
 
     if (!drv_flash_sd_is_init)
     {
-        return -4; // FLASH未初始化
+        return -1; // FLASH未初始化
     }
 
     if (drv_flash_sd_is_busy)
     {
-        return -3; // FLASH忙
+        return -2; // FLASH忙
     }
 
     // 参数合法性检查
     if (data == NULL)
     {
-        return -1;
+        return -3;
     }
     if (addr + data_len > SD_TOTAL_SIZE)
     {
-        return -2;
+        return -4;
     }
 
     // 标记FLASH为忙
@@ -115,7 +115,7 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 单个扇区内读取
         if (sd_read_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -5;
             goto exit;
         }
         for (i = 0; i < data_len; i++)
@@ -129,7 +129,7 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 读取第一个扇区
         if (sd_read_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -6;
             goto exit;
         }
         for (i = 0; i < SD_SECTOR_SIZE - start_offset; i++)
@@ -142,7 +142,7 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         {
             if (sd_read_disk(data + read_len, start_sector + 1, end_sector - start_sector - 1) != SD_OK)
             {
-                ret = -1;
+                ret = -7;
                 goto exit;
             }
             read_len += (end_sector - start_sector - 1) * SD_SECTOR_SIZE;
@@ -151,7 +151,7 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 读取最后一个扇区
         if (sd_read_disk(buffer, end_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -8;
             goto exit;
         }
         for (i = 0; i <= end_offset; i++)
@@ -182,23 +182,23 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
 
     if (!drv_flash_sd_is_init)
     {
-        return -4; // FLASH未初始化
+        return -1; // FLASH未初始化
     }
 
     // 检查FLASH是否忙
     if (drv_flash_sd_is_busy)
     {
-        return -3; // FLASH忙
+        return -2; // FLASH忙
     }
 
     // 参数合法性检查
     if (data == NULL)
     {
-        return -1;
+        return -3;
     }
     if (addr + data_len > SD_TOTAL_SIZE)
     {
-        return -2;
+        return -4;
     }
 
     // 标记FLASH为忙
@@ -218,7 +218,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 单个扇区内写入
         if (sd_read_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -5;
             goto exit;
         }
         for (i = 0; i < data_len; i++)
@@ -227,7 +227,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         }
         if (sd_write_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -6;
             goto exit;
         }
     }
@@ -237,7 +237,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 写入第一个扇区
         if (sd_read_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -7;
             goto exit;
         }
         for (i = 0; i < SD_SECTOR_SIZE - start_offset; i++)
@@ -246,7 +246,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         }
         if (sd_write_disk(buffer, start_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -8;
             goto exit;
         }
 
@@ -255,7 +255,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         {
             if (sd_write_disk(data + write_len, start_sector + 1, end_sector - start_sector - 1) != SD_OK)
             {
-                ret = -1;
+                ret = -9;
                 goto exit;
             }
             write_len += (end_sector - start_sector - 1) * SD_SECTOR_SIZE;
@@ -264,7 +264,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         // 写入最后一个扇区
         if (sd_read_disk(buffer, end_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -10;
             goto exit;
         }
         for (i = 0; i <= end_offset; i++)
@@ -273,7 +273,7 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
         }
         if (sd_write_disk(buffer, end_sector, 1) != SD_OK)
         {
-            ret = -1;
+            ret = -11;
             goto exit;
         }
     }
