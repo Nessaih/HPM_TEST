@@ -1981,6 +1981,12 @@
         </file>
         <file>
             <name>$PROJ_DIR$\..\..\src\app\hpm\hpm_pack.c</name>
+            <outputs>
+                <tool>
+                    <name>ICCARM</name>
+                    <file> 744</file>
+                </tool>
+            </outputs>
             <inputs>
                 <tool>
                     <name>ICCARM</name>
