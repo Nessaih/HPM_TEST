@@ -10,7 +10,7 @@
 #define STATE_AWAIT_SEND_COMPLETE 2
 #define STATE_AWAIT_RESPONSE 3
 
-UDSErr_t UDSClientInit(UDSClient_t *client) {
+UDSErr_t UDSClientInit(UDSClient_t *client) { 
     if (NULL == client) {
         return UDS_ERR_INVALID_ARG;
     }
@@ -86,7 +86,7 @@ static UDSErr_t ValidateServerResponse(const UDSClient_t *client) {
         } else if (UDS_NRC_RequestCorrectlyReceived_ResponsePending == client->recv_buf[2]) {
             return UDS_OK;
         } else {
-            return client->recv_buf[2];
+            return (UDSErr_t)(client->recv_buf[2]);
         }
 
     } else { // Positive response
@@ -174,7 +174,7 @@ static UDSErr_t PollLowLevel(UDSClient_t *client) {
     }
     case STATE_SENDING: {
         {
-            UDSSDU_t info = {0};
+            UDSSDU_t info = {UDS_A_MTYPE_DIAG};
             ssize_t len = UDSTpRecv(client->tp, client->recv_buf, sizeof(client->recv_buf), &info);
             if (len < 0) {
                 UDS_LOGE(__FILE__, "transport returned error %zd", len);
@@ -193,7 +193,7 @@ static UDSErr_t PollLowLevel(UDSClient_t *client) {
                                                                      : UDS_A_TA_TYPE_PHYSICAL;
         UDSSDU_t info = {
             .A_Mtype = UDS_A_MTYPE_DIAG,
-            .A_TA_Type = ta_type,
+            .A_TA_Type = (UDS_A_TA_Type_t)ta_type,
         };
         ssize_t ret = UDSTpSend(client->tp, client->send_buf, client->send_size, &info);
         if (ret < 0) {
@@ -229,7 +229,7 @@ static UDSErr_t PollLowLevel(UDSClient_t *client) {
         break;
     }
     case STATE_AWAIT_RESPONSE: {
-        UDSSDU_t info = {0};
+        UDSSDU_t info = {UDS_A_MTYPE_DIAG};
 
         ssize_t len = UDSTpRecv(client->tp, client->recv_buf, sizeof(client->recv_buf), &info);
         if (len < 0) {

@@ -17,7 +17,7 @@
 // clang-format off
 #define SOFTWARE_VER  "00"
 #define DEBUG_VER     "11"
-#define RELEASE_DATE  "20260311"
+#define RELEASE_DATE  "20260312"
 #define HARDWARE_VER  "93"
 #define APP_VERSION   MOUDLE_TYPE "." PROJECT_CODE "." SOFTWARE_VER "." DEBUG_VER "." RELEASE_DATE "." HARDWARE_VER
 // clang-format on
@@ -28,11 +28,11 @@ const CHAR *version_get(UINT8 type)
 {
     const char *ver = NULL;
 
-    if (CURRENT_VERSION_TYPE == type) 
+    if (CURRENT_VERSION_TYPE == type)
     {
         ver = app_version;
-    } 
-    else 
+    }
+    else
     {
 #ifdef __BOOTLOADER__
         ver = (const char *)(FLASH_APP_ADDR + 0X200U);
@@ -48,12 +48,12 @@ VOID  version_print(UINT8 type)
 {
     const CHAR *name[] = {"BOOT", "APP"};
     CHAR print_buff[64] = "\0";
-    
+
     strncpy(print_buff, "\n-------------------------------------------------\n", 64U);
     tbox_log_raw_output(print_buff, strlen(print_buff));
     snprintf(print_buff, 64U, "%4s Version: %s", name[type], version_get(type));
     tbox_log_raw_output(print_buff, strlen(print_buff));
-    strncpy(print_buff, "\n-------------------------------------------------\n", 64U);  
+    strncpy(print_buff, "\n-------------------------------------------------\n", 64U);
     tbox_log_raw_output(print_buff, strlen(print_buff));
 }
 

@@ -10,6 +10,8 @@
 #include "hpm_pack.h"
 #include "hpm_cfg.h"
 
+typedef UINT16 (*hpm_pack_func_t)(UINT8 *buf);
+
 #define HPM_PROTOCOL_VERSION 0x14
 #define HPM_UNIQUE_CODE_LENGTH 20
 #define HPM_DATA_BUFF_LENGTH 512
@@ -45,7 +47,7 @@ INT32 hpm_get_imei(UINT8 *buf)
 {
     UINT8 imei[IF_4G_MAX_IMEI_LEN] = {0};
     UINT8 len = IF_4G_MAX_IMEI_LEN;
-    UINT8 i = 0;
+    INT32 i = 0;
 
     if_4g_get_imei(imei, &len);
     for (; i < len; i++)
@@ -63,16 +65,17 @@ INT32 hpm_get_imei(UINT8 *buf)
 
 INT32 hpm_get_time(UINT8 *buf)
 {
+    INT32 len = 0;
     DEV_TIME time;
 
     time_if_get(&time);
-    buf[0] = time.year;
-    buf[1] = time.month;
-    buf[2] = time.day;
-    buf[3] = time.hour;
-    buf[4] = time.min;
-    buf[5] = time.sec;
-    return 6;
+    buf[len++] = time.year;
+    buf[len++] = time.month;
+    buf[len++] = time.day;
+    buf[len++] = time.hour;
+    buf[len++] = time.min;
+    buf[len++] = time.sec;
+    return len;
 }
 
 INT32 hpm_get_iccid(UINT8 *buf)
@@ -124,100 +127,106 @@ UINT8 hpm_get_delay_cmdid(UINT8 cmd)
     return delay;
 }
 
-static INT32 hpm_pack(HPM_CMD_TYPE cmd, HPM_COMPRESS_E cps, HPM_ENCRYPT_E ecp, UINT16 datalen, UINT8 *data, UINT8 *buf)
+static UINT16 hpm_make_header(HPM_CMD_TYPE cmd, UINT8 *buf)
 {
     UINT16 len = 0;
-    UINT8 cs;
 
-    buf[len++] = 0x53;
-    buf[len++] = 0x4C;
+    buf[len++] = HPM_CMD_PREFIX0;
+    buf[len++] = HPM_CMD_PREFIX1;
     buf[len++] = cmd;
     len += hpm_get_imei(buf + len);
     buf[len++] = HPM_PROTOCOL_VERSION;
-    buf[len++] = (ecp << 0) | (cps << 4);
-    buf[len++] = (datalen >> 8) & 0xFF;
-    buf[len++] = (datalen >> 0) & 0xFF;
+    buf[len++] = (HPM_COMPRESS_NONE << 0) | (HPM_ENCRYPT_NONE << 4);
 
-    memcpy(&buf[len], data, datalen);
-    len += datalen;
-    cs = xor_checksum(&buf[HPM_UNIQUE_CODE_LENGTH + 3], datalen + 4);
+    return len;
+}
+
+static INT32 hpm_pack(HPM_CMD_TYPE cmd, UINT16 datalen, const UINT8 *data, UINT8 *buf)
+{
+    INT32 len = 0;
+    len = hpm_make_header(cmd, buf);
+
+    buf[len++] = (datalen >> 8) & 0xFF;
+    buf[len++] = datalen & 0xFF;
+
+    if ((datalen > 0) && (data != NULL))
+    {
+        memcpy(&buf[len], data, datalen);
+        len += datalen;
+    }
+
+    UINT8 cs = xor_checksum(&buf[HPM_UNIQUE_CODE_LENGTH + 3], datalen + 4);
     buf[len++] = cs;
+    return len;
+}
+
+static INT32 hpm_pack_data(HPM_CMD_TYPE cmd, UINT8 *buf, hpm_pack_func_t cb)
+{
+    INT32 len = 0;
+    len = hpm_make_header(cmd, buf);
+
+    UINT16 len_pos = len;
+    len += 2;
+
+    UINT16 datalen = 0;
+    if (cb != NULL)
+    {
+        datalen = cb(buf + len);
+        len += datalen;
+    }
+
+    buf[len_pos] = (datalen >> 8) & 0xFF;
+    buf[len_pos + 1] = datalen & 0xFF;
+
+    UINT8 cs = xor_checksum(&buf[HPM_UNIQUE_CODE_LENGTH + 3], datalen + 4);
+    buf[len++] = cs;
+    return len;
+}
+
+static UINT16 hpm_pack_login_data_cb(UINT8 *buf)
+{
+    UINT16 len = 0;
+    len += hpm_get_time(buf + len);
+    len += hpm_sesion_get_login_seq(buf + len);
+    len += hpm_get_iccid(buf + len);
+    len += hpm_get_vin(buf + len);
     return len;
 }
 
 INT32 hpm_pack_login(UINT8 *buf)
 {
-    UINT8 *data = NULL;
-    INT32 len = 0;
+    return hpm_pack_data(HPM_CMD_LOGIN, buf, hpm_pack_login_data_cb);
+}
 
-    data = mempool_alloc(HPM_PACK_HEAD_MEM_SIZE);
-    if (NULL == data)
-    {
-        MODULE_LOG_E(HPM, "memalloc pack head buf failed");
-        return -1;
-    }
-
-    len = 0;
-    len += hpm_get_time(data + len);
-    len += hpm_sesion_get_login_seq(data + len);
-    len += hpm_get_iccid(data + len);
-    len += hpm_get_vin(data + len);
-    len = hpm_pack(HPM_CMD_LOGIN, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, len, data, buf);
-
-    mempool_free(data);
+static UINT16 hpm_pack_logout_data_cb(UINT8 *buf)
+{
+    UINT16 len = 0;
+    len += hpm_get_time(buf + len);
+    len += hpm_session_get_logout_seq(buf + len);
     return len;
 }
 
 INT32 hpm_pack_logout(UINT8 *buf)
 {
-    UINT8 *data;
-    UINT8 len;
-
-    data = mempool_alloc(HPM_PACK_HEAD_MEM_SIZE);
-    if (NULL == data)
-    {
-        MODULE_LOG_E(HPM, "memalloc pack head buf failed");
-        return -1;
-    }
-
-    len = 0;
-    len += hpm_get_time(data + len);
-    len += hpm_session_get_logout_seq(data + len);
-    len = hpm_pack(HPM_CMD_LOGOUT, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, len, data, buf);
-
-    mempool_free(data);
-    return len;
+    return hpm_pack_data(HPM_CMD_LOGOUT, buf, hpm_pack_logout_data_cb);
 }
 
 INT32 hpm_pack_heartbeat(UINT8 *buf)
 {
-    UINT8 len = 0;
-    len = hpm_pack(HPM_CMD_HEART_BEAT, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, 0, NULL, buf);
+    INT32 len = 0;
+    len = hpm_pack(HPM_CMD_HEART_BEAT, 0, NULL, buf);
     return len;
 }
 
 INT32 hpm_pack_report_data(HPM_PACKET *pack, UINT8 *buf)
 {
-    UINT16 len = 0;
-    buf[len++] = 0x53;
-    buf[len++] = 0x4C;
-    buf[len++] = pack->type;
-    len += hpm_get_imei(buf + len);
-    buf[len++] = HPM_PROTOCOL_VERSION;
-    buf[len++] = (HPM_COMPRESS_NONE << 0) | (HPM_ENCRYPT_NONE << 4);
-    buf[len++] = (pack->len >> 8) & 0xFF;
-    buf[len++] = (pack->len >> 0) & 0xFF;
-    memcpy(buf + len, pack->data, pack->len);
-    len += pack->len;
-    UINT8 cs = xor_checksum(&buf[HPM_UNIQUE_CODE_LENGTH + 3], pack->len + 4);
-    buf[len++] = cs;
-    return len;
+    return hpm_pack((HPM_CMD_TYPE)pack->type, pack->len, pack->data, buf);
 }
 
 INT32 hpm_pack_common_resp(UINT8 *buf, UINT8 *res, UINT16 ret_len)
 {
-    UINT8 len = 0;
-    len = hpm_pack(HPM_CMD_TBOX_COMMON_ACK, HPM_COMPRESS_NONE, HPM_ENCRYPT_NONE, ret_len, res, buf);
+    INT32 len = 0;
+    len = hpm_pack(HPM_CMD_TBOX_COMMON_ACK, ret_len, res, buf);
     return len;
 }
 

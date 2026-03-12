@@ -104,7 +104,7 @@ int32_t drv_spi_deinit(drv_spi_handle_t *handle)
 
     if (status)
     {
-        DRV_LOG_E(DRVSPI, "spi%d invalid:%d", handle->config->instance, status);
+        DRV_LOG_W(DRVSPI, "spi%d invalid:%d", handle->config->instance, status);
         return status;
     }
     Spi_Hal_DeInit(handle->config->instance);

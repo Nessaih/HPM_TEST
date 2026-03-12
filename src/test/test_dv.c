@@ -288,7 +288,7 @@ static INT8 dv_diag_sdflash_wr(CHAR *des, INT32 deslen)
         status = drv_flash_sd_get_size(&flash_size);
         if (0 != status || 0 == flash_size)
         {
-            DRV_LOG_E("nandflash", "get size failed, ret: %d", status);
+            DRV_LOG_E("sdflash", "get size failed, ret: %d", status);
             return -1;
         }
     }
@@ -302,7 +302,7 @@ static INT8 dv_diag_sdflash_wr(CHAR *des, INT32 deslen)
     if (status)
     {
         test_error_count++;
-        DRV_LOG_E("nandflash", "write failed, ret: %d", status);
+        DRV_LOG_E("sdflash", "write failed, ret: %d", status);
         goto exit;
     }
 
@@ -310,14 +310,14 @@ static INT8 dv_diag_sdflash_wr(CHAR *des, INT32 deslen)
     if (status)
     {
         test_error_count++;
-        DRV_LOG_E("nandflash", "read failed, ret: %d", status);
+        DRV_LOG_E("sdflash", "read failed, ret: %d", status);
         goto exit;
     }
 
     if (0 != memcmp(wbuf, rbuf, NAND_WRBUF_SIZE))
     {
         test_error_count++;
-        DRV_LOG_E("nandflash", "compare failed");
+        DRV_LOG_E("sdflash", "compare failed");
         goto exit;
     }
 
