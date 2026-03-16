@@ -115,6 +115,13 @@ static UINT8 fota_com_ftp_callback(UINT8 notify_code, UINT8 *data, UINT16 len)
         MODULE_LOG_I(FOTA , "%u %u" , fota_write_addr - FLASH_MCU_ADDR_FOTA_DATA , len);
         if (((fota_write_addr - FLASH_MCU_ADDR_FOTA_DATA) + len) >= fota_context.file_size)
         {
+            if (len < 4)
+            {
+                MODULE_LOG_E(FOTA, "fota_com: final chunk too small to contain CRC (len=%u)", len);
+                fota_context.reslut.rst = FOTA_RST_NG;
+                fota_context.reslut.err_code = FOTA_STA_DWL_NG;
+                return IF_FTP_4G_CALLBACK_RET_ABORT;
+            }
             fota_com_crc = Crc_Hal_CalculateCRC32(data, len - 4 , fota_com_crc, fota_first_crc_call, CRC_TABLE_256_BYTE_MODE);
 			fota_context.crc = (data[len-4]<<24) | (data[len-3]<<16) | (data[len-2]<<8) | data[len-1];
         }
