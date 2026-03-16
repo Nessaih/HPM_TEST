@@ -318,7 +318,6 @@ static INT32 tbox_stimer_inner_init(VOID)
         stimer_info[i].round  = 0U;
         stimer_info[i].period = 0U;
         stimer_info[i].callback = NULL;
-        dlist_init(&stimer_wheel[i]);
     }
     for(i = 0U; i < TBOX_STIMER_WHEEL_SLOTE_NUM; i++)
     {

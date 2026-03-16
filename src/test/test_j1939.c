@@ -25,6 +25,10 @@ static void test_j1939_dm1_cb(uint8_t *msg, uint16_t len, uint8_t sa, uint32_t p
     UNUSED(pgn);
     struct j1939_dm1_led led;
 
+    if (len < 2)
+    {
+        return;
+    }
     memcpy(&led, msg, 1);
     cnt = (len - 2) / 4;
     msg += 2;
@@ -33,7 +37,7 @@ static void test_j1939_dm1_cb(uint8_t *msg, uint16_t len, uint8_t sa, uint32_t p
     for (uint32_t i = 0; i < cnt; i++)
     {
 
-        spn = msg[i * 4] + (msg[i + 1] << 8) + ((msg[i * 4 + 2] & 0xE0) << 3);
+        spn = msg[i * 4] + (msg[i * 4 + 1] << 8) + ((msg[i * 4 + 2] & 0xE0) << 3);
         fmi = msg[i * 4 + 2] & 0x1F;
         oc  = msg[i * 4 + 3] & 0x7F;
         cm  = (msg[i * 4 + 3] & 0x80) >> 7;
