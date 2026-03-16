@@ -40,7 +40,7 @@ VOID tbox_main_task(VOID *param)
     UNUSED(param);
 
     tbox_core_main(tbox_load_all_module);
-    test_init();
+    // test_init();
     vTaskDelete(NULL_PTR);
 }
 

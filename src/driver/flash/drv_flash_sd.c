@@ -1,5 +1,7 @@
 #include <stddef.h>
+#include "drv_flash_sd.h"
 #include "spi_sdcard.h"
+
 
 #define SD_STATIC_CAPACITY 1
 #define SD_SECTOR_SIZE     512 // 扇区大小（字节）
@@ -38,6 +40,9 @@ int32_t drv_flash_sd_init(void)
 
 int32_t drv_flash_sd_sleep(void)
 {
+    /*   End with a read operation; otherwise,
+      the SD card cannot enter the sleep mode */
+    drv_flash_sd_get_id(NULL);
     return 0;
 }
 
@@ -52,6 +57,9 @@ int32_t drv_flash_sd_get_id(uint32_t *id)
 
     if (SD_OK != sd_get_cid(cid))
         return -1;
+
+    if (id == NULL)
+        return -2;
 
     *id = cid[15] | cid[14] << 8 | cid[13] << 16;
 
