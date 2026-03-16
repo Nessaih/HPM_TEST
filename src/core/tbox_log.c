@@ -239,9 +239,10 @@ INT32 tbox_log_init(VOID)
                             &tbox_log_mgr.task_handle);
     if(pdPASS != ret)
     {
+        SemaphoreHandle_t mutex_to_delete = tbox_log_mgr.mutex;
         tbox_log_mgr.mutex = NULL_PTR;
-        tbox_log_mgr.task_handle = NULL_PTR;        
-        vSemaphoreDelete(tbox_log_mgr.mutex);
+        tbox_log_mgr.task_handle = NULL_PTR;
+        vSemaphoreDelete(mutex_to_delete);
         tbox_memory_free(TBOX_MEMORY_TYPE_CORE, tbox_log_mgr.log_queue.buffer);
         tbox_memory_free(TBOX_MEMORY_TYPE_CORE, tbox_log_mgr.temp_buffer);
         return (INT32)TBOX_E_FAILED_CREATE;

@@ -101,6 +101,10 @@ int32_t drv_flash_sd_read(uint32_t addr, uint8_t *data, uint32_t data_len)
     {
         return -3;
     }
+    if (data_len == 0)
+    {
+        return 0;
+    }
     if (addr + data_len > SD_TOTAL_SIZE)
     {
         return -4;
@@ -203,6 +207,10 @@ int32_t drv_flash_sd_write(uint32_t addr, uint8_t *data, uint32_t data_len)
     if (data == NULL)
     {
         return -3;
+    }
+    if (data_len == 0)
+    {
+        return 0;
     }
     if (addr + data_len > SD_TOTAL_SIZE)
     {
