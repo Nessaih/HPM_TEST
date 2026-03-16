@@ -44,11 +44,11 @@ static BaseType_t gnss_shell_cmd(char *buf, size_t bufsz, const char *cmd)
 			goto GNSS_SHELL_ERR;
 		}
 		
-		if(0 == strncmp(param2_ptr, "0", param1_len))
+		if(0 == strncmp(param2_ptr, "0", param2_len))
 		{
 			gnss_parse_show_nmea(false);
 		}
-		else if(0 == strncmp(param2_ptr, "1", param1_len))
+		else if(0 == strncmp(param2_ptr, "1", param2_len))
 		{
 			gnss_parse_show_nmea(true);
 		}

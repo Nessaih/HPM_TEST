@@ -172,11 +172,18 @@ static VOID gnss_control_save_flash(VOID)
 
 VOID gnss_control_handle_cfg_change(TBOX_MSG_DATA *data)
 {
-	TBOX_CFG_CHANGE_INFO *info = (TBOX_CFG_CHANGE_INFO *)data->data;
-	
+	TBOX_CFG_CHANGE_INFO *info;
+
+    if (NULL_PTR == data)
+    {
+        MODULE_LOG_E(GNSS, "invalid param");
+        return;
+    }
+
+    info = (TBOX_CFG_CHANGE_INFO *)data->data;
     if (NULL_PTR == info)
     {
-        MODULE_LOG_E(HPM, "invalid param");
+        MODULE_LOG_E(GNSS, "invalid param");
         return;
     }
 
