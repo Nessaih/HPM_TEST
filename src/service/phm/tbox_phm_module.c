@@ -113,7 +113,7 @@ VOID tbox_phm_module_period(VOID)
 
 static VOID tbox_phm_handle_task_abnormal(const CHAR *name, TBOX_MSG_DATA *data)
 {
-    TBOX_CORE_TASK_ABNORMAL_INFO *info = (TBOX_CORE_TASK_ABNORMAL_INFO *)data->data;
+    TBOX_CORE_TASK_ABNORMAL_INFO *info;
     if(0U != strncmp(TBOX_CORE_TASK_ABNORMAL_NOTIFY, name, strlen(TBOX_CORE_TASK_ABNORMAL_NOTIFY)) ||
        NULL_PTR == data)
     {
@@ -124,6 +124,7 @@ static VOID tbox_phm_handle_task_abnormal(const CHAR *name, TBOX_MSG_DATA *data)
     {
         return;
     }
+    info = (TBOX_CORE_TASK_ABNORMAL_INFO *)data->data;
     if(NULL_PTR == info)
     {
         return;
@@ -169,7 +170,7 @@ static VOID tbox_phm_handle_task_abnormal(const CHAR *name, TBOX_MSG_DATA *data)
 
 static VOID tbox_phm_handle_memory_abnormal(const CHAR *name, TBOX_MSG_DATA *data)
 {
-    TBOX_CORE_MEMORY_ABNORMAL_INFO *info = (TBOX_CORE_MEMORY_ABNORMAL_INFO *)data->data;
+    TBOX_CORE_MEMORY_ABNORMAL_INFO *info;
 
     if(0U != strncmp(TBOX_CORE_MEMORY_ABNORMAL_NOTIFY, name, strlen(TBOX_CORE_MEMORY_ABNORMAL_NOTIFY)) ||
        NULL_PTR == data)
@@ -181,6 +182,7 @@ static VOID tbox_phm_handle_memory_abnormal(const CHAR *name, TBOX_MSG_DATA *dat
     {
         return;
     }
+    info = (TBOX_CORE_MEMORY_ABNORMAL_INFO *)data->data;
     if(NULL_PTR == info)
     {
         return;

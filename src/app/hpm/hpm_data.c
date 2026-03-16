@@ -25,8 +25,8 @@ static DLIST_NODE * hpm_get_node_from_free_list(VOID)
        if ((node = dlist_pop_first_node(&hpm_delay_list)) == NULL &&
           (node = dlist_pop_first_node(&hpm_realtm_list)) == NULL)
        {
-          MODULE_LOG_E(HPM, "no buffer to use, reset");
-          while(1);
+          MODULE_LOG_E(HPM, "no buffer available, returning NULL");
+          return NULL;
        }
     }
 
@@ -109,7 +109,7 @@ static VOID hpm_data_flush_one_realtm_data(VOID)
         else
         {
             MODULE_LOG_I(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
-            dlist_add_tail(node, &hpm_realtm_list);
+            dlist_add_tail(node, &hpm_free_list);
         }
         count--;
     }
@@ -215,7 +215,7 @@ VOID hpm_data_flush_realtm_data(VOID)
         else
         {
             MODULE_LOG_W(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
-            dlist_add_tail(node, &hpm_realtm_list);
+            dlist_add_tail(node, &hpm_free_list);
         }
 		count--;
     }

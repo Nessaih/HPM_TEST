@@ -211,7 +211,7 @@ static INT32 hpm_fetch_ftp_check_file(VOID)
         {
             MODULE_LOG_DUMP(HPM, "file md5", md5, sizeof(md5));
             MODULE_LOG_DUMP(HPM, "expected md5", hpm_fetch_ftp.md5, sizeof(hpm_fetch_ftp.md5));
-            ret = 0;
+            ret = -1;
         }
     }
     else
@@ -567,7 +567,7 @@ static BOOL hpm_fetch_register_single(hpm_fetch_node_t *node)
     for (UINT32 i = 0; i < HPM_FETCH_SINGLE_COUNT; i++)
     {
         hpm_fetch_can_single_t *p = &hpm_fetch_can_single[i];
-        if (node->canid == p->node->canid)
+        if (NULL_PTR != p->node && node->canid == p->node->canid)
         {
             MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
             return FALSE;
@@ -608,7 +608,7 @@ static BOOL hpm_fetch_register_consecutive(hpm_fetch_node_t *node)
 {
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
-        if (node->canid == hpm_fetch_can_multi[i].node->canid)
+        if (NULL_PTR != hpm_fetch_can_multi[i].node && node->canid == hpm_fetch_can_multi[i].node->canid)
         {
             MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
             return FALSE;
@@ -719,7 +719,7 @@ static BOOL hpm_fetch_register_bdpgn(hpm_fetch_node_t *node)
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
-        if (node->canid == p->node->canid)
+        if (NULL_PTR != p->node && node->canid == p->node->canid)
         {
             MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
             return FALSE;
@@ -742,7 +742,7 @@ static BOOL hpm_fetch_register_pgn(hpm_fetch_node_t *node)
     for (UINT32 i = 0; i < HPM_FETCH_MULTI_COUNT; i++)
     {
         hpm_fetch_can_multi_t *p = &hpm_fetch_can_multi[i];
-        if (node->canid == p->node->canid)
+        if (NULL_PTR != p->node && node->canid == p->node->canid)
         {
             MODULE_LOG_E(HPM, "canid 0X%08X already registered.", node->canid);
             return FALSE;

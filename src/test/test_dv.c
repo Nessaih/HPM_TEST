@@ -95,6 +95,11 @@ static INT8 dv_diag_4g_nat(CHAR *des, INT32 deslen)
     const CHAR *status_str[] = {"disconnected", "disconnecting", "connecting", "connected"};
 
     state = if_4g_get_call_state(IF_4G_PUBLIC_APN);
+    if (state < 0 || state >= (INT32)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+4gNat:unknown(%d)", state);
+        return -1;
+    }
     snprintf(des, deslen, "+4gNat:%s", status_str[state]);
     if (IF_4G_STATE_CONNECTED == state)
     {
@@ -110,6 +115,11 @@ static INT8 dv_diag_4g_ant(CHAR *des, INT32 deslen)
     const CHAR *status_str[] = {"normal", "open", "short", "unknow"};
 
     state = analog_lte_ant_status();
+    if (state < 0 || state >= (INT32)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+4gAnt:unknown(%d)", state);
+        return -1;
+    }
     snprintf(des, deslen, "+4gAnt:%s", status_str[state]);
     if (ANT_NORMAL == state)
     {
@@ -154,6 +164,11 @@ static INT8 dv_diag_gns_fix(CHAR *des, INT32 deslen)
     const CHAR *status_str[] = {"UNFIX", "FIX"};
 
     state = gnss_get_fix_state();
+    if (state < 0 || state >= (INT32)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+GnsSta:unknown(%d)", state);
+        return -1;
+    }
     snprintf(des, deslen, "+GnsSta:%s", status_str[state]);
     if (GNSS_POS_STATE_FIX == state)
     {
@@ -169,6 +184,11 @@ static INT8 dv_diag_gns_ant(CHAR *des, INT32 deslen)
     const CHAR *status_str[] = {"normal", "open", "short", "unknow"};
 
     state = analog_gps_ant_status();
+    if (state < 0 || state >= (INT32)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+GnsAnt:unknown(%d)", state);
+        return -1;
+    }
     snprintf(des, deslen, "+GnsAnt:%s", status_str[state]);
     if (ANT_NORMAL == state)
     {
@@ -281,6 +301,7 @@ static INT8 dv_diag_sdflash_wr(CHAR *des, INT32 deslen)
     {
         uint32_t tick = xTaskGetTickCount();
         srand(tick);
+        is_srand_init = true;
     }
 
     if (0 == flash_size)
@@ -374,6 +395,11 @@ static INT8 dv_diag_can1_sta(CHAR *des, INT32 deslen)
     UINT8       sta          = 0;
     const CHAR *status_str[] = {"unused", "idle", "busy", "error", "off"};
     sta                      = can_if_state_get(0);
+    if (sta >= (UINT8)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+Can1Sta:unknown(%d)", sta);
+        return -1;
+    }
     snprintf(des, deslen, "+Can1Sta:%s", status_str[sta]);
     if (CAN_INSTANCE_IDLE == sta || CAN_INSTANCE_BUSY == sta)
     {
@@ -387,6 +413,11 @@ static INT8 dv_diag_can2_sta(CHAR *des, INT32 deslen)
     UINT8       sta          = 0;
     const CHAR *status_str[] = {"unused", "idle", "busy", "error", "off"};
     sta                      = can_if_state_get(1);
+    if (sta >= (UINT8)(sizeof(status_str) / sizeof(status_str[0])))
+    {
+        snprintf(des, deslen, "+Can2Sta:unknown(%d)", sta);
+        return -1;
+    }
     snprintf(des, deslen, "+Can2Sta:%s", status_str[sta]);
     if (CAN_INSTANCE_IDLE == sta || CAN_INSTANCE_BUSY == sta)
     {

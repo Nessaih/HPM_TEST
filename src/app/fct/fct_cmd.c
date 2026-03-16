@@ -1749,10 +1749,14 @@ TBOX_ADSP_PROCESS_RESULT fct_cmd_callback(UINT8 *data, UINT32 len)
 	CHAR  tmp_buf[FCT_CMD_DATA_LEN_MAX]; 
 
 	memset(tmp_buf, 0, FCT_CMD_DATA_LEN_MAX);
-	if (data[len - 2] != '\r' || data[len - 1] != '\n')
+	if (len < 2 || data[len - 2] != '\r' || data[len - 1] != '\n')
     {
         return TBOX_ADSP_NOT_PROCESS;
     }
+	if (len >= FCT_CMD_DATA_LEN_MAX)
+	{
+		return TBOX_ADSP_NOT_PROCESS;
+	}
 	data[len] = '\0';
 	tbox_log_print("~ #%s", data);
 	tmp_len = strlen("dbg.bin ");

@@ -200,7 +200,8 @@ int32_t program_write_cfg(program_config_t *cfg)
         return -1;
     }
 
-    strncpy(cfg->iver, (char *)(cfg->iaddr + 0x200U), sizeof(cfg->iver));
+    strncpy(cfg->iver, (char *)(cfg->iaddr + 0x200U), sizeof(cfg->iver) - 1);
+    cfg->iver[sizeof(cfg->iver) - 1] = '\0';
 
     if (FLASH_PCFG1_ADDR == cfg->saddr)
     {

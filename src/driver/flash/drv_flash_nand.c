@@ -131,7 +131,7 @@ int32_t drv_flash_nand_get_id(uint32_t *id)
         return -1;
     }
     *id = 0;
-    memcpy(&id, &rx_buffer[2], 3);
+    memcpy(id, &rx_buffer[2], 3);
 
     return 0;
 }

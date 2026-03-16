@@ -29,6 +29,11 @@ void sharemem_4g_init(void)
     if(NULL_PTR == sharemem_4g)
     {
         sharemem_4g = (uint8 *)mempool_alloc(MEM_4G_MEM_LEN);
+        if(NULL_PTR == sharemem_4g)
+        {
+            MODULE_LOG_E(TBOX4G, "failed to alloc sharemem");
+            return;
+        }
     }
     
     sharemem_4g_reinit();

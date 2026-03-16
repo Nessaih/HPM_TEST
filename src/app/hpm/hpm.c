@@ -125,8 +125,6 @@ static INT32 hpm_init(UINT8 seq)
         if (NULL == hpm_mutex)
         {
             MODULE_LOG_E(HPM, "hpm creat mutex faied");
-            vSemaphoreDelete(hpm_mutex);
-            hpm_mutex = NULL;
         }
         break;
 

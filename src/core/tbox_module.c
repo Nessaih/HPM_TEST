@@ -258,8 +258,9 @@ VOID tbox_module_show_allname(VOID)
             continue;
         }
         snprintf(pos, len, "%-12s ", tbox_modules[i].module_info.name);
-        pos += strlen(pos);
-        len -= strlen(pos);
+        UINT8 written = (UINT8)strlen(pos);
+        len -= written;
+        pos += written;
         count++;
         if(count >= TBOX_MODULE_ONELINE_COUNT)
         {

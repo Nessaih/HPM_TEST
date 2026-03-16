@@ -340,14 +340,18 @@ INT32 se_get_pubkey(UINT8 *data, UINT16 *len)
 INT32 se_get_real_chip_id(UINT8 *data, UINT16 *len)
 {
     INT32  ret = -1;
-    UINT16 id_len;
+
+    if (data == NULL || len == NULL)
+    {
+        MODULE_LOG_E(SE, "se get chip id: null pointer");
+        return -1;
+    }
 
     if (SE_MGR_DEV_OPEN != se_mgr_dev_info.sta)
     {
         return -1;
     }
 
-    id_len = *len;
     ret    = vse_get_did(data, len);
     if (0 != ret)
     {
@@ -355,7 +359,6 @@ INT32 se_get_real_chip_id(UINT8 *data, UINT16 *len)
         return -1;
     }
 
-    *len = id_len;
     return ret;
 }
 

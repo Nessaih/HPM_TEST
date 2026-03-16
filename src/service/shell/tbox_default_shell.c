@@ -29,6 +29,10 @@ static BaseType_t print_task_info(char *buf, size_t bufsz, const char *cmd)
         } else {
             task_count = uxTaskGetSystemState(task_list, task_count, &total_time);
             total_time = total_time / 100U;
+            if (total_time == 0U)
+            {
+                total_time = 1U;
+            }
             task_index = 0;
             xPhase     = 1;
             xReturn    = pdTRUE;

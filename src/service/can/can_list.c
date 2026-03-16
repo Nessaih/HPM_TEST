@@ -55,7 +55,7 @@ can_node_t *can_list_pop(can_list_t *list)
     }
 
     node = list_first_entry(&list->head, can_node_t, list);
-    list_del(&list->head);
+    list_del(&node->list);
     --list->size;
     return node;
 }
@@ -78,7 +78,7 @@ can_node_t *can_list_malloc(void)
     }
 
     node = list_first_entry(&free_list.head, can_node_t, list);
-    list_del(&free_list.head);
+    list_del(&node->list);
     --free_list.size;
     return node;
 }

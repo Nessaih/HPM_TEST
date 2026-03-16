@@ -652,7 +652,7 @@ static INT32 hpm_cfg_tsp_set_main_ip(UINT8 *data, UINT16 in_len)
     TBOX_CFG_ID cfg_id;
     CHAR ip[TBOX_CFG_IP_LEN] = {0};
 
-    sprintf(ip, "%hhu.%hhu.%hhu.%hhu", data[0], data[1], data[2], data[3]);
+    snprintf(ip, sizeof(ip), "%hhu.%hhu.%hhu.%hhu", data[0], data[1], data[2], data[3]);
 
     TBOX_CFG_ID_GET(HPMMIP, cfg_id);
     ret = tbox_cfg_write(cfg_id, ip);
@@ -758,7 +758,7 @@ static INT32 hpm_cfg_tsp_set_slaver_ip(UINT8 *data, UINT16 in_len)
     TBOX_CFG_ID cfg_id;
     CHAR ip[TBOX_CFG_IP_LEN] = {0};
 
-    sprintf(ip, "%hhu.%hhu.%hhu.%hhu", data[0], data[1], data[2], data[3]);
+    snprintf(ip, sizeof(ip), "%hhu.%hhu.%hhu.%hhu", data[0], data[1], data[2], data[3]);
 
     TBOX_CFG_ID_GET(HPMSIP, cfg_id);
     ret = tbox_cfg_write(cfg_id, ip);
@@ -1093,9 +1093,10 @@ static INT32 hpm_cfg_tsp_set_report_intv(UINT8 *data, UINT16 in_len)
 static INT32 hpm_cfg_tsp_get_soft_ver(UINT8 *data, UINT16 *out_len)
 {
     const CHAR *ver = version_get(VERSION_TYPE_APP);
-    strcpy((char *)data, ver);
+    strncpy((char *)data, ver, VERION_MAX_LEN - 1);
+    ((char *)data)[VERION_MAX_LEN - 1] = '\0';
 
-    *out_len = strlen(ver) + 1;
+    *out_len = (UINT16)strlen((char *)data) + 1;
     return HPM_CFG_RESP_OK;
 }
 

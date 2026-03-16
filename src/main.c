@@ -57,7 +57,7 @@ void main(void)
     if(pdPASS != ret)
     {
         CHAR print_buff[64] = "\0";
-        strncpy(print_buff, "tbox main task create fail, ret:%d", ret);
+        snprintf(print_buff, sizeof(print_buff), "tbox main task create fail, ret:%d", (int)ret);
         tbox_log_raw_output(print_buff, strlen(print_buff));
         return;        
     }

@@ -302,7 +302,7 @@ INT32 hpm_param_parse_node(hpm_fetch_node_t *node, const char *line)
     tbox_string_get_num_bylen((UINT8 *)buf, sizeof(buf), &val);
     if (val > 0)
     {
-        node->channel = (val - 1) & DRV_CAN_INS_COUNT;
+        node->channel = (val - 1) % DRV_CAN_INS_COUNT;
     }
     else
     {
