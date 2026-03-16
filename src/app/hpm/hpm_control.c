@@ -75,7 +75,12 @@ static INT32 hpm_control_upgrade(UINT8 *in_data, UINT16 in_len, UINT8 *out_data,
 	fota_info.fota_ver[ver_len] = '\0';
 	if (pos < in_len) pos++; // 跳过结束符（如果还有数据）
 
-	memcpy(fota_info.fota_md5, in_data+pos, HPM_FOTA_MD5_MAX_LEN);
+	if (pos + HPM_FOTA_MD5_MAX_LEN <= in_len) {
+		memcpy(fota_info.fota_md5, in_data+pos, HPM_FOTA_MD5_MAX_LEN);
+	} else {
+		MODULE_LOG_E(HPM, "hpm control upgrade: MD5 data missing or truncated");
+		return -1;
+	}
 	
 	switch (fota_info.type)
 	{
