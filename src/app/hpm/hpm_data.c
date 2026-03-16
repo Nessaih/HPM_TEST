@@ -109,7 +109,7 @@ static VOID hpm_data_flush_one_realtm_data(VOID)
         else
         {
             MODULE_LOG_I(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
-            dlist_add_tail(node, &hpm_realtm_list);
+            dlist_add_tail(node, &hpm_free_list);
         }
         count--;
     }
@@ -215,7 +215,7 @@ VOID hpm_data_flush_realtm_data(VOID)
         else
         {
             MODULE_LOG_W(HPM, "no need to reissue, delete it[reissue cmdid=0x%x, real_cmdid: 0x%x]", delay_cmdid, pack->type);
-            dlist_add_tail(node, &hpm_realtm_list);
+            dlist_add_tail(node, &hpm_free_list);
         }
 		count--;
     }
