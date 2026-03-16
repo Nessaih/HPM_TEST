@@ -675,6 +675,10 @@ static BaseType_t tbox_cfg_shell_setcfg(CHAR *buf, UINT32 bufsz, const CHAR *cmd
         snprintf(buf, bufsz, "failed to alloc memory.\r\n");
         return pdFALSE;
     }
+    if((BaseType_t)param_len >= (BaseType_t)TBOX_CFG_VALUE_MAX_LEN)
+    {
+        param_len = (BaseType_t)TBOX_CFG_VALUE_MAX_LEN - 1;
+    }
     strncpy(temp_buff, param_ptr, param_len);
     temp_buff[param_len] = '\0'; // 确保字符串终止
     tbox_string_toupper(temp_buff);

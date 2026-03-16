@@ -187,7 +187,7 @@ int32_t fal_partition_init(void)
     }
 
     while(part_table_find_ok) {
-        memset(new_part, 0x00, table_num);
+        memset(new_part, 0x00, table_item_size);
         if(flash_dev->ops.read(part_table_offset - table_item_size * (table_num),
                                (uint8_t *)new_part, table_item_size) < 0) {
             MODULE_LOG_E(TBOXSVR, "Initialize failed! Flash device (%s) read error!", flash_dev->name);
