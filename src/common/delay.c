@@ -5,20 +5,20 @@
 
 void delay_us(int32_t tick)
 {
-    tick = tick * 23;
-    while (tick > 0)
+    int64_t count = (int64_t)tick * 23;
+    while (count > 0)
     {
         __NOP();
-        --tick;
+        --count;
     }
 }
 
 void delay_ms(int32_t tick)
 {
-    tick = tick * 24000;
-    while (tick > 0)
+    int64_t count = (int64_t)tick * 24000;
+    while (count > 0)
     {
         __NOP();
-        --tick;
+        --count;
     }
 }

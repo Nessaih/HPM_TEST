@@ -149,8 +149,8 @@ UINT8 dataqueue_dequeue_body(DATA_QUEUE_PTR data_queue,
                              UINT16 lenght,
                              UINT8* element_body)
 {
-    INT16 used_size = 0U;
-    INT16 index = 0U;
+    UINT16 used_size = 0U;
+    UINT16 index = 0U;
 
     if(lenght <= 0U)
     {
